@@ -188,7 +188,17 @@ export default function WardManager() {
     setBedEdit(b => ({...b, historyTaken:newHistoryTaken}));
   };
 
-  const addFloorPatient = async () => {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const clearBed = async (bedNum) => {
+    const bed = data.beds[bedNum];
+    const cleared = { ...bed, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false };
+    const newData = { ...data, beds:{ ...data.beds, [bedNum]: cleared } };
+    setData(newData); await save(newData);
+    setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false });
+    setShowClearConfirm(false);
+    showToast("Bed cleared");
+  };
     const beds = { ...data.beds };
     const floorKeys = Object.keys(beds).filter(k=>beds[k].isFloor);
     const key = `F${floorKeys.length+1}`;
@@ -430,7 +440,7 @@ export default function WardManager() {
 
       {/* ── BED DETAIL SHEET ── */}
       {view==="bed" && selectedBed && selBed && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);}}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);setShowClearConfirm(false);}}}>
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 22px"}}/>
 
@@ -439,7 +449,7 @@ export default function WardManager() {
                 <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:500}}>{selBed.isFloor?"Floor Patient":"Bed"}</div>
                 <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{selectedBed}</h2>
               </div>
-              <button onClick={()=>{setView("home");setSelectedBed(null);}} style={{background:C.surfaceEl,border:"none",color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
+              <button onClick={()=>{setView("home");setSelectedBed(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
                 <Icon name="close" size={13} color={C.textSub}/>
               </button>
             </div>
@@ -530,6 +540,27 @@ export default function WardManager() {
               style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",letterSpacing:"-0.01em",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>
               Save
             </button>
+
+            {/* Clear bed */}
+            {!showClearConfirm
+              ? <button onClick={()=>setShowClearConfirm(true)}
+                  style={{marginTop:10,width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:13,padding:"12px",fontSize:"0.85rem",cursor:"pointer",fontFamily:SF}}>
+                  Clear Bed Data
+                </button>
+              : <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
+                  <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patient data for this bed?</p>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setShowClearConfirm(false)}
+                      style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>
+                      Cancel
+                    </button>
+                    <button onClick={()=>clearBed(selectedBed)}
+                      style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontSize:"0.85rem",fontFamily:SF}}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+            }
           </div>
         </div>
       )}
