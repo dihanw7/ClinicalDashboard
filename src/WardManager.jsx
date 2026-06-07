@@ -236,9 +236,10 @@ export default function WardManager() {
   });
 
   const stats = {
-    newPt:        bedKeys.filter(k=>beds[k]?.isNew).length,
-    historyTaken: bedKeys.filter(k=>beds[k]?.historyTaken).length,
-    floor:        bedKeys.filter(k=>beds[k]?.isFloor).length,
+    newPt:         bedKeys.filter(k=>beds[k]?.isNew).length,
+    historyTaken:  bedKeys.filter(k=>beds[k]?.historyTaken).length,
+    totalAssigned: bedKeys.filter(k=>!beds[k]?.isFloor && (beds[k]?.assigned?.length>0 || beds[k]?.diagnosis)).length,
+    floor:         bedKeys.filter(k=>beds[k]?.isFloor).length,
   };
 
   if (view==="loading") return (
@@ -364,13 +365,13 @@ export default function WardManager() {
           {/* Stats bar */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
             {[
-              { key:"newPt",        label:"New",     icon:"newdot",  color:C.red   },
-              { key:"historyTaken", label:"History", icon:"history", color:C.green },
-              { key:"floor",        label:"Floor",   icon:"floor",   color:theme   },
+              { key:"newPt",        label:"New",              icon:"newdot",  color:C.red,   value: String(stats.newPt) },
+              { key:"historyTaken", label:"Histories Taken",  icon:"history", color:C.green, value: `${stats.historyTaken}/${setup.bedCount||0}` },
+              { key:"floor",        label:"Floor",            icon:"floor",   color:theme,   value: String(stats.floor) },
             ].map(s => (
               <div key={s.key} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)"}}>
                 <div style={{display:"flex",justifyContent:"center",marginBottom:5}}><Icon name={s.icon} size={14} color={s.color}/></div>
-                <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{stats[s.key]}</div>
+                <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.value}</div>
                 <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
               </div>
             ))}
