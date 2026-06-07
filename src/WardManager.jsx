@@ -747,13 +747,15 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, theme,
 
   const toggleAssigned = s => {
     const k=getName(s);
-    if(isAssigned(s)){setAssigned(a=>a.filter(x=>getName(x)!==k));return;}
-    setShadows(sh=>sh.filter(x=>getName(x)!==k)); setAssigned(a=>[...a,s]);
+    if(isAssigned(s)){setAssigned([]);return;}                      // deselect if tapping same
+    setShadows(sh=>sh.filter(x=>getName(x)!==k));                  // remove from shadow if there
+    setAssigned([s]);                                               // replace previous primary
   };
   const toggleShadow = s => {
     const k=getName(s);
-    if(isShadow(s)){setShadows(sh=>sh.filter(x=>getName(x)!==k));return;}
-    setAssigned(a=>a.filter(x=>getName(x)!==k)); setShadows(sh=>[...sh,s]);
+    if(isShadow(s)){setShadows([]);return;}                         // deselect if tapping same
+    setAssigned(a=>a.filter(x=>getName(x)!==k));                   // remove from primary if there
+    setShadows([s]);                                                // replace previous shadow
   };
 
   return (
