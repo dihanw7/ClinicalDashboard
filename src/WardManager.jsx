@@ -459,10 +459,6 @@ export default function WardManager() {
             {/* Leader controls */}
             {isLeader && (
               <div style={{display:"flex",gap:8,marginBottom:18}}>
-                <button onClick={()=>toggleFlag(selectedBed,"isNew")}
-                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:selBed.isNew?`rgba(${hexToRgb(C.red)},0.08)`:C.surfaceEl,border:`1px solid ${selBed.isNew?C.red:C.border}`,color:selBed.isNew?C.red:C.textSub,borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>
-                  <Icon name="newdot" size={11} color={selBed.isNew?C.red:C.textMuted}/>{selBed.isNew?"New Patient":"Mark New"}
-                </button>
                 <button onClick={()=>setAssignModal(selectedBed)}
                   style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
                   <Icon name="user" size={12} color="#fff"/> Assign
@@ -475,6 +471,19 @@ export default function WardManager() {
                 )}
               </div>
             )}
+
+            {/* New patient toggle — visible to all */}
+            <div onClick={()=>toggleFlag(selectedBed,"isNew")}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:selBed.isNew?`rgba(${hexToRgb(C.red)},0.06)`:C.surfaceEl,border:`1px solid ${selBed.isNew?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:13,cursor:"pointer",marginBottom:10,userSelect:"none"}}>
+              <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${selBed.isNew?C.red:C.borderMid}`,background:selBed.isNew?C.red:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                {selBed.isNew && <Icon name="check" size={12} color="#fff"/>}
+              </div>
+              <div>
+                <div style={{fontSize:"0.88rem",color:selBed.isNew?C.red:C.text,fontWeight:500}}>New Patient</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Tap to toggle</div>
+              </div>
+              <div style={{marginLeft:"auto"}}><Icon name="newdot" size={14} color={selBed.isNew?C.red:C.textMuted}/></div>
+            </div>
 
             {/* History checkbox */}
             <div onClick={()=>toggleHistory(selectedBed)}
