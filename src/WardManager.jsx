@@ -199,6 +199,8 @@ export default function WardManager() {
     setShowClearConfirm(false);
     showToast("Bed cleared");
   };
+
+  const addFloorPatient = async () => {
     const beds = { ...data.beds };
     const floorKeys = Object.keys(beds).filter(k=>beds[k].isFloor);
     const key = `F${floorKeys.length+1}`;
