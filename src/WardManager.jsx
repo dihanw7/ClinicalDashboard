@@ -312,7 +312,7 @@ export default function WardManager() {
             <div style={{display:"flex",alignItems:"center",gap:5}}>
               <h1 style={{margin:0,fontSize:"0.72rem",fontWeight:600,color:C.text,letterSpacing:"0.01em"}}>{setup.wardName}</h1>
             </div>
-            <div style={{fontSize:"1.56rem",color:C.textSub,marginTop:-8,fontWeight:400}}>{setup.appointmentType}</div>
+            <div style={{fontSize:"1.56rem",color:C.textSub,marginTop:4,fontWeight:400}}>{setup.appointmentType}</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {isLeader
