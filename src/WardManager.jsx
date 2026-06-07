@@ -168,7 +168,9 @@ export default function WardManager() {
 
   const assignStudents = async (bedNum, assigned, shadows) => {
     const newData = { ...data, beds:{ ...data.beds, [bedNum]:{ ...data.beds[bedNum], assigned, shadows } } };
-    setData(newData); await save(newData); setAssignModal(null); showToast("Students assigned");
+    setData(newData); await save(newData); setAssignModal(null);
+    setView("home"); setSelectedBed(null);
+    showToast("Students assigned");
   };
 
   const saveBedEdit = async (bedNum) => {
