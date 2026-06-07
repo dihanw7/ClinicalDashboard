@@ -192,7 +192,7 @@ export default function WardManager() {
 
   const clearBed = async (bedNum) => {
     const bed = data.beds[bedNum];
-    const cleared = { ...bed, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false };
+    const cleared = { ...bed, assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false };
     const newData = { ...data, beds:{ ...data.beds, [bedNum]: cleared } };
     setData(newData); await save(newData);
     setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false });
