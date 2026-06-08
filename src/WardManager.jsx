@@ -3,15 +3,19 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ── Config ─────────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://kpwfldmucvfbgasnkcag.supabase.co";
 const SUPABASE_KEY = "sb_publishable_--WwMN5Z4CSgeHcrBN3VRw_ssGCevfr";
-const ADMIN_PIN    = "ADMIN2025";
+const SUPER_PIN    = "CD##SUPER99";
 const TABLE        = "ward_data";
 
 const GROUP_PINS = {
-  "cg1":  "CGALEAD",  "cg2":  "CGBLEAD",  "cg3":  "CGCLEAD",
-  "cg4":  "CGDLEAD",  "cg5":  "CGELEAD",  "cg6":  "CGFLEAD",
-  "cg7":  "CGGLEAD",  "cg8":  "CGHLEAD",  "cg9":  "CGILEAD",
-  "cg10": "CGJLEAD",
+  "cg1":  "CG1LEAD",  "cg2":  "CG2LEAD",  "cg3":  "CG3LEAD",
+  "cg4":  "CG4LEAD",  "cg5":  "CG5LEAD",  "cg6":  "CG6LEAD",
+  "cg7":  "CG7LEAD",  "cg8":  "CG8LEAD",  "cg9":  "CG9LEAD",
+  "cg10": "CG10LEAD",
 };
+
+const ALL_LEADER_PINS = Object.values(GROUP_PINS);
+const isAdminPin  = (p) => ALL_LEADER_PINS.includes(p) || p === SUPER_PIN;
+const isLeaderPin = (p, wardId) => p === GROUP_PINS[wardId] || p === SUPER_PIN;
 
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABKCAYAAAA/i5OkAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABgklEQVR4nO3aXW+DMAyFYTP1//9lejdFUSj5cBLbeZ+bVWhd6cmpoQwRAAAAAAAAAAjjfthW2n6cv8Hn39lPZEYDLiHsxNX5vJYQe18jhJ4Gtzb06EbPGBFIjH5803ZeP7YdS6vBxwf5ZCTgu/D46Hlb0tO81hBLo0Nb+j5GXkf9k9jaYKsN1dov9ff3afz91qYcP5s1D3J5mMeHK8J5cG77DC65Co+9tnf7DE49hbgjXLMLGmFEaIarvlBWV772o9qy/zP+5iuLDd4SxCzWAg4VrsjYQU5byC8uVhocMlwRGwGHDVdk/4ionbluL+LvDriHq7AtjIgRVi+f/vMesIjxkCMELGI45CgBixgNefdBruYgZTK4Wh4aXPpviRseAnaNgCdbHfBxN2avDDi/E+iIoHePiNqg3S7GqtO0t4DcBvhmd4M1mTyVWxFw2HbWiNJgk+0VWRPw7G9iZsMVWdtg7SBmLJz6Yq2+2GP2RulZrO1oKXRr+wgAAAAAAAAAHn0BpuAyXZaUVW4AAAAASUVORK5CYII=";
 
@@ -256,16 +260,15 @@ function WardCard({ ward, onOpen }) {
   );
 }
 
-// ── Admin button — creates new wards ───────────────────────────────────────────
+// ── Admin button — full page ward creation ─────────────────────────────────────
 function AdminButton({ wards, onSave, showToast }) {
-  const [open,    setOpen]    = useState(false);
-  const [pin,     setPin]     = useState("");
-  const [pinOk,   setPinOk]   = useState(false);
-  const [pinErr,  setPinErr]  = useState(false);
-  const [form,    setForm]    = useState({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff" });
+  const [screen, setScreen] = useState("idle"); // idle | pin | create
+  const [pin,    setPin]    = useState("");
+  const [pinErr, setPinErr] = useState(false);
+  const [form,   setForm]   = useState({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
 
   const tryPin = () => {
-    if (pin===ADMIN_PIN) { setPinOk(true); setPinErr(false); }
+    if (isAdminPin(pin)) { setScreen("create"); setPinErr(false); }
     else { setPinErr(true); setTimeout(()=>setPinErr(false),1500); }
   };
 
@@ -276,69 +279,129 @@ function AdminButton({ wards, onSave, showToast }) {
     if (wards.find(w=>w.id===form.groupId)) { showToast("Group already has a ward","error"); return; }
     const beds = {};
     for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    const wardData = { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, students:[], consultants:[] }, beds };
+    const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+    const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
+    const wardData = { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, students, consultants }, beds };
     await onSave(form.groupId, wardData);
-    showToast("Ward created!"); setOpen(false); setPinOk(false); setPin("");
-    setForm({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff" });
+    showToast("Ward created!");
+    setScreen("idle"); setPin("");
+    setForm({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
   };
 
-  const groupOptions = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
+  const addStudent    = () => setForm(f=>({...f, students:[...f.students,{name:"",group:""}]}));
+  const updStudent    = (i,k,v) => setForm(f=>{ const a=[...f.students]; a[i]={...a[i],[k]:v}; return {...f,students:a}; });
+  const remStudent    = (i) => setForm(f=>({...f,students:f.students.filter((_,idx)=>idx!==i)}));
+  const addConsultant = () => setForm(f=>({...f, consultants:[...f.consultants,{name:"",color:"#6366f1"}]}));
+  const updConsultant = (i,k,v) => setForm(f=>{ const a=[...f.consultants]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
+  const remConsultant = (i) => setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}));
+  const groupOptions  = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
 
-  return (
-    <>
-      <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-        <Icon name="plus" size={12} color={C.textSub}/> New Ward
-      </button>
-      {open && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
-          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:360,maxHeight:"85vh",overflowY:"auto",boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
-            {!pinOk ? <>
-              <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Admin Access</h3>
-              <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter the admin PIN to create a new ward.</p>
-              <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Admin PIN"
-                style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinErr?C.red:undefined}}/>
-              {pinErr && <div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
-              <div style={{display:"flex",gap:10,marginTop:14}}>
-                <button onClick={()=>{setOpen(false);setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-                <button onClick={tryPin} style={{flex:1,...accentBtn("#007aff","0,122,255"),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
-              </div>
-            </> : <>
-              <h3 style={{margin:"0 0 18px",color:C.text,fontWeight:600}}>Create Ward</h3>
-              <div style={{marginBottom:14}}>
-                <label style={labelStyle}>Clinical Group</label>
-                <select value={form.groupId} onChange={e=>setForm(f=>({...f,groupId:e.target.value}))}
-                  style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
-                  {groupOptions.map(id=><option key={id} value={id}>{id.toUpperCase()}</option>)}
-                </select>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={labelStyle}>Ward Name</label>
-                <input value={form.wardName} onChange={e=>setForm(f=>({...f,wardName:e.target.value}))} placeholder="e.g. Medicine Male" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={labelStyle}>Rotation / Appointment</label>
-                <input value={form.appointmentType} onChange={e=>setForm(f=>({...f,appointmentType:e.target.value}))} placeholder="e.g. Medicine – Week 1" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={labelStyle}>Number of Beds</label>
-                <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
-              </div>
-              <div style={{marginBottom:20}}>
-                <label style={labelStyle}>Accent Colour</label>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surfaceEl,borderRadius:10,padding:"10px 14px",border:`1px solid ${C.border}`}}>
-                  <input type="color" value={form.themeColor} onChange={e=>setForm(f=>({...f,themeColor:e.target.value}))} style={{width:36,height:36,border:"none",borderRadius:6,cursor:"pointer",padding:0}}/>
-                  <div style={{flex:1,height:6,borderRadius:3,background:`linear-gradient(90deg,${C.surfaceEl},${form.themeColor})`}}/>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>{setOpen(false);setPinOk(false);setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-                <button onClick={create} style={{flex:2,...accentBtn(form.themeColor,hexToRgb(form.themeColor)),padding:"11px",fontSize:"0.9rem"}}>Create Ward</button>
-              </div>
-            </>}
+  // ── PIN screen ──────────────────────────────────────────────────────────────
+  if (screen==="pin") return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+      <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+          <Icon name="key" size={16} color="#007aff"/>
+          <h3 style={{margin:0,color:C.text,fontWeight:600}}>Admin Access</h3>
+        </div>
+        <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter the admin PIN to create a new ward.</p>
+        <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Admin PIN"
+          style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinErr?C.red:undefined}}/>
+        {pinErr && <div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
+        <div style={{display:"flex",gap:10,marginTop:14}}>
+          <button onClick={()=>{setScreen("idle");setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+          <button onClick={tryPin} style={{flex:1,...accentBtn("#007aff","0,122,255"),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Full-page create screen ─────────────────────────────────────────────────
+  if (screen==="create") return (
+    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>setScreen("idle")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Create New Ward</span>
           </div>
         </div>
-      )}
-    </>
+      </div>
+
+      <div style={{maxWidth:560,margin:"0 auto",padding:"28px 20px 60px"}}>
+        {/* Group selector */}
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Clinical Group</label>
+          <select value={form.groupId} onChange={e=>setForm(f=>({...f,groupId:e.target.value}))}
+            style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
+            {groupOptions.map(id=><option key={id} value={id}>{id.toUpperCase()}</option>)}
+          </select>
+        </div>
+
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Ward Name</label>
+          <input value={form.wardName} onChange={e=>setForm(f=>({...f,wardName:e.target.value}))} placeholder="e.g. Medicine Male" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+        </div>
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Rotation / Appointment</label>
+          <input value={form.appointmentType} onChange={e=>setForm(f=>({...f,appointmentType:e.target.value}))} placeholder="e.g. Medicine – Week 1" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+        </div>
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Number of Beds</label>
+          <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+        </div>
+
+        {/* Colour */}
+        <div style={{marginBottom:22}}>
+          <label style={labelStyle}>Accent Colour</label>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+            <input type="color" value={form.themeColor} onChange={e=>setForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0,background:"none"}}/>
+            <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${form.themeColor})`}}/>
+            <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{form.themeColor}</span>
+          </div>
+        </div>
+
+        {/* Students */}
+        <div style={{marginBottom:22}}>
+          <label style={labelStyle}>Students</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
+            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
+            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP</span>
+          </div>
+          {form.students.map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
+              <input value={s.name} onChange={e=>updStudent(i,"name",e.target.value)} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"9px 12px"}}/>
+              <input value={s.group} onChange={e=>updStudent(i,"group",e.target.value)} placeholder="1" style={{...iS,width:48,padding:"9px 8px",textAlign:"center",flexShrink:0}}/>
+              {form.students.length>1 && <button onClick={()=>remStudent(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            </div>
+          ))}
+          <button onClick={addStudent} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
+        </div>
+
+        {/* Consultants */}
+        <div style={{marginBottom:32}}>
+          <label style={labelStyle}>Consultants</label>
+          {form.consultants.map((c,i)=>(
+            <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+              <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+              <input value={c.name} onChange={e=>updConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
+              {form.consultants.length>1 && <button onClick={()=>remConsultant(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            </div>
+          ))}
+          <button onClick={addConsultant} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+        </div>
+
+        <button onClick={create} style={{...accentBtn(form.themeColor,hexToRgb(form.themeColor)),width:"100%",padding:"15px",fontSize:"0.95rem"}}>
+          Create Ward
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <button onClick={()=>setScreen("pin")} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
+      <Icon name="plus" size={12} color={C.textSub}/> New Ward
+    </button>
   );
 }
 
@@ -417,7 +480,7 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, showToast, localT
 
   // ── PIN ────────────────────────────────────────────────────────────────────
   const tryPin = () => {
-    if (pinInput===GROUP_PINS[wardId]) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
