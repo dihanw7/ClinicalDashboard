@@ -7,10 +7,10 @@ const ADMIN_PIN    = "ADMIN2025";
 const TABLE        = "ward_data";
 
 const GROUP_PINS = {
-  "cg1":  "CG1LEAD",  "cg2":  "CG2LEAD",  "cg3":  "CG3LEAD",
-  "cg4":  "CG4LEAD",  "cg5":  "CG5LEAD",  "cg6":  "CG6LEAD",
-  "cg7":  "CG7LEAD",  "cg8":  "CG8LEAD",  "cg9":  "CG9LEAD",
-  "cg10": "CG10LEAD",
+  "cg1":  "CGALEAD",  "cg2":  "CGBLEAD",  "cg3":  "CGCLEAD",
+  "cg4":  "CGDLEAD",  "cg5":  "CGELEAD",  "cg6":  "CGFLEAD",
+  "cg7":  "CGGLEAD",  "cg8":  "CGHLEAD",  "cg9":  "CGILEAD",
+  "cg10": "CGJLEAD",
 };
 
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABKCAYAAAA/i5OkAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABgklEQVR4nO3aXW+DMAyFYTP1//9lejdFUSj5cBLbeZ+bVWhd6cmpoQwRAAAAAAAAAAjjfthW2n6cv8Hn39lPZEYDLiHsxNX5vJYQe18jhJ4Gtzb06EbPGBFIjH5803ZeP7YdS6vBxwf5ZCTgu/D46Hlb0tO81hBLo0Nb+j5GXkf9k9jaYKsN1dov9ff3afz91qYcP5s1D3J5mMeHK8J5cG77DC65Co+9tnf7DE49hbgjXLMLGmFEaIarvlBWV772o9qy/zP+5iuLDd4SxCzWAg4VrsjYQU5byC8uVhocMlwRGwGHDVdk/4ionbluL+LvDriHq7AtjIgRVi+f/vMesIjxkCMELGI45CgBixgNefdBruYgZTK4Wh4aXPpviRseAnaNgCdbHfBxN2avDDi/E+iIoHePiNqg3S7GqtO0t4DcBvhmd4M1mTyVWxFw2HbWiNJgk+0VWRPw7G9iZsMVWdtg7SBmLJz6Yq2+2GP2RulZrO1oKXRr+wgAAAAAAAAAHn0BpuAyXZaUVW4AAAAASUVORK5CYII=";
@@ -291,7 +291,7 @@ function AdminButton({ wards, onSave, showToast }) {
       </button>
       {open && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
-          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:360,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:360,maxHeight:"85vh",overflowY:"auto",boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
             {!pinOk ? <>
               <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Admin Access</h3>
               <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter the admin PIN to create a new ward.</p>
