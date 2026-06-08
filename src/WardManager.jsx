@@ -157,6 +157,18 @@ export default function App() {
     return ts;
   }, []);
 
+  const deleteWard = useCallback(async (wardId) => {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.ward:${wardId}`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      });
+      setWards(ws => ws.filter(w => w.id !== wardId));
+      setScreen("home");
+      setActiveWardId(null);
+    } catch { showToast("Delete failed","error"); }
+  }, []);
+
   if (screen==="loading") return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg,color:C.textSub,fontFamily:SF}}>Loading…</div>
   );
@@ -168,6 +180,7 @@ export default function App() {
       ward={ward}
       onBack={()=>{ setScreen("home"); pollRef.current=true; loadAll(); }}
       onSave={saveWard}
+      onDelete={deleteWard}
       showToast={showToast}
       localTs={localTs}
       seniorMode={seniorMode}
@@ -310,13 +323,17 @@ function AdminButton({ onCreateWard }) {
 
 // ── Full-page create ward screen ───────────────────────────────────────────────
 function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
-  const [form, setForm] = useState({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const groupOptions = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
+  const [form, setForm] = useState({ groupId: groupOptions[0]||"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const [error, setError] = useState("");
 
   const create = async () => {
-    if (!form.wardName||!form.appointmentType||!form.bedCount) { showToast("Fill all fields","error"); return; }
+    setError("");
+    if (!form.wardName||!form.appointmentType||!form.bedCount) { setError("Please fill in Ward Name, Rotation, and Number of Beds."); return; }
     const count = parseInt(form.bedCount);
-    if (isNaN(count)||count<1||count>80) { showToast("Beds 1–80","error"); return; }
-    if (wards.find(w=>w.id===form.groupId)) { showToast("Group already has a ward","error"); return; }
+    if (isNaN(count)||count<1||count>80) { setError("Bed count must be between 1 and 80."); return; }
+    if (wards.find(w=>w.id===form.groupId)) { setError("This clinical group already has a ward."); return; }
+    if (groupOptions.length===0) { setError("All clinical groups already have wards."); return; }
     const beds = {};
     for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
     const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
@@ -332,7 +349,6 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
   const addConsultant = () => setForm(f=>({...f,consultants:[...f.consultants,{name:"",color:"#6366f1"}]}));
   const updConsultant = (i,k,v) => setForm(f=>{ const a=[...f.consultants]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
   const remConsultant = (i) => setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}));
-  const groupOptions  = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
@@ -401,6 +417,8 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
           <button onClick={addConsultant} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
         </div>
 
+        {error && <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:"0.82rem",color:C.red}}>{error}</div>}
+
         <button onClick={create} style={{...accentBtn(form.themeColor,hexToRgb(form.themeColor)),width:"100%",padding:"15px",fontSize:"0.95rem"}}>
           Create Ward
         </button>
@@ -413,7 +431,7 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // WARD VIEW  (full ward, scoped to one group)
 // ══════════════════════════════════════════════════════════════════════════════
-function WardView({ wardId, ward: initialWard, onBack, onSave, showToast, localTs, seniorMode=false }) {
+function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToast, localTs, seniorMode=false }) {
   const [ward,       setWard]       = useState(initialWard || { setup:null, beds:{} });
   const [isLeader,   setIsLeader]   = useState(false);
   const [pinInput,   setPinInput]   = useState("");
@@ -426,6 +444,7 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, showToast, localT
   const [assignModal,setAssignModal]= useState(null);
   const [editMode,   setEditMode]   = useState(false);
   const [showReset,  setShowReset]  = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
   const pollActive = useRef(true);
@@ -586,9 +605,12 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, showToast, localT
       </div>
       <div style={{maxWidth:520,margin:"0 auto",padding:"24px 20px"}}>
         <SetupForm form={setupForm} setForm={setSetupForm} onSubmit={handleSaveEdit} submitLabel="Save Changes" theme={theme} hideBedsField/>
-        <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+        <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
           <button onClick={()=>setShowReset(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>
             Reset Ward (New Rotation)
+          </button>
+          <button onClick={()=>setShowDelete(true)} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>
+            Delete Ward Permanently
           </button>
         </div>
       </div>
@@ -823,6 +845,20 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, showToast, localT
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowReset(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={resetWard} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDelete && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
+            <p style={{margin:"0 0 4px",color:C.text,fontSize:"0.88rem",fontWeight:500}}>{setup.wardName}</p>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>This permanently removes the ward and all its data from the system. This cannot be undone.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowDelete(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{ setShowDelete(false); onDelete && onDelete(wardId); }} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
             </div>
           </div>
         </div>
