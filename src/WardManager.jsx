@@ -92,7 +92,7 @@ export default function WardManager() {
   const [toast, setToast]               = useState(null);
   const [assignModal, setAssignModal]   = useState(null);
   const [activeTab, setActiveTab]       = useState("ward");
-  const [bedEdit, setBedEdit]           = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false });
+  const [bedEdit, setBedEdit]           = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
 
   const [setupForm, setSetupForm] = useState({
     wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff",
@@ -192,10 +192,10 @@ export default function WardManager() {
 
   const clearBed = async (bedNum) => {
     const bed = data.beds[bedNum];
-    const cleared = { ...bed, assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false };
+    const cleared = { ...bed, assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, opStatus:"" };
     const newData = { ...data, beds:{ ...data.beds, [bedNum]: cleared } };
     setData(newData); await save(newData);
-    setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false });
+    setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
     setShowClearConfirm(false);
     showToast("Bed cleared");
   };
@@ -393,7 +393,7 @@ export default function WardManager() {
               const filled = hasAssigned || bed.diagnosis || bed.consultant;
               return (
                 <div key={bedNum}
-                  onClick={()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken}); setView("bed"); }}
+                  onClick={()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||""}); setView("bed"); }}
                   style={{
                     background: bed.historyTaken ? `rgba(${hexToRgb(C.green)},0.06)` : C.surface,
                     border: bed.historyTaken ? `1px solid rgba(${hexToRgb(C.green)},0.2)` : `1px solid rgba(0,0,0,${filled ? 0.1 : 0.08})`,
@@ -416,6 +416,14 @@ export default function WardManager() {
                   {bed.diagnosis && <div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
                   {bed.consultant && <div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
                   {bed.notes && <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
+                  {bed.opStatus && (
+                    <div style={{display:"inline-block",marginTop:6,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,
+                      background: bed.opStatus==="pre-op" ? "rgba(249,115,22,0.12)" : "rgba(56,189,248,0.15)",
+                      color:       bed.opStatus==="pre-op" ? "#c2410c"              : "#0369a1",
+                      border:      bed.opStatus==="pre-op" ? "1px solid rgba(249,115,22,0.3)" : "1px solid rgba(56,189,248,0.4)"}}>
+                      {bed.opStatus}
+                    </div>
+                  )}
 
                   {/* Student chips */}
                   {(hasAssigned||hasShadow) && (
@@ -517,6 +525,27 @@ export default function WardManager() {
                 </div>
               </div>
             )}
+
+            {/* Op Status toggle */}
+            <div style={{marginBottom:16}}>
+              <label style={labelStyle}>Op Status</label>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                {[{val:"pre-op",bg:"rgba(249,115,22,0.1)",border:"rgba(249,115,22,0.35)",activeBg:"rgba(249,115,22,0.18)",activeBorder:"#f97316",color:"#c2410c"},
+                  {val:"post-op",bg:"rgba(56,189,248,0.08)",border:"rgba(56,189,248,0.3)",activeBg:"rgba(56,189,248,0.18)",activeBorder:"#38bdf8",color:"#0369a1"}
+                ].map(o => {
+                  const active = bedEdit.opStatus===o.val;
+                  return (
+                    <button key={o.val} onClick={()=>setBedEdit(b=>({...b,opStatus:active?"":o.val}))}
+                      style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:active?700:500,letterSpacing:"0.01em",textTransform:"capitalize",transition:"all 0.12s",
+                        background: active ? o.activeBg : o.bg,
+                        border:     `1px solid ${active ? o.activeBorder : o.border}`,
+                        color:      active ? o.color : C.textSub}}>
+                      {o.val}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Consultant */}
             <div style={{marginBottom:16}}>
