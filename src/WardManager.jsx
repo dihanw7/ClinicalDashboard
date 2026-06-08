@@ -99,11 +99,11 @@ function BrandingBar({ theme }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const seniorMode = new URLSearchParams(window.location.search).get("view")==="senior";
-  const [screen, setScreen]     = useState("loading"); // loading | home | ward
-  const [wards,  setWards]      = useState([]);         // [{id, setup, beds, updated_at}]
+  const [screen, setScreen]     = useState("loading"); // loading | home | ward | create
+  const [wards,  setWards]      = useState([]);
   const [activeWardId, setActiveWardId] = useState(null);
   const [toast,  setToast]      = useState(null);
-  const localTs  = useRef({});   // { wardId: timestamp }
+  const localTs  = useRef({});
   const pollRef  = useRef(true);
 
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),2500); };
@@ -174,6 +174,16 @@ export default function App() {
     />;
   }
 
+  if (screen==="create") return (
+    <CreateWardScreen
+      wards={wards}
+      onSave={saveWard}
+      showToast={showToast}
+      onBack={()=>setScreen("home")}
+      onCreated={()=>{ loadAll(); setScreen("home"); }}
+    />
+  );
+
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
       {/* Header */}
@@ -186,7 +196,7 @@ export default function App() {
             </div>
             <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1}}>{seniorMode ? "Senior view — read only" : "All active wards"}</div>
           </div>
-          {!seniorMode && <AdminButton wards={wards} onSave={saveWard} showToast={showToast}/>}
+          {!seniorMode && <AdminButton onCreateWard={()=>setScreen("create")}/>}
           {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
         </div>
       </div>
@@ -260,17 +270,47 @@ function WardCard({ ward, onOpen }) {
   );
 }
 
-// ── Admin button — full page ward creation ─────────────────────────────────────
-function AdminButton({ wards, onSave, showToast }) {
-  const [screen, setScreen] = useState("idle"); // idle | pin | create
-  const [pin,    setPin]    = useState("");
-  const [pinErr, setPinErr] = useState(false);
-  const [form,   setForm]   = useState({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+// ── Admin button — PIN gate only, create screen is at App level ────────────────
+function AdminButton({ onCreateWard }) {
+  const [open,   setOpen]  = useState(false);
+  const [pin,    setPin]   = useState("");
+  const [pinErr, setPinErr]= useState(false);
 
   const tryPin = () => {
-    if (isAdminPin(pin)) { setScreen("create"); setPinErr(false); }
+    if (isAdminPin(pin)) { setOpen(false); setPin(""); onCreateWard(); }
     else { setPinErr(true); setTimeout(()=>setPinErr(false),1500); }
   };
+
+  return (
+    <>
+      <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
+        <Icon name="plus" size={12} color={C.textSub}/> New Ward
+      </button>
+      {open && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <Icon name="key" size={16} color="#007aff"/>
+              <h3 style={{margin:0,color:C.text,fontWeight:600}}>Leader Access</h3>
+            </div>
+            <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter your leader PIN to create a new ward.</p>
+            <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Leader PIN"
+              style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinErr?C.red:undefined}}/>
+            {pinErr && <div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={()=>{setOpen(false);setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={tryPin} style={{flex:1,...accentBtn("#007aff","0,122,255"),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Full-page create ward screen ───────────────────────────────────────────────
+function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
+  const [form, setForm] = useState({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
 
   const create = async () => {
     if (!form.wardName||!form.appointmentType||!form.bedCount) { showToast("Fill all fields","error"); return; }
@@ -281,63 +321,35 @@ function AdminButton({ wards, onSave, showToast }) {
     for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
     const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
     const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-    const wardData = { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, students, consultants }, beds };
-    await onSave(form.groupId, wardData);
+    await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, students, consultants }, beds });
     showToast("Ward created!");
-    setScreen("idle"); setPin("");
-    setForm({ groupId:"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+    onCreated();
   };
 
-  const addStudent    = () => setForm(f=>({...f, students:[...f.students,{name:"",group:""}]}));
+  const addStudent    = () => setForm(f=>({...f,students:[...f.students,{name:"",group:""}]}));
   const updStudent    = (i,k,v) => setForm(f=>{ const a=[...f.students]; a[i]={...a[i],[k]:v}; return {...f,students:a}; });
   const remStudent    = (i) => setForm(f=>({...f,students:f.students.filter((_,idx)=>idx!==i)}));
-  const addConsultant = () => setForm(f=>({...f, consultants:[...f.consultants,{name:"",color:"#6366f1"}]}));
+  const addConsultant = () => setForm(f=>({...f,consultants:[...f.consultants,{name:"",color:"#6366f1"}]}));
   const updConsultant = (i,k,v) => setForm(f=>{ const a=[...f.consultants]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
   const remConsultant = (i) => setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}));
   const groupOptions  = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
 
-  // ── PIN screen ──────────────────────────────────────────────────────────────
-  if (screen==="pin") return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
-      <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-          <Icon name="key" size={16} color="#007aff"/>
-          <h3 style={{margin:0,color:C.text,fontWeight:600}}>Admin Access</h3>
-        </div>
-        <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter the admin PIN to create a new ward.</p>
-        <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Admin PIN"
-          style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinErr?C.red:undefined}}/>
-        {pinErr && <div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
-        <div style={{display:"flex",gap:10,marginTop:14}}>
-          <button onClick={()=>{setScreen("idle");setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-          <button onClick={tryPin} style={{flex:1,...accentBtn("#007aff","0,122,255"),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Full-page create screen ─────────────────────────────────────────────────
-  if (screen==="create") return (
-    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setScreen("idle")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
-            <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Create New Ward</span>
-          </div>
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
+      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",zIndex:50}}>
+        <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+          <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Create New Ward</span>
         </div>
       </div>
 
       <div style={{maxWidth:560,margin:"0 auto",padding:"28px 20px 60px"}}>
-        {/* Group selector */}
         <div style={{marginBottom:18}}>
           <label style={labelStyle}>Clinical Group</label>
-          <select value={form.groupId} onChange={e=>setForm(f=>({...f,groupId:e.target.value}))}
-            style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
+          <select value={form.groupId} onChange={e=>setForm(f=>({...f,groupId:e.target.value}))} style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
             {groupOptions.map(id=><option key={id} value={id}>{id.toUpperCase()}</option>)}
           </select>
         </div>
-
         <div style={{marginBottom:18}}>
           <label style={labelStyle}>Ward Name</label>
           <input value={form.wardName} onChange={e=>setForm(f=>({...f,wardName:e.target.value}))} placeholder="e.g. Medicine Male" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
@@ -350,8 +362,6 @@ function AdminButton({ wards, onSave, showToast }) {
           <label style={labelStyle}>Number of Beds</label>
           <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
         </div>
-
-        {/* Colour */}
         <div style={{marginBottom:22}}>
           <label style={labelStyle}>Accent Colour</label>
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
@@ -395,13 +405,8 @@ function AdminButton({ wards, onSave, showToast }) {
           Create Ward
         </button>
       </div>
+      <BrandingBar theme={form.themeColor}/>
     </div>
-  );
-
-  return (
-    <button onClick={()=>setScreen("pin")} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-      <Icon name="plus" size={12} color={C.textSub}/> New Ward
-    </button>
   );
 }
 
