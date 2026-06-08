@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const LEADER_PIN = "CG1LEAD";
 const STORAGE_KEY = "ward-manager-v3";
@@ -21,20 +21,30 @@ const sb = {
       body: JSON.stringify({ id, value, updated_at: new Date().toISOString() })
     });
   },
-  subscribe(onUpdate) {
-    const ws = new WebSocket(`${SUPABASE_URL.replace("https","wss")}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`);
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ topic:"realtime:public:ward_data", event:"phx_join", payload:{}, ref:"1" }));
+  // Poll every 5s — reliable across mobile networks, auto-recovers from drops
+  subscribe(onUpdate, getLocalTimestamp) {
+    let active = true;
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ward_data?id=eq.${STORAGE_KEY}&select=value,updated_at`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        const rows = await res.json();
+        if (rows?.[0]) {
+          const remoteTs = rows[0].updated_at;
+          const localTs  = getLocalTimestamp();
+          if (!localTs || new Date(remoteTs) > new Date(localTs)) {
+            const parsed = JSON.parse(rows[0].value);
+            parsed._ts = remoteTs;
+            onUpdate(parsed, remoteTs);
+          }
+        }
+      } catch {}
+      if (active) setTimeout(poll, 5000);
     };
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.event === "INSERT" || msg.event === "UPDATE") {
-        const rec = msg.payload?.record;
-        if (rec?.id === STORAGE_KEY) onUpdate(JSON.parse(rec.value));
-      }
-    };
-    ws.onerror = () => {};
-    return () => ws.close();
+    setTimeout(poll, 5000); // first poll after 5s (initial load already done)
+    return () => { active = false; };
   }
 };
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABKCAYAAAA/i5OkAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABgklEQVR4nO3aXW+DMAyFYTP1//9lejdFUSj5cBLbeZ+bVWhd6cmpoQwRAAAAAAAAAAjjfthW2n6cv8Hn39lPZEYDLiHsxNX5vJYQe18jhJ4Gtzb06EbPGBFIjH5803ZeP7YdS6vBxwf5ZCTgu/D46Hlb0tO81hBLo0Nb+j5GXkf9k9jaYKsN1dov9ff3afz91qYcP5s1D3J5mMeHK8J5cG77DC65Co+9tnf7DE49hbgjXLMLGmFEaIarvlBWV772o9qy/zP+5iuLDd4SxCzWAg4VrsjYQU5byC8uVhocMlwRGwGHDVdk/4ionbluL+LvDriHq7AtjIgRVi+f/vMesIjxkCMELGI45CgBixgNefdBruYgZTK4Wh4aXPpviRseAnaNgCdbHfBxN2avDDi/E+iIoHePiNqg3S7GqtO0t4DcBvhmd4M1mTyVWxFw2HbWiNJgk+0VWRPw7G9iZsMVWdtg7SBmLJz6Yq2+2GP2RulZrO1oKXRr+wgAAAAAAAAAHn0BpuAyXZaUVW4AAAAASUVORK5CYII=";
@@ -100,28 +110,41 @@ export default function WardManager() {
   });
   const [editMode, setEditMode] = useState(false);
 
+  const localTs = useRef(null);
+
   useEffect(() => {
     (async () => {
       try {
-        const val = await sb.get(STORAGE_KEY);
-        if (val) {
-          const parsed = JSON.parse(val);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ward_data?id=eq.${STORAGE_KEY}&select=value,updated_at`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        const rows = await res.json();
+        if (rows?.[0]?.value) {
+          const parsed = JSON.parse(rows[0].value);
+          localTs.current = rows[0].updated_at;
           setData(parsed);
           setView(parsed.setup ? "home" : "setup");
         } else setView("setup");
       } catch { setView("setup"); }
     })();
 
-    // Realtime — update state when another client saves
-    const unsub = sb.subscribe((parsed) => {
-      setData(parsed);
-      if (parsed.setup && view === "loading") setView("home");
-    });
+    const unsub = sb.subscribe(
+      (parsed, ts) => { localTs.current = ts; setData(d => ({ ...parsed })); },
+      () => localTs.current
+    );
     return unsub;
   }, []);
 
   const save = useCallback(async (d) => {
-    try { await sb.upsert(STORAGE_KEY, JSON.stringify(d)); } catch {}
+    try {
+      const ts = new Date().toISOString();
+      localTs.current = ts;
+      await fetch(`${SUPABASE_URL}/rest/v1/ward_data`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify({ id: STORAGE_KEY, value: JSON.stringify(d), updated_at: ts })
+      });
+    } catch {}
   }, []);
 
   const showToast = (msg, type="success") => {
