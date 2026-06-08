@@ -376,7 +376,7 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
           <label style={labelStyle}>Students</label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
             <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
-            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP</span>
+            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP NO.</span>
           </div>
           {form.students.map((s,i)=>(
             <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
@@ -871,7 +871,7 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
         <label style={labelStyle}>Students</label>
         <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
           <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
-          <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP</span>
+          <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP NO.</span>
         </div>
         {form.students.map((s,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
