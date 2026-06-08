@@ -96,8 +96,9 @@ export default function WardManager() {
 
   const [setupForm, setSetupForm] = useState({
     wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff",
-    students:[{name:"",group:""}], consultants:[""]
+    students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}]
   });
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -139,7 +140,7 @@ export default function WardManager() {
     const count = parseInt(setupForm.bedCount);
     if (isNaN(count)||count<1||count>80) { showToast("Bed count 1–80","error"); return; }
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
-    const consultants = setupForm.consultants.filter(c=>c.trim());
+    const consultants = setupForm.consultants.filter(c=>c.name?.trim()||typeof c==="string").map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:{name:c.name.trim(),color:c.color||"#6366f1"}).filter(c=>c.name);
     const beds = {};
     for (let i=1;i<=count;i++) {
       beds[i] = { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false };
@@ -149,10 +150,22 @@ export default function WardManager() {
     showToast("Ward configured!");
   };
 
-  const addField      = (f)     => setSetupForm(p => ({ ...p, [f]: f==="students" ? [...p[f],{name:"",group:""}] : [...p[f],""] }));
+  const addField      = (f)     => setSetupForm(p => ({ ...p, [f]: f==="students" ? [...p[f],{name:"",group:""}] : f==="consultants" ? [...p[f],{name:"",color:"#6366f1"}] : [...p[f],""] }));
   const updateField   = (f,i,v) => setSetupForm(p => { const a=[...p[f]]; a[i]=v; return {...p,[f]:a}; });
   const removeField   = (f,i)   => setSetupForm(p => ({ ...p, [f]:p[f].filter((_,idx)=>idx!==i) }));
-  const updateStudent = (i,k,v) => setSetupForm(p => { const a=[...p.students]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
+  const updateStudent    = (i,k,v) => setSetupForm(p => { const a=[...p.students]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
+  const updateConsultant = (i,k,v) => setSetupForm(p => { const a=[...p.consultants]; a[i]={...a[i],[k]:v}; return {...p,consultants:a}; });
+
+  const handleSaveEdit = async () => {
+    if (!setupForm.wardName || !setupForm.appointmentType) {
+      showToast("Fill required fields","error"); return;
+    }
+    const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
+    const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
+    const newData = { ...data, setup:{ ...data.setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, students, consultants } };
+    setData(newData); await save(newData);
+    setEditMode(false); showToast("Settings saved!");
+  };
 
   // ── PIN ────────────────────────────────────────────────────────────────────
   const tryPin = () => {
@@ -297,8 +310,10 @@ export default function WardManager() {
         <div style={{marginBottom:32}}>
           <label style={labelStyle}>Consultants</label>
           {setupForm.consultants.map((c,i) => (
-            <div key={i} style={{display:"flex",gap:6,marginTop:8}}>
-              <input value={c} onChange={e=>updateField("consultants",i,e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
+            <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+              <input type="color" value={c.color||"#6366f1"} onChange={e=>updateConsultant(i,"color",e.target.value)}
+                style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+              <input value={c.name} onChange={e=>updateConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
               {setupForm.consultants.length>1 && <button onClick={()=>removeField("consultants",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
             </div>
           ))}
@@ -336,12 +351,80 @@ export default function WardManager() {
                   <Icon name="key" size={12} color={C.textSub}/> Login
                 </button>
             }
-            {isLeader && <button onClick={()=>setShowSetupReset(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
+            {isLeader && <button onClick={()=>{ setEditMode(true); setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", bedCount:setup.bedCount||"", themeColor:setup.themeColor||"#007aff", students:setup.students?.length?setup.students:[{name:"",group:""}], consultants:setup.consultants?.length?setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c):[{name:"",color:"#6366f1"}] }); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
             </button>}
           </div>
         </div>
       </div>
+
+      {/* ── EDIT SETTINGS OVERLAY ── */}
+      {editMode && (
+        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{maxWidth:520,margin:"0 auto",padding:"24px 20px 60px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
+              <h2 style={{margin:0,fontSize:"1.3rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em"}}>Edit Settings</h2>
+              <button onClick={()=>setEditMode(false)} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="close" size={13} color={C.textSub}/>
+              </button>
+            </div>
+
+            <SetupField label="Ward Name" value={setupForm.wardName} onChange={v=>setSetupForm(f=>({...f,wardName:v}))} placeholder="e.g. Obs & Gynae Ward B" theme={setupForm.themeColor}/>
+            <SetupField label="Rotation / Appointment Type" value={setupForm.appointmentType} onChange={v=>setSetupForm(f=>({...f,appointmentType:v}))} placeholder="e.g. Obstetrics – Week 3" theme={setupForm.themeColor}/>
+
+            <div style={{marginBottom:24}}>
+              <label style={labelStyle}>Accent Colour</label>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+                <input type="color" value={setupForm.themeColor} onChange={e=>setSetupForm(f=>({...f,themeColor:e.target.value}))}
+                  style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0,background:"none"}}/>
+                <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setupForm.themeColor})`}}/>
+                <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{setupForm.themeColor}</span>
+              </div>
+            </div>
+
+            {/* Students */}
+            <div style={{marginBottom:24}}>
+              <label style={labelStyle}>Students</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
+                <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
+                <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP</span>
+              </div>
+              {setupForm.students.map((s,i) => (
+                <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
+                  <input value={s.name} onChange={e=>updateStudent(i,"name",e.target.value)} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"10px 12px"}}/>
+                  <input value={s.group} onChange={e=>updateStudent(i,"group",e.target.value)} placeholder="1" style={{...iS,width:48,padding:"10px 8px",textAlign:"center",flexShrink:0}}/>
+                  {setupForm.students.length>1 && <button onClick={()=>removeField("students",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+                </div>
+              ))}
+              <button onClick={()=>addField("students")} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
+            </div>
+
+            {/* Consultants */}
+            <div style={{marginBottom:32}}>
+              <label style={labelStyle}>Consultants</label>
+              {setupForm.consultants.map((c,i) => (
+                <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                  <input type="color" value={c.color||"#6366f1"} onChange={e=>updateConsultant(i,"color",e.target.value)}
+                    style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+                  <input value={c.name} onChange={e=>updateConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
+                  {setupForm.consultants.length>1 && <button onClick={()=>removeField("consultants",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+                </div>
+              ))}
+              <button onClick={()=>addField("consultants")} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+            </div>
+
+            <button onClick={handleSaveEdit} style={{background:setupForm.themeColor,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"15px",boxShadow:`0 4px 14px rgba(${hexToRgb(setupForm.themeColor)},0.35)`}}>
+              Save Changes
+            </button>
+
+            <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:16}}>
+              <button onClick={()=>{setEditMode(false);setShowSetupReset(true);}} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>
+                Reset Ward (New Rotation)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"53px",zIndex:49,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
@@ -391,13 +474,23 @@ export default function WardManager() {
               const hasAssigned = bed.assigned?.length>0;
               const hasShadow   = bed.shadows?.length>0;
               const filled = hasAssigned || bed.diagnosis || bed.consultant;
+              const consultantObj = (setup.consultants||[]).find(c=>(typeof c==="object"?c.name:c)===bed.consultant);
+              const consultantColor = consultantObj?.color ? hexToRgb(consultantObj.color) : null;
               return (
                 <div key={bedNum}
                   onClick={()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||""}); setView("bed"); }}
                   style={{
-                    background: bed.historyTaken ? `rgba(${hexToRgb(C.green)},0.06)` : C.surface,
-                    border: bed.historyTaken ? `1px solid rgba(${hexToRgb(C.green)},0.2)` : `1px solid rgba(0,0,0,${filled ? 0.1 : 0.08})`,
-                    boxShadow: bed.historyTaken ? `0 4px 16px rgba(${hexToRgb(C.green)},0.1), 0 1px 3px rgba(0,0,0,0.06)` : filled ? "0 6px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)" : "0 2px 10px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+                    background: consultantColor ? `rgba(${consultantColor},0.07)` : C.surface,
+                    border: bed.historyTaken
+                      ? `1px solid rgba(${hexToRgb(C.green)},0.2)`
+                      : consultantColor
+                        ? `1px solid rgba(${consultantColor},0.22)`
+                        : `1px solid rgba(0,0,0,${filled ? 0.1 : 0.08})`,
+                    boxShadow: consultantColor
+                      ? `0 6px 20px rgba(${consultantColor},0.1), 0 1px 4px rgba(0,0,0,0.05)`
+                      : bed.historyTaken
+                        ? `0 4px 16px rgba(${hexToRgb(C.green)},0.1), 0 1px 3px rgba(0,0,0,0.06)`
+                        : filled ? "0 6px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)" : "0 2px 10px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)",
                     borderRadius:14, padding:"12px 11px", cursor:"pointer", position:"relative",
                     transition:"transform 0.12s, box-shadow 0.12s", userSelect:"none",
                   }}
@@ -552,12 +645,18 @@ export default function WardManager() {
               <label style={labelStyle}>Consultant</label>
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
                 {(setup.consultants||[]).length>0
-                  ? (setup.consultants||[]).map(c=>(
-                      <button key={c} onClick={()=>setBedEdit(b=>({...b,consultant:b.consultant===c?"":c}))}
-                        style={{background:bedEdit.consultant===c?theme:C.surfaceEl,border:`1px solid ${bedEdit.consultant===c?theme:C.border}`,color:bedEdit.consultant===c?"#fff":C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:bedEdit.consultant===c?600:400,transition:"all 0.12s"}}>
-                        {c}
-                      </button>
-                    ))
+                  ? (setup.consultants||[]).map((c,i)=>{
+                      const cName = typeof c==="object"?c.name:c;
+                      const cColor = typeof c==="object"?c.color:"#6366f1";
+                      const active = bedEdit.consultant===cName;
+                      return (
+                        <button key={i} onClick={()=>setBedEdit(b=>({...b,consultant:b.consultant===cName?"":cName}))}
+                          style={{display:"flex",alignItems:"center",gap:7,background:active?`rgba(${hexToRgb(cColor)},0.12)`:C.surfaceEl,border:`1px solid ${active?cColor:C.border}`,color:active?cColor:C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:active?600:400,transition:"all 0.12s"}}>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:cColor,flexShrink:0}}/>
+                          {cName}
+                        </button>
+                      );
+                    })
                   : <input value={bedEdit.consultant} onChange={e=>setBedEdit(b=>({...b,consultant:e.target.value}))} placeholder="Consultant name" style={{...iS,width:"100%",boxSizing:"border-box"}}/>
                 }
               </div>
