@@ -1813,6 +1813,11 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
     (g.students||[]).filter(s=>s.name).map(s=>({...s, groupName:g.name, groupIdx:groups.indexOf(g)}))
   );
 
+  const getStudentPatients = (name) => ({
+    primary: patients.filter(p => p.primary1===name || p.primary2===name),
+    shadow:  patients.filter(p => p.shadow===name),
+  });
+
   const sorted = [...allStudents].sort((a,b) => {
     const {primary: ap, shadow: as_} = getStudentPatients(a.name);
     const {primary: bp, shadow: bs_} = getStudentPatients(b.name);
@@ -1827,11 +1832,6 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
 
   const groupColors = ["#6366f1","#f97316"];
   const tabOptions = [{id:"all",label:"All"}, ...groups.map((g,i)=>({id:g.name,label:g.name,color:groupColors[i]}))];
-
-  const getStudentPatients = (name) => ({
-    primary: patients.filter(p => p.primary1===name || p.primary2===name),
-    shadow:  patients.filter(p => p.shadow===name),
-  });
 
   if (allStudents.length===0) return (
     <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students added in setup.</div>
