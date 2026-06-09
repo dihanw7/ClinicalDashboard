@@ -394,18 +394,16 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
             {groupOptions.map(id=><option key={id} value={id}>{id.toUpperCase()}</option>)}
           </select>
         </div>
-        {/* Template selector */}
+        {/* Template selector - dropdown */}
         <div style={{marginBottom:22}}>
           <label style={labelStyle}>Ward Template</label>
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
+          <select value={form.template} onChange={e=>setForm(f=>({...f,template:e.target.value}))}
+            style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
             {Object.entries(WARD_TEMPLATES).map(([key,t])=>(
-              <div key={key} onClick={()=>setForm(f=>({...f,template:key}))}
-                style={{padding:"12px 14px",borderRadius:12,cursor:"pointer",border:`1px solid ${form.template===key?theme:C.border}`,background:form.template===key?`rgba(${hexToRgb(theme)},0.06)`:C.surface,transition:"all 0.12s"}}>
-                <div style={{fontSize:"0.85rem",fontWeight:600,color:form.template===key?theme:C.text}}>{t.label}</div>
-                <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:2}}>{t.desc}</div>
-              </div>
+              <option key={key} value={key}>{t.label}</option>
             ))}
-          </div>
+          </select>
+          <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:6,paddingLeft:2}}>{WARD_TEMPLATES[form.template]?.desc}</div>
         </div>
 
         <div style={{marginBottom:18}}>
@@ -481,23 +479,27 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
 
 // ── PaedSetupFields ────────────────────────────────────────────────────────────
 function PaedSetupFields({ form, setForm }) {
-  const updGroup    = (gi,k,v) => setForm(f=>{ const g=[...f.paedGroups]; g[gi]={...g[gi],[k]:v}; return {...f,paedGroups:g}; });
-  const addStudent  = (gi) => setForm(f=>{ const g=[...f.paedGroups]; g[gi].students=[...g[gi].students,{name:"",no:""}]; return {...f,paedGroups:g}; });
-  const updStudent  = (gi,si,k,v) => setForm(f=>{ const g=[...f.paedGroups]; const s=[...g[gi].students]; s[si]={...s[si],[k]:v}; g[gi].students=s; return {...f,paedGroups:g}; });
-  const remStudent  = (gi,si) => setForm(f=>{ const g=[...f.paedGroups]; g[gi].students=g[gi].students.filter((_,i)=>i!==si); return {...f,paedGroups:g}; });
+  const paedGroups   = form.paedGroups   || [{name:"Group A",students:[{name:"",no:""}]},{name:"Group B",students:[{name:"",no:""}]}];
+  const wardSections = form.wardSections || [{name:"General",count:""},{name:"HDU",count:""},{name:"NICU",count:""},{name:"NBU",count:""}];
+  const shadowHOs    = form.shadowHOs    || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
+  const consultants  = form.consultants  || [{name:"",color:"#6366f1"}];
 
-  const addSection  = () => setForm(f=>({...f,wardSections:[...f.wardSections,{name:"",count:""}]}));
-  const updSection  = (i,k,v) => setForm(f=>{ const s=[...f.wardSections]; s[i]={...s[i],[k]:v}; return {...f,wardSections:s}; });
-  const remSection  = (i) => setForm(f=>({...f,wardSections:f.wardSections.filter((_,idx)=>idx!==i)}));
+  const updGroup    = (gi,k,v) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],[k]:v}; return {...f,paedGroups:g}; });
+  const addStudent  = (gi) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],students:[...(g[gi].students||[]),{name:"",no:""}]}; return {...f,paedGroups:g}; });
+  const updStudent  = (gi,si,k,v) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; const s=[...(g[gi].students||[])]; s[si]={...s[si],[k]:v}; g[gi]={...g[gi],students:s}; return {...f,paedGroups:g}; });
+  const remStudent  = (gi,si) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],students:(g[gi].students||[]).filter((_,i)=>i!==si)}; return {...f,paedGroups:g}; });
 
-  const updShadowHO = (i,v) => setForm(f=>{ const s=[...f.shadowHOs]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+  const addSection  = () => setForm(f=>({...f,wardSections:[...(f.wardSections||wardSections),{name:"",count:""}]}));
+  const updSection  = (i,k,v) => setForm(f=>{ const s=[...(f.wardSections||wardSections)]; s[i]={...s[i],[k]:v}; return {...f,wardSections:s}; });
+  const remSection  = (i) => setForm(f=>({...f,wardSections:(f.wardSections||wardSections).filter((_,idx)=>idx!==i)}));
 
-  const updConsultant = (i,k,v) => setForm(f=>{ const a=[...f.consultants]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
+  const updShadowHO   = (i,v) => setForm(f=>{ const s=[...(f.shadowHOs||shadowHOs)]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+  const updConsultant = (i,k,v) => setForm(f=>{ const a=[...(f.consultants||consultants)]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
 
   return (
     <div>
       {/* Groups */}
-      {form.paedGroups.map((grp,gi)=>(
+      {paedGroups.map((grp,gi)=>(
         <div key={gi} style={{marginBottom:22,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 10px"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:gi===0?"#6366f1":"#f97316",flexShrink:0}}/>
@@ -522,11 +524,11 @@ function PaedSetupFields({ form, setForm }) {
       {/* Ward Sections */}
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Ward Sections</label>
-        {form.wardSections.map((s,i)=>(
+        {wardSections.map((s,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input value={s.name} onChange={e=>updSection(i,"name",e.target.value)} placeholder="Section name (e.g. HDU)" style={{...iS,flex:1,padding:"9px 12px"}}/>
             <input type="number" value={s.count} onChange={e=>updSection(i,"count",e.target.value)} placeholder="Beds" style={{...iS,width:62,padding:"9px 8px",textAlign:"center"}}/>
-            {form.wardSections.length>1 && <button onClick={()=>remSection(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+            {wardSections.length>1 && <button onClick={()=>remSection(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
           </div>
         ))}
         <button onClick={addSection} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Section</button>
@@ -536,7 +538,7 @@ function PaedSetupFields({ form, setForm }) {
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Shadow HO Posts</label>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Assign names to 3-day rotating posts. Leaders can update these anytime.</p>
-        {form.shadowHOs.map((ho,i)=>(
+        {shadowHOs.map((ho,i)=>(
           <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
             <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
             <input value={ho.name} onChange={e=>updShadowHO(i,e.target.value)} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
@@ -547,14 +549,14 @@ function PaedSetupFields({ form, setForm }) {
       {/* Consultants */}
       <div style={{marginBottom:32}}>
         <label style={labelStyle}>Consultants</label>
-        {form.consultants.map((c,i)=>(
+        {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
             <input value={c.name} onChange={e=>updConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
-            {form.consultants.length>1 && <button onClick={()=>setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            {consultants.length>1 && <button onClick={()=>setForm(f=>({...f,consultants:(f.consultants||consultants).filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
           </div>
         ))}
-        <button onClick={()=>setForm(f=>({...f,consultants:[...f.consultants,{name:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+        <button onClick={()=>setForm(f=>({...f,consultants:[...(f.consultants||consultants),{name:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
       </div>
     </div>
   );
@@ -599,7 +601,7 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
   }, [wardId, onSave]);
 
   const setup = ward.setup || {};
-  const template = setup.template || "default";
+  const template = setup.template || "default"; // existing wards default to "default"
 
   if (template === "paed") {
     return <PaedWardView wardId={wardId} ward={ward} onBack={onBack} saveWard={saveWard} onDelete={onDelete} showToast={showToast} seniorMode={seniorMode}/>;
@@ -651,7 +653,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const handleSaveEdit = async () => {
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, students, consultants } });
+    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants } });
     setEditMode(false); showToast("Settings saved!");
   };
 
@@ -757,6 +759,16 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         </div>
       </div>
       <div style={{maxWidth:520,margin:"0 auto",padding:"24px 20px"}}>
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Ward Template</label>
+          <select value={setupForm.template||"default"} onChange={e=>setSetupForm(f=>({...f,template:e.target.value}))}
+            style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}>
+            {Object.entries(WARD_TEMPLATES).map(([key,t])=>(
+              <option key={key} value={key}>{t.label}</option>
+            ))}
+          </select>
+          <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:4,paddingLeft:2}}>{WARD_TEMPLATES[setupForm.template||"default"]?.desc}</div>
+        </div>
         <SetupForm form={setupForm} setForm={setSetupForm} onSubmit={handleSaveEdit} submitLabel="Save Changes" theme={theme} hideBedsField/>
         <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
           <button onClick={()=>setShowReset(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>
@@ -782,6 +794,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div>
               <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,letterSpacing:"-0.01em"}}>{setup.wardName}</div>
               <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
+              <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:2,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{WARD_TEMPLATES[setup.template||"default"]?.label||"Default"}</div>
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
