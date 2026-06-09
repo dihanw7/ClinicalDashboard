@@ -1555,7 +1555,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Paed Assign modal */}
       {assignTarget&&(
-        <PaedAssignModal patient={patients.find(p=>p.id===assignTarget)} groups={groups} allStudents={allStudents} theme={theme} rgb={rgb}
+        <PaedAssignModal patient={patients.find(p=>p.id===assignTarget)} groups={groups} allStudents={allStudents} theme={theme} rgb={rgb} patients={patients}
           onConfirm={async(p1,p2,sh)=>{ await updatePatient(assignTarget,{primary1:p1,primary2:p2,shadow:sh}); setAssignTarget(null); showToast("Assigned"); }}
           onClose={()=>setAssignTarget(null)}/>
       )}
@@ -1758,7 +1758,7 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
 }
 
 // ── Paed Assign Modal ──────────────────────────────────────────────────────────
-function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, onClose }) {
+function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, onClose, patients=[] }) {
   const [p1, setP1] = useState(patient?.primary1||null);
   const [p2, setP2] = useState(patient?.primary2||null);
   const [sh, setSh] = useState(patient?.shadow||null);
@@ -1768,20 +1768,46 @@ function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, 
   const g0s = (g0.students||[]).filter(s=>s.name);
   const g1s = (g1.students||[]).filter(s=>s.name);
 
-  const SRow = ({students,selected,onSelect,label,color}) => (
-    <div style={{marginBottom:14}}>
-      <div style={{fontSize:"0.65rem",fontWeight:600,color,letterSpacing:"0.04em",marginBottom:6,textTransform:"uppercase"}}>{label}</div>
-      {students.map(s=>(
-        <div key={s.name} onClick={()=>onSelect(selected===s.name?null:s.name)}
-          style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,background:selected===s.name?`rgba(${hexToRgb(color)},0.1)`:C.surfaceEl,border:`1px solid ${selected===s.name?color:C.border}`}}>
-          <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${selected===s.name?color:C.borderMid}`,background:selected===s.name?color:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            {selected===s.name&&<Icon name="check" size={10} color="#fff"/>}
+  // Count existing patient assignments per student (excluding current patient)
+  const countFor = (name) => patients.filter(p =>
+    p.id !== patient?.id && (p.primary1===name || p.primary2===name || p.shadow===name)
+  ).length;
+
+  const StudentChip = ({ s, selected, onSelect, color, dashed=false }) => {
+    const count = countFor(s.name);
+    const isSel = selected===s.name;
+    return (
+      <div onClick={()=>onSelect(isSel?null:s.name)}
+        style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
+          padding:"8px 4px",borderRadius:10,cursor:"pointer",textAlign:"center",
+          background:isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
+          border:dashed?`1px dashed ${isSel?color:C.borderMid}`:`1px solid ${isSel?color:C.border}`,
+          transition:"all 0.1s",position:"relative"}}>
+        {/* Checkmark */}
+        {isSel && <div style={{position:"absolute",top:4,right:4,width:14,height:14,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="check" size={8} color="#fff"/>
+        </div>}
+        {/* Student number */}
+        {s.no && <span style={{fontSize:"0.55rem",color:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
+        {/* Name — first name only */}
+        <span style={{fontSize:"0.72rem",fontWeight:isSel?700:500,color:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
+        {/* Patient count badge */}
+        <span style={{fontSize:"0.55rem",fontWeight:600,color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.06)":"transparent",borderRadius:4,padding:count>0?"1px 4px":"0"}}>
+          {count>0?`${count}pt`:"—"}
+        </span>
+      </div>
+    );
+  };
+
+  const GridSection = ({ students, selected, onSelect, label, color, dashed=false }) => (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.65rem",fontWeight:600,color,letterSpacing:"0.04em",marginBottom:8,textTransform:"uppercase"}}>{label}</div>
+      {students.length===0
+        ? <div style={{fontSize:"0.75rem",color:C.textMuted,padding:"4px 0"}}>No students in this group</div>
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {students.map(s=><StudentChip key={s.name} s={s} selected={selected} onSelect={onSelect} color={color} dashed={dashed}/>)}
           </div>
-          <span style={{fontSize:"0.88rem",color:C.text,flex:1}}>{s.name}</span>
-          {s.no&&<span style={{fontSize:"0.65rem",color:C.textMuted,fontFamily:"monospace"}}>{s.no}</span>}
-        </div>
-      ))}
-      {students.length===0&&<div style={{fontSize:"0.75rem",color:C.textMuted,padding:"6px 0"}}>No students in this group</div>}
+      }
     </div>
   );
 
@@ -1791,23 +1817,12 @@ function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, 
         <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
         <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Assign — {patient?.name}</h3>
         <p style={{margin:"0 0 16px",color:C.textMuted,fontSize:"0.76rem"}}>One primary from each group · one shadow from either</p>
-        <SRow students={g0s} selected={p1} onSelect={setP1} label={`Primary — ${g0.name}`} color="#6366f1"/>
-        <SRow students={g1s} selected={p2} onSelect={setP2} label={`Primary — ${g1.name}`} color="#f97316"/>
-        {/* Shadow */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:"0.65rem",fontWeight:600,color:C.textSub,letterSpacing:"0.04em",marginBottom:6,textTransform:"uppercase"}}>Shadow (any group)</div>
-          {allStudents.filter(s=>s.name).map(s=>(
-            <div key={s.name+s.groupName} onClick={()=>setSh(sh===s.name?null:s.name)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,background:sh===s.name?"rgba(0,0,0,0.04)":C.surface,border:`1px dashed ${sh===s.name?C.textSub:C.border}`}}>
-              <div style={{width:18,height:18,borderRadius:5,border:`2px dashed ${sh===s.name?C.textSub:C.borderMid}`,background:sh===s.name?"rgba(0,0,0,0.06)":"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {sh===s.name&&<Icon name="check" size={10} color={C.textSub}/>}
-              </div>
-              <span style={{fontSize:"0.88rem",color:C.text,flex:1}}>{s.name}</span>
-              <span style={{fontSize:"0.62rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>{s.groupName}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{display:"flex",gap:10}}>
+
+        <GridSection students={g0s} selected={p1} onSelect={setP1} label={`Primary — ${g0.name}`} color="#6366f1"/>
+        <GridSection students={g1s} selected={p2} onSelect={setP2} label={`Primary — ${g1.name}`} color="#f97316"/>
+        <GridSection students={allStudents.filter(s=>s.name)} selected={sh} onSelect={setSh} label="Shadow (any group)" color={C.textSub} dashed/>
+
+        <div style={{display:"flex",gap:10,marginTop:4}}>
           <button onClick={onClose} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
           <button onClick={()=>onConfirm(p1,p2,sh)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Confirm</button>
         </div>
