@@ -1813,9 +1813,15 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
     (g.students||[]).filter(s=>s.name).map(s=>({...s, groupName:g.name, groupIdx:groups.indexOf(g)}))
   );
 
-  const sorted = [...allStudents].sort((a,b) =>
-    a.groupIdx !== b.groupIdx ? a.groupIdx - b.groupIdx : a.name.localeCompare(b.name)
-  );
+  const sorted = [...allStudents].sort((a,b) => {
+    const {primary: ap, shadow: as_} = getStudentPatients(a.name);
+    const {primary: bp, shadow: bs_} = getStudentPatients(b.name);
+    const aTotal = ap.length + as_.length;
+    const bTotal = bp.length + bs_.length;
+    if (bTotal !== aTotal) return bTotal - aTotal;           // most patients first
+    if (a.groupIdx !== b.groupIdx) return a.groupIdx - b.groupIdx; // then group order
+    return a.name.localeCompare(b.name);
+  });
 
   const filtered = activeGrp==="all" ? sorted : sorted.filter(s=>s.groupName===activeGrp);
 
