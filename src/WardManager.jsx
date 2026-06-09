@@ -249,16 +249,28 @@ export default function App() {
 
 // ── Ward card on homepage ──────────────────────────────────────────────────────
 function WardCard({ ward, onOpen }) {
-  const setup  = ward.setup || {};
-  const beds   = ward.beds  || {};
-  const theme  = setup.themeColor || "#007aff";
-  const rgb    = hexToRgb(theme);
-  const bedKeys = Object.keys(beds);
-  const newCount    = bedKeys.filter(k=>beds[k]?.isNew).length;
-  const histCount   = bedKeys.filter(k=>beds[k]?.historyTaken).length;
-  const assigned    = bedKeys.filter(k=>beds[k]?.assigned?.length>0||beds[k]?.shadows?.length>0).length;
-  const floorCount  = bedKeys.filter(k=>beds[k]?.isFloor).length;
-  const patientCount= bedKeys.filter(k=>{const b=beds[k]; return b&&(b.diagnosis||b.consultant||b.notes||b.assigned?.length>0||b.shadows?.length>0||b.isNew||b.historyTaken||b.opStatus);}).length;
+  const setup    = ward.setup || {};
+  const beds     = ward.beds  || {};
+  const patients = ward.patients || [];
+  const theme    = setup.themeColor || "#007aff";
+  const rgb      = hexToRgb(theme);
+  const isPaed   = setup.template === "paed";
+  const bedKeys  = Object.keys(beds);
+
+  // Default template stats
+  const newCount  = bedKeys.filter(k=>beds[k]?.isNew).length;
+  const histCount = bedKeys.filter(k=>beds[k]?.historyTaken).length;
+  const assigned  = bedKeys.filter(k=>beds[k]?.assigned?.length>0||beds[k]?.shadows?.length>0).length;
+
+  // Patient count — paed uses patients array, default uses beds with any data
+  const patientCount = isPaed
+    ? patients.filter(p=>p.name).length
+    : bedKeys.filter(k=>{ const b=beds[k]; return b&&(b.diagnosis||b.consultant||b.notes||b.assigned?.length>0||b.shadows?.length>0||b.isNew||b.historyTaken||b.opStatus); }).length;
+
+  // Paed stats
+  const paedNew  = patients.filter(p=>p.isNew).length;
+  const paedHist = patients.filter(p=>p.historyTaken).length;
+  const paedAssigned = patients.filter(p=>p.primary1||p.primary2).length;
 
   return (
     <div onClick={onOpen} style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:18,padding:"18px 18px 14px",cursor:"pointer",boxShadow:"0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
@@ -270,21 +282,19 @@ function WardCard({ ward, onOpen }) {
           <div style={{fontSize:"1.15rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em",lineHeight:1}}>{setup.wardName||"Unnamed Ward"}</div>
           <div style={{fontSize:"0.78rem",color:C.textSub,marginTop:3,fontWeight:400}}>{setup.appointmentType||""}</div>
         </div>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <div style={{background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:8,padding:"4px 10px"}}>
-            <span style={{fontSize:"0.7rem",fontWeight:600,color:theme}}>{patientCount} patients</span>
-          </div>
-          <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px"}}>
-            <span style={{fontSize:"0.7rem",fontWeight:500,color:C.textSub}}>{setup.bedCount||0} beds</span>
-          </div>
+        <div style={{background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:8,padding:"4px 10px"}}>
+          <span style={{fontSize:"0.7rem",fontWeight:600,color:theme}}>{patientCount} patients</span>
         </div>
       </div>
+
       {/* Stats row */}
       <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-        {[
-          { icon:"newdot",  color:C.red,   label:"New",     val:newCount },
-          { icon:"history", color:C.green, label:"Hx taken",val:`${histCount}/${assigned}` },
-          { icon:"floor",   color:theme,   label:"Floor",   val:floorCount },
+        {isPaed ? [
+          { icon:"newdot",  color:C.red,   label:"New",      val:paedNew },
+          { icon:"history", color:C.green, label:"Hx taken", val:`${paedHist}/${paedAssigned}` },
+        ] : [
+          { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
+          { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
         ].map(s=>(
           <div key={s.label} style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
             <Icon name={s.icon} size={12} color={s.color}/>
@@ -293,17 +303,18 @@ function WardCard({ ward, onOpen }) {
           </div>
         ))}
       </div>
+
       {/* Share links */}
       <div style={{display:"flex",gap:12,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
-        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}`;navigator.clipboard?.writeText(u).then(()=>alert("Ward link copied!")).catch(()=>alert(u));}}
+        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}`;navigator.clipboard?.writeText(u).then(()=>alert("Student link copied!")).catch(()=>alert(u));}}
           style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-          Ward link
+          Student link
         </button>
-        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}&view=senior`;navigator.clipboard?.writeText(u).then(()=>alert("Senior link copied!")).catch(()=>alert(u));}}
+        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}&view=senior`;navigator.clipboard?.writeText(u).then(()=>alert("Read-only link copied!")).catch(()=>alert(u));}}
           style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-          Senior link
+          Read-only link
         </button>
       </div>
     </div>
