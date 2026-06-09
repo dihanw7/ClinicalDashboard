@@ -289,13 +289,13 @@ function WardCard({ ward, onOpen }) {
 
       {/* Stats row */}
       <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-        {isPaed ? [
+        {(isPaed ? [
           { icon:"newdot",  color:C.red,   label:"New",      val:paedNew },
           { icon:"history", color:C.green, label:"Hx taken", val:`${paedHist}/${paedAssigned}` },
         ] : [
           { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
           { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
-        ].map(s=>(
+        ]).map(s=>(
           <div key={s.label} style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
             <Icon name={s.icon} size={12} color={s.color}/>
             <span style={{fontSize:"0.72rem",fontWeight:600,color:s.color}}>{s.val}</span>
