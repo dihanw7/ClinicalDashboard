@@ -1336,7 +1336,9 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const addPatient = async () => {
     if (!newPt.name.trim()) { showToast("Enter patient name","error"); return; }
     const ageStr = [newPt.ageYears&&`${newPt.ageYears}y`, newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
-    const assignment = newPt.autoAssign ? computeAutoAssign(patients) : {primary1:null,primary2:null,shadow:null};
+    const assignment = newPt.autoAssign
+      ? computeAutoAssign(patients)
+      : {primary1: newPt.manualP1||null, primary2: newPt.manualP2||null, shadow: newPt.manualShadow||null};
     const pt = { id:Date.now().toString(), name:newPt.name.trim(), age:ageStr, primary1:assignment.primary1, primary2:assignment.primary2, shadow:assignment.shadow, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", opStatus:"", addedAt:Date.now() };
     await save({ ...ward, patients:[...patients, pt] });
     setNewPt({name:"",ageYears:"",ageMonths:"",autoAssign:true}); setShowAddPt(false); showToast("Patient added");
@@ -1586,11 +1588,11 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
             <div style={{marginBottom:14}}>
               <label style={labelStyle}>Diagnosis</label>
-              <input value={ptEdit.diagnosis} onChange={e=>setPtEdit(b=>({...b,diagnosis:e.target.value}))} placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/>
+              <input value={ptEdit.diagnosis} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,diagnosis:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/>
             </div>
             <div style={{marginBottom:20}}>
               <label style={labelStyle}>Notes</label>
-              <textarea value={ptEdit.notes} onChange={e=>setPtEdit(b=>({...b,notes:e.target.value}))} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
+              <textarea value={ptEdit.notes} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,notes:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
             </div>
 
             <button onClick={async()=>{ await updatePatient(selPt.id,ptEdit); setSelectedPt(null); }}
@@ -1670,15 +1672,20 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               </div>
             )}
 
-            {/* Manual assign button */}
+            {/* Manual assign inline */}
             {!newPt.autoAssign && (
-              <div style={{fontSize:"0.78rem",color:C.textMuted,marginBottom:14,padding:"10px 14px",background:C.surfaceEl,borderRadius:10}}>
-                Tap <strong>Add</strong> to create the patient, then use the Assign button in the patient card.
-              </div>
+              <InlineAssignPicker
+                groups={groups}
+                allStudents={allStudents}
+                patients={patients}
+                value={{p1:newPt.manualP1||null, p2:newPt.manualP2||null, shadow:newPt.manualShadow||null}}
+                onChange={(p1,p2,shadow)=>setNewPt(p=>({...p,manualP1:p1,manualP2:p2,manualShadow:shadow}))}
+                theme={theme} rgb={rgb}
+              />
             )}
 
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",ageYears:"",ageMonths:"",autoAssign:true});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",ageYears:"",ageMonths:"",autoAssign:true,manualP1:null,manualP2:null,manualShadow:null});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
             </div>
           </div>
@@ -1918,6 +1925,58 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
         );
       })}
       </div>
+    </div>
+  );
+}
+
+// ── Inline assign picker (used inside add patient modal) ───────────────────────
+function InlineAssignPicker({ groups, allStudents, patients, value, onChange, theme, rgb }) {
+  const g0 = groups[0]||{name:"Group A",students:[]};
+  const g1 = groups[1]||{name:"Group B",students:[]};
+  const g0s = (g0.students||[]).filter(s=>s.name);
+  const g1s = (g1.students||[]).filter(s=>s.name);
+
+  const countFor = (name) => patients.filter(p=>p.primary1===name||p.primary2===name||p.shadow===name).length;
+
+  const Chip = ({s, selected, onSelect, color, dashed=false}) => {
+    const isSel = selected===s.name;
+    const count = countFor(s.name);
+    return (
+      <div onClick={()=>onSelect(isSel?null:s.name)}
+        style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+          padding:"8px 4px",borderRadius:10,cursor:"pointer",textAlign:"center",position:"relative",
+          background:isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
+          border:dashed?`1px dashed ${isSel?color:C.borderMid}`:`1px solid ${isSel?color:C.border}`}}>
+        {isSel&&<div style={{position:"absolute",top:3,right:3,width:13,height:13,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="check" size={7} color="#fff"/>
+        </div>}
+        {s.no&&<span style={{fontSize:"0.52rem",color:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
+        <span style={{fontSize:"0.7rem",fontWeight:isSel?700:500,color:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
+        <span style={{fontSize:"0.52rem",color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.05)":"transparent",borderRadius:4,padding:count>0?"1px 3px":"0"}}>
+          {count>0?`${count}pt`:"—"}
+        </span>
+      </div>
+    );
+  };
+
+  const Section = ({students,selected,onSelect,label,color,dashed=false}) => (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:"0.62rem",fontWeight:600,color,letterSpacing:"0.04em",marginBottom:6,textTransform:"uppercase"}}>{label}</div>
+      {students.length===0
+        ?<div style={{fontSize:"0.72rem",color:C.textMuted}}>No students</div>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+          {students.map(s=><Chip key={s.name} s={s} selected={selected} onSelect={onSelect} color={color} dashed={dashed}/>)}
+        </div>
+      }
+    </div>
+  );
+
+  return (
+    <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px",marginBottom:14}}>
+      <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:12}}>Manual Assignment</div>
+      <Section students={g0s} selected={value.p1} onSelect={p1=>onChange(p1,value.p2,value.shadow)} label={`Primary — ${g0.name}`} color="#6366f1"/>
+      <Section students={g1s} selected={value.p2} onSelect={p2=>onChange(value.p1,p2,value.shadow)} label={`Primary — ${g1.name}`} color="#f97316"/>
+      <Section students={allStudents.filter(s=>s.name)} selected={value.shadow} onSelect={sh=>onChange(value.p1,value.p2,sh)} label="Shadow" color={C.textSub} dashed/>
     </div>
   );
 }
