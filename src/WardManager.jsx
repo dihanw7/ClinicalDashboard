@@ -1275,7 +1275,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const [showDelete,setShowDelete]= useState(false);
   const [selectedPt,setSelectedPt]= useState(null);
   const [showAddPt, setShowAddPt] = useState(false);
-  const [newPt,     setNewPt]     = useState({name:"",age:""});
+  const [newPt,     setNewPt]     = useState({name:"",ageYears:"",ageMonths:"",autoAssign:true});
   const [ptEdit,    setPtEdit]    = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:"",opStatus:""});
   const [assignTarget, setAssignTarget] = useState(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -1298,11 +1298,48 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
+  // ── Auto-assign logic ──────────────────────────────────────────────────────
+  const computeAutoAssign = (existingPatients) => {
+    const activeShadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
+
+    const g0 = groups[0] || {students:[]};
+    const g1 = groups[1] || {students:[]};
+    const g0students = (g0.students||[]).filter(s=>s.name && !activeShadowHONames.has(s.name));
+    const g1students = (g1.students||[]).filter(s=>s.name && !activeShadowHONames.has(s.name));
+    const allEligible = [...g0students.map(s=>s.name), ...g1students.map(s=>s.name)].filter(Boolean);
+
+    // Count current assignments per student
+    const countPrimary = (name) => existingPatients.filter(p=>p.primary1===name||p.primary2===name).length;
+    const countAll     = (name) => existingPatients.filter(p=>p.primary1===name||p.primary2===name||p.shadow===name).length;
+
+    const pickFrom = (students, reversed) => {
+      const ordered = reversed ? [...students].reverse() : students;
+      // First: pick someone with 0 primary patients
+      const zero = ordered.find(s => countPrimary(s.name)===0);
+      if (zero) return zero.name;
+      // Otherwise: pick the one with fewest
+      return [...ordered].sort((a,b)=>countPrimary(a.name)-countPrimary(b.name))[0]?.name || null;
+    };
+
+    const p1 = pickFrom(g0students, false);   // Group A top→bottom
+    const p2 = pickFrom(g1students, true);    // Group B bottom→top
+
+    // Shadow: any eligible student not already picked, not active shadow HO, fewest total
+    const shadowCandidates = allEligible.filter(n=>n!==p1&&n!==p2);
+    const shadow = shadowCandidates.length>0
+      ? [...shadowCandidates].sort((a,b)=>countAll(a)-countAll(b))[0]
+      : null;
+
+    return {primary1: p1||null, primary2: p2||null, shadow: shadow||null};
+  };
+
   const addPatient = async () => {
     if (!newPt.name.trim()) { showToast("Enter patient name","error"); return; }
-    const pt = { id:Date.now().toString(), name:newPt.name.trim(), age:newPt.age.trim(), primary1:null, primary2:null, shadow:null, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", opStatus:"", addedAt:Date.now() };
+    const ageStr = [newPt.ageYears&&`${newPt.ageYears}y`, newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
+    const assignment = newPt.autoAssign ? computeAutoAssign(patients) : {primary1:null,primary2:null,shadow:null};
+    const pt = { id:Date.now().toString(), name:newPt.name.trim(), age:ageStr, primary1:assignment.primary1, primary2:assignment.primary2, shadow:assignment.shadow, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", opStatus:"", addedAt:Date.now() };
     await save({ ...ward, patients:[...patients, pt] });
-    setNewPt({name:"",age:""}); setShowAddPt(false); showToast("Patient added");
+    setNewPt({name:"",ageYears:"",ageMonths:"",autoAssign:true}); setShowAddPt(false); showToast("Patient added");
   };
 
   const updatePatient = async (id, updates) => {
@@ -1576,19 +1613,78 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
       )}
 
       {/* Add patient modal */}
-      {showAddPt&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
-          <div style={{background:C.surface,borderRadius:20,padding:"26px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+      {showAddPt&&(()=>{
+        const preview = newPt.autoAssign ? computeAutoAssign(patients) : null;
+        return (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:"20px 20px 0 0",padding:"10px 22px 44px",width:"100%",boxShadow:C.shadowMd,maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
-            <div style={{marginBottom:12}}><label style={labelStyle}>Name</label><input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addPatient()} placeholder="Patient full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
-            <div style={{marginBottom:20}}><label style={labelStyle}>Age</label><input value={newPt.age} onChange={e=>setNewPt(p=>({...p,age:e.target.value}))} placeholder="e.g. 5" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+
+            {/* Name */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Patient Name</label>
+              <input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} placeholder="Full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
+            </div>
+
+            {/* Age — years + months */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Age</label>
+              <div style={{display:"flex",gap:8,marginTop:6}}>
+                <div style={{flex:1}}>
+                  <input type="number" min="0" max="17" value={newPt.ageYears} onChange={e=>setNewPt(p=>({...p,ageYears:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center"}}/>
+                  <div style={{fontSize:"0.65rem",color:C.textMuted,textAlign:"center",marginTop:3}}>Years</div>
+                </div>
+                <div style={{flex:1}}>
+                  <input type="number" min="0" max="11" value={newPt.ageMonths} onChange={e=>setNewPt(p=>({...p,ageMonths:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center"}}/>
+                  <div style={{fontSize:"0.65rem",color:C.textMuted,textAlign:"center",marginTop:3}}>Months</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Auto-assign toggle */}
+            <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign}))}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:newPt.autoAssign?`rgba(${rgb},0.06)`:C.surfaceEl,border:`1px solid ${newPt.autoAssign?`rgba(${rgb},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
+              <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${newPt.autoAssign?theme:C.borderMid}`,background:newPt.autoAssign?theme:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                {newPt.autoAssign&&<Icon name="check" size={12} color="#fff"/>}
+              </div>
+              <div>
+                <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign students</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Fair rotation · excludes active Shadow HOs</div>
+              </div>
+            </div>
+
+            {/* Assignment preview */}
+            {newPt.autoAssign && preview && (
+              <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Assignment Preview</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {[[preview.primary1,"#6366f1",(groups[0]||{}).name||"Group A","Primary"],[preview.primary2,"#f97316",(groups[1]||{}).name||"Group B","Primary"],[preview.shadow,C.textSub,"Shadow","Shadow"]].map(([name,col,grp,role])=>(
+                    <div key={role} style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"0.65rem",color:col,fontWeight:600,width:52}}>{role}</span>
+                      <span style={{fontSize:"0.78rem",color:name?C.text:C.textMuted,flex:1}}>{name||"—"}</span>
+                      {name&&<span style={{fontSize:"0.6rem",color:C.textMuted}}>{grp}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Manual assign button */}
+            {!newPt.autoAssign && (
+              <div style={{fontSize:"0.78rem",color:C.textMuted,marginBottom:14,padding:"10px 14px",background:C.surfaceEl,borderRadius:10}}>
+                Tap <strong>Add</strong> to create the patient, then use the Assign button in the patient card.
+              </div>
+            )}
+
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",age:""}); }} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-              <button onClick={addPatient} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add</button>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",ageYears:"",ageMonths:"",autoAssign:true});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Paed Assign modal */}
       {assignTarget&&(
