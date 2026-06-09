@@ -1338,7 +1338,16 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
     // Shadow: any eligible student not already picked, not active shadow HO, fewest total
     const shadowCandidates = allEligible.filter(n=>n!==p1&&n!==p2);
     const shadow = shadowCandidates.length>0
-      ? [...shadowCandidates].sort((a,b)=>countAll(a)-countAll(b))[0]
+      ? [...shadowCandidates].sort((a,b)=>{
+          const aAll = countAll(a), bAll = countAll(b);
+          const aPri = countPrimary(a), bPri = countPrimary(b);
+          // Tier 1: no assignments at all
+          if ((aAll===0) !== (bAll===0)) return aAll===0 ? -1 : 1;
+          // Tier 2: no primaries
+          if ((aPri===0) !== (bPri===0)) return aPri===0 ? -1 : 1;
+          // Tier 3: fewest total
+          return aAll - bAll;
+        })[0]
       : null;
 
     return {primary1: p1||null, primary2: p2||null, shadow: shadow||null};
