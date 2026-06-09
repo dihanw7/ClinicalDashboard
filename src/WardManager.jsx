@@ -1544,7 +1544,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             </div>
 
             {/* History taken */}
-            <div onClick={()=>{ const v=!ptEdit.historyTaken; setPtEdit(b=>({...b,historyTaken:v})); updatePatient(selPt.id,{historyTaken:v,isNew:v?false:selPt.isNew}); }}
+            <div onClick={()=>{ const v=!ptEdit.historyTaken; setPtEdit(b=>({...b,historyTaken:v,isNew:v?false:b.isNew})); updatePatient(selPt.id,{historyTaken:v,isNew:v?false:selPt.isNew}); }}
               style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.07)`:C.surfaceEl,border:`1px solid ${ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
               <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${ptEdit.historyTaken?C.green:C.borderMid}`,background:ptEdit.historyTaken?C.green:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 {ptEdit.historyTaken&&<Icon name="check" size={11} color="#fff"/>}
