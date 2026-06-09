@@ -17,6 +17,11 @@ const ALL_LEADER_PINS = Object.values(GROUP_PINS);
 const isAdminPin  = (p) => ALL_LEADER_PINS.includes(p) || p === SUPER_PIN;
 const isLeaderPin = (p, wardId) => p === GROUP_PINS[wardId] || p === SUPER_PIN;
 
+const WARD_TEMPLATES = {
+  default: { label:"Default (Bed-based)", desc:"Assign students to numbered beds. Used for Gynaecology, Medicine, Surgery, Obstetrics, Psychiatry." },
+  paed:    { label:"Paediatrics",         desc:"Assign by admission order with patient name/age. Two student groups, ward sections (General/HDU/NICU/NBU), Shadow HO banner." },
+};
+
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABKCAYAAAA/i5OkAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABgklEQVR4nO3aXW+DMAyFYTP1//9lejdFUSj5cBLbeZ+bVWhd6cmpoQwRAAAAAAAAAAjjfthW2n6cv8Hn39lPZEYDLiHsxNX5vJYQe18jhJ4Gtzb06EbPGBFIjH5803ZeP7YdS6vBxwf5ZCTgu/D46Hlb0tO81hBLo0Nb+j5GXkf9k9jaYKsN1dov9ff3afz91qYcP5s1D3J5mMeHK8J5cG77DC65Co+9tnf7DE49hbgjXLMLGmFEaIarvlBWV772o9qy/zP+5iuLDd4SxCzWAg4VrsjYQU5byC8uVhocMlwRGwGHDVdk/4ionbluL+LvDriHq7AtjIgRVi+f/vMesIjxkCMELGI45CgBixgNefdBruYgZTK4Wh4aXPpviRseAnaNgCdbHfBxN2avDDi/E+iIoHePiNqg3S7GqtO0t4DcBvhmd4M1mTyVWxFw2HbWiNJgk+0VWRPw7G9iZsMVWdtg7SBmLJz6Yq2+2GP2RulZrO1oKXRr+wgAAAAAAAAAHn0BpuAyXZaUVW4AAAAASUVORK5CYII=";
 
 // ── Supabase helpers ───────────────────────────────────────────────────────────
@@ -324,23 +329,46 @@ function AdminButton({ onCreateWard }) {
 // ── Full-page create ward screen ───────────────────────────────────────────────
 function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
   const groupOptions = Object.keys(GROUP_PINS).filter(id=>!wards.find(w=>w.id===id));
-  const [form, setForm] = useState({ groupId: groupOptions[0]||"cg1", wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const [form, setForm] = useState({
+    groupId: groupOptions[0]||"cg1", wardName:"", appointmentType:"", bedCount:"",
+    themeColor:"#007aff", template:"default",
+    students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}],
+    // Paed-specific
+    paedGroups:[{name:"Group A",students:[{name:"",no:""}]},{name:"Group B",students:[{name:"",no:""}]}],
+    wardSections:[{name:"General",count:""},{name:"HDU",count:""},{name:"NICU",count:""},{name:"NBU",count:""}],
+    shadowHOs:[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}],
+  });
   const [error, setError] = useState("");
 
   const create = async () => {
     setError("");
-    if (!form.wardName||!form.appointmentType||!form.bedCount) { setError("Please fill in Ward Name, Rotation, and Number of Beds."); return; }
-    const count = parseInt(form.bedCount);
-    if (isNaN(count)||count<1||count>80) { setError("Bed count must be between 1 and 80."); return; }
+    if (!form.wardName||!form.appointmentType) { setError("Please fill in Ward Name and Rotation."); return; }
+    if (form.template==="default" && !form.bedCount) { setError("Please enter Number of Beds."); return; }
     if (wards.find(w=>w.id===form.groupId)) { setError("This clinical group already has a ward."); return; }
     if (groupOptions.length===0) { setError("All clinical groups already have wards."); return; }
-    const beds = {};
-    for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
-    const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-    await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, students, consultants }, beds });
-    showToast("Ward created!");
-    onCreated();
+
+    let setup;
+    if (form.template==="paed") {
+      setup = {
+        wardName: form.wardName, appointmentType: form.appointmentType,
+        themeColor: form.themeColor, template: "paed",
+        paedGroups: form.paedGroups.map(g=>({name:g.name, students:g.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),no:s.no?.trim()||""}))})),
+        wardSections: form.wardSections.filter(s=>s.name?.trim()&&s.count).map(s=>({name:s.name.trim(),count:parseInt(s.count)||0})),
+        shadowHOs: form.shadowHOs,
+        consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
+      };
+    } else {
+      const count = parseInt(form.bedCount);
+      if (isNaN(count)||count<1||count>80) { setError("Bed count must be between 1 and 80."); return; }
+      const beds = {};
+      for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+      const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+      const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
+      await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:"default", students, consultants }, beds });
+      showToast("Ward created!"); onCreated(); return;
+    }
+    await onSave(form.groupId, { setup, patients:[], beds:{} });
+    showToast("Ward created!"); onCreated();
   };
 
   const addStudent    = () => setForm(f=>({...f,students:[...f.students,{name:"",group:""}]}));
@@ -366,18 +394,36 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
             {groupOptions.map(id=><option key={id} value={id}>{id.toUpperCase()}</option>)}
           </select>
         </div>
+        {/* Template selector */}
+        <div style={{marginBottom:22}}>
+          <label style={labelStyle}>Ward Template</label>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
+            {Object.entries(WARD_TEMPLATES).map(([key,t])=>(
+              <div key={key} onClick={()=>setForm(f=>({...f,template:key}))}
+                style={{padding:"12px 14px",borderRadius:12,cursor:"pointer",border:`1px solid ${form.template===key?theme:C.border}`,background:form.template===key?`rgba(${hexToRgb(theme)},0.06)`:C.surface,transition:"all 0.12s"}}>
+                <div style={{fontSize:"0.85rem",fontWeight:600,color:form.template===key?theme:C.text}}>{t.label}</div>
+                <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:2}}>{t.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div style={{marginBottom:18}}>
           <label style={labelStyle}>Ward Name</label>
-          <input value={form.wardName} onChange={e=>setForm(f=>({...f,wardName:e.target.value}))} placeholder="e.g. Medicine Male" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+          <input value={form.wardName} onChange={e=>setForm(f=>({...f,wardName:e.target.value}))} placeholder="e.g. Paediatric Ward" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
         </div>
         <div style={{marginBottom:18}}>
           <label style={labelStyle}>Rotation / Appointment</label>
-          <input value={form.appointmentType} onChange={e=>setForm(f=>({...f,appointmentType:e.target.value}))} placeholder="e.g. Medicine – Week 1" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+          <input value={form.appointmentType} onChange={e=>setForm(f=>({...f,appointmentType:e.target.value}))} placeholder="e.g. Paediatrics – Week 1" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
         </div>
-        <div style={{marginBottom:18}}>
-          <label style={labelStyle}>Number of Beds</label>
-          <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
-        </div>
+
+        {form.template==="default" && (
+          <div style={{marginBottom:18}}>
+            <label style={labelStyle}>Number of Beds</label>
+            <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",marginTop:6,boxSizing:"border-box"}}/>
+          </div>
+        )}
+
         <div style={{marginBottom:22}}>
           <label style={labelStyle}>Accent Colour</label>
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
@@ -387,35 +433,40 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
           </div>
         </div>
 
-        {/* Students */}
-        <div style={{marginBottom:22}}>
-          <label style={labelStyle}>Students</label>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
-            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
-            <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP NO.</span>
-          </div>
-          {form.students.map((s,i)=>(
-            <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
-              <input value={s.name} onChange={e=>updStudent(i,"name",e.target.value)} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"9px 12px"}}/>
-              <input value={s.group} onChange={e=>updStudent(i,"group",e.target.value)} placeholder="1" style={{...iS,width:48,padding:"9px 8px",textAlign:"center",flexShrink:0}}/>
-              {form.students.length>1 && <button onClick={()=>remStudent(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+        {form.template==="paed" ? (
+          <PaedSetupFields form={form} setForm={setForm} theme={form.themeColor}/>
+        ) : (
+          <>
+            {/* Default students */}
+            <div style={{marginBottom:22}}>
+              <label style={labelStyle}>Students</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
+                <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
+                <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP NO.</span>
+              </div>
+              {form.students.map((s,i)=>(
+                <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
+                  <input value={s.name} onChange={e=>setForm(f=>{const a=[...f.students];a[i]={...a[i],name:e.target.value};return{...f,students:a};})} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"9px 12px"}}/>
+                  <input value={s.group} onChange={e=>setForm(f=>{const a=[...f.students];a[i]={...a[i],group:e.target.value};return{...f,students:a};})} placeholder="1" style={{...iS,width:48,padding:"9px 8px",textAlign:"center",flexShrink:0}}/>
+                  {form.students.length>1 && <button onClick={()=>setForm(f=>({...f,students:f.students.filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+                </div>
+              ))}
+              <button onClick={()=>setForm(f=>({...f,students:[...f.students,{name:"",group:""}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
             </div>
-          ))}
-          <button onClick={addStudent} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
-        </div>
-
-        {/* Consultants */}
-        <div style={{marginBottom:32}}>
-          <label style={labelStyle}>Consultants</label>
-          {form.consultants.map((c,i)=>(
-            <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-              <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
-              <input value={c.name} onChange={e=>updConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
-              {form.consultants.length>1 && <button onClick={()=>remConsultant(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            {/* Consultants */}
+            <div style={{marginBottom:32}}>
+              <label style={labelStyle}>Consultants</label>
+              {form.consultants.map((c,i)=>(
+                <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                  <input type="color" value={c.color||"#6366f1"} onChange={e=>setForm(f=>{const a=[...f.consultants];a[i]={...a[i],color:e.target.value};return{...f,consultants:a};})} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+                  <input value={c.name} onChange={e=>setForm(f=>{const a=[...f.consultants];a[i]={...a[i],name:e.target.value};return{...f,consultants:a};})} placeholder="Name or title" style={{...iS,flex:1}}/>
+                  {form.consultants.length>1 && <button onClick={()=>setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+                </div>
+              ))}
+              <button onClick={()=>setForm(f=>({...f,consultants:[...f.consultants,{name:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
             </div>
-          ))}
-          <button onClick={addConsultant} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
-        </div>
+          </>
+        )}
 
         {error && <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:"0.82rem",color:C.red}}>{error}</div>}
 
@@ -428,33 +479,95 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
   );
 }
 
+// ── PaedSetupFields ────────────────────────────────────────────────────────────
+function PaedSetupFields({ form, setForm }) {
+  const updGroup    = (gi,k,v) => setForm(f=>{ const g=[...f.paedGroups]; g[gi]={...g[gi],[k]:v}; return {...f,paedGroups:g}; });
+  const addStudent  = (gi) => setForm(f=>{ const g=[...f.paedGroups]; g[gi].students=[...g[gi].students,{name:"",no:""}]; return {...f,paedGroups:g}; });
+  const updStudent  = (gi,si,k,v) => setForm(f=>{ const g=[...f.paedGroups]; const s=[...g[gi].students]; s[si]={...s[si],[k]:v}; g[gi].students=s; return {...f,paedGroups:g}; });
+  const remStudent  = (gi,si) => setForm(f=>{ const g=[...f.paedGroups]; g[gi].students=g[gi].students.filter((_,i)=>i!==si); return {...f,paedGroups:g}; });
+
+  const addSection  = () => setForm(f=>({...f,wardSections:[...f.wardSections,{name:"",count:""}]}));
+  const updSection  = (i,k,v) => setForm(f=>{ const s=[...f.wardSections]; s[i]={...s[i],[k]:v}; return {...f,wardSections:s}; });
+  const remSection  = (i) => setForm(f=>({...f,wardSections:f.wardSections.filter((_,idx)=>idx!==i)}));
+
+  const updShadowHO = (i,v) => setForm(f=>{ const s=[...f.shadowHOs]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+
+  const updConsultant = (i,k,v) => setForm(f=>{ const a=[...f.consultants]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
+
+  return (
+    <div>
+      {/* Groups */}
+      {form.paedGroups.map((grp,gi)=>(
+        <div key={gi} style={{marginBottom:22,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:gi===0?"#6366f1":"#f97316",flexShrink:0}}/>
+            <input value={grp.name} onChange={e=>updGroup(gi,"name",e.target.value)} placeholder={`Group ${gi+1} name`}
+              style={{...iS,flex:1,padding:"7px 10px",fontSize:"0.85rem",fontWeight:600,background:"transparent",border:"none",boxShadow:"none"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 52px",gap:4,marginBottom:4,paddingLeft:2}}>
+            <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
+            <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>NO.</span>
+          </div>
+          {grp.students.map((s,si)=>(
+            <div key={si} style={{display:"flex",gap:6,marginTop:6}}>
+              <input value={s.name} onChange={e=>updStudent(gi,si,"name",e.target.value)} placeholder={`Student ${si+1}`} style={{...iS,flex:1,padding:"8px 10px"}}/>
+              <input value={s.no} onChange={e=>updStudent(gi,si,"no",e.target.value)} placeholder="1" style={{...iS,width:48,padding:"8px 6px",textAlign:"center"}}/>
+              {grp.students.length>1 && <button onClick={()=>remStudent(gi,si)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+            </div>
+          ))}
+          <button onClick={()=>addStudent(gi)} style={{...aMB,marginTop:8,fontSize:"0.75rem"}}><Icon name="plus" size={11} color={C.textSub}/> Add Student</button>
+        </div>
+      ))}
+
+      {/* Ward Sections */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Ward Sections</label>
+        {form.wardSections.map((s,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input value={s.name} onChange={e=>updSection(i,"name",e.target.value)} placeholder="Section name (e.g. HDU)" style={{...iS,flex:1,padding:"9px 12px"}}/>
+            <input type="number" value={s.count} onChange={e=>updSection(i,"count",e.target.value)} placeholder="Beds" style={{...iS,width:62,padding:"9px 8px",textAlign:"center"}}/>
+            {form.wardSections.length>1 && <button onClick={()=>remSection(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+          </div>
+        ))}
+        <button onClick={addSection} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Section</button>
+      </div>
+
+      {/* Shadow HOs */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Shadow HO Posts</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Assign names to 3-day rotating posts. Leaders can update these anytime.</p>
+        {form.shadowHOs.map((ho,i)=>(
+          <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
+            <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
+            <input value={ho.name} onChange={e=>updShadowHO(i,e.target.value)} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
+          </div>
+        ))}
+      </div>
+
+      {/* Consultants */}
+      <div style={{marginBottom:32}}>
+        <label style={labelStyle}>Consultants</label>
+        {form.consultants.map((c,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+            <input value={c.name} onChange={e=>updConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
+            {form.consultants.length>1 && <button onClick={()=>setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+          </div>
+        ))}
+        <button onClick={()=>setForm(f=>({...f,consultants:[...f.consultants,{name:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // WARD VIEW  (full ward, scoped to one group)
 // ══════════════════════════════════════════════════════════════════════════════
 function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToast, localTs, seniorMode=false }) {
-  const [ward,       setWard]       = useState(initialWard || { setup:null, beds:{} });
-  const [isLeader,   setIsLeader]   = useState(false);
-  const [pinInput,   setPinInput]   = useState("");
-  const [pinError,   setPinError]   = useState(false);
-  const [showPin,    setShowPin]    = useState(false);
-  const [view,       setView]       = useState("home"); // home | bed
-  const [activeTab,  setActiveTab]  = useState("ward");
-  const [selectedBed,setSelectedBed]= useState(null);
-  const [bedEdit,    setBedEdit]    = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
-  const [assignModal,setAssignModal]= useState(null);
-  const [editMode,   setEditMode]   = useState(false);
-  const [showReset,  setShowReset]  = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const [ward, setWard] = useState(initialWard || { setup:null, beds:{}, patients:[] });
+
+  // Poll this ward for updates
   const pollActive = useRef(true);
-
-  const setup  = ward.setup || {};
-  const beds   = ward.beds  || {};
-  const theme  = setup.themeColor || "#007aff";
-  const rgb    = hexToRgb(theme);
-
-  // Poll this specific ward every 5s
   useEffect(() => {
     pollActive.current = true;
     const poll = async () => {
@@ -462,11 +575,10 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
       try {
         const row = await db.get(`ward:${wardId}`);
         if (row) {
-          const remoteTs = row.updated_at;
-          const myTs = localTs.current[wardId];
-          if (!myTs || new Date(remoteTs) > new Date(myTs)) {
+          const ts = row.updated_at;
+          if (!localTs.current[wardId] || new Date(ts) > new Date(localTs.current[wardId])) {
             const parsed = JSON.parse(row.value);
-            localTs.current[wardId] = remoteTs;
+            localTs.current[wardId] = ts;
             setWard(parsed);
           }
         }
@@ -477,10 +589,51 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
     return () => { pollActive.current = false; };
   }, [wardId]);
 
-  const save = useCallback(async (newWard) => {
+  useEffect(() => { if (initialWard) setWard(initialWard); }, [initialWard]);
+
+  const saveWard = useCallback(async (newWard) => {
+    const ts = await db.upsert(`ward:${wardId}`, newWard);
+    localTs.current[wardId] = ts;
     setWard(newWard);
-    await onSave(wardId, newWard);
+    return ts;
   }, [wardId, onSave]);
+
+  const setup = ward.setup || {};
+  const template = setup.template || "default";
+
+  if (template === "paed") {
+    return <PaedWardView wardId={wardId} ward={ward} onBack={onBack} saveWard={saveWard} onDelete={onDelete} showToast={showToast} seniorMode={seniorMode}/>;
+  }
+
+  // Default template continues below
+  return <DefaultWardView wardId={wardId} ward={ward} onBack={onBack} saveWard={saveWard} onDelete={onDelete} showToast={showToast} seniorMode={seniorMode}/>;
+}
+
+// ── Default Ward View ──────────────────────────────────────────────────────────
+function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
+  const [isLeader,   setIsLeader]   = useState(false);
+  const [pinInput,   setPinInput]   = useState("");
+  const [pinError,   setPinError]   = useState(false);
+  const [showPin,    setShowPin]    = useState(false);
+  const [view,       setView]       = useState("home");
+  const [activeTab,  setActiveTab]  = useState("ward");
+  const [selectedBed,setSelectedBed]= useState(null);
+  const [bedEdit,    setBedEdit]    = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
+  const [assignModal,setAssignModal]= useState(null);
+  const [editMode,   setEditMode]   = useState(false);
+  const [showReset,  setShowReset]  = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+
+  const setup  = ward.setup || {};
+  const beds   = ward.beds  || {};
+  const theme  = setup.themeColor || "#007aff";
+  const rgb    = hexToRgb(theme);
+
+  const save = useCallback(async (newWard) => {
+    await saveWard(newWard);
+  }, [saveWard]);
 
   // ── Setup (first time) ────────────────────────────────────────────────────
   const handleSetupSubmit = async () => {
@@ -871,6 +1024,11 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// PAED WARD VIEW — see PaedWardView and PaedAssignModal components at bottom
+// ══════════════════════════════════════════════════════════════════════════════
+function PaedWardViewPlaceholder() { return null; } // Components defined below
+
+// ══════════════════════════════════════════════════════════════════════════════
 // SHARED COMPONENTS
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1053,4 +1211,456 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, theme,
 
 function Toast({ toast }) {
   return <div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?C.red:C.text,color:"#fff",borderRadius:12,padding:"9px 18px",fontSize:"0.82rem",zIndex:400,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.15)",fontFamily:SF}}>{toast.msg}</div>;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PAED WARD VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
+  const [isLeader,  setIsLeader]  = useState(false);
+  const [pinInput,  setPinInput]  = useState("");
+  const [pinError,  setPinError]  = useState(false);
+  const [showPin,   setShowPin]   = useState(false);
+  const [editMode,  setEditMode]  = useState(false);
+  const [showDelete,setShowDelete]= useState(false);
+  const [selectedPt,setSelectedPt]= useState(null);
+  const [showAddPt, setShowAddPt] = useState(false);
+  const [newPt,     setNewPt]     = useState({name:"",age:""});
+  const [ptEdit,    setPtEdit]    = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:"",opStatus:""});
+  const [assignTarget, setAssignTarget] = useState(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [shadowEditing, setShadowEditing] = useState(false);
+  const [shadowForm, setShadowForm] = useState(null);
+
+  const setup    = ward.setup || {};
+  const patients = ward.patients || [];
+  const theme    = setup.themeColor || "#007aff";
+  const rgb      = hexToRgb(theme);
+  const groups   = setup.paedGroups || [];
+  const sections = setup.wardSections || [];
+  const shadowHOs= setup.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
+  const consultants = setup.consultants || [];
+
+  const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
+
+  const tryPin = () => {
+    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
+  };
+
+  const addPatient = async () => {
+    if (!newPt.name.trim()) { showToast("Enter patient name","error"); return; }
+    const pt = { id:Date.now().toString(), name:newPt.name.trim(), age:newPt.age.trim(), primary1:null, primary2:null, shadow:null, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", opStatus:"", addedAt:Date.now() };
+    await save({ ...ward, patients:[...patients, pt] });
+    setNewPt({name:"",age:""}); setShowAddPt(false); showToast("Patient added");
+  };
+
+  const updatePatient = async (id, updates) => {
+    await save({...ward, patients:patients.map(p => p.id===id ? {...p,...updates} : p)});
+  };
+
+  const removePatient = async (id) => {
+    await save({...ward, patients:patients.filter(p=>p.id!==id)});
+    setSelectedPt(null); setShowClearConfirm(false);
+  };
+
+  const saveShadowHOs = async (newHOs) => {
+    await save({...ward, setup:{...setup, shadowHOs:newHOs}});
+    setShadowEditing(false); showToast("Shadow HO posts updated");
+  };
+
+  const allStudents = groups.flatMap(g => (g.students||[]).filter(s=>s.name).map(s=>({...s,groupName:g.name,groupIdx:groups.indexOf(g)})));
+  const sectionOrder = sections.map(s=>s.name);
+  const sortedPatients = [...patients].sort((a,b)=>{
+    const aB=a.section&&a.bedNo, bB=b.section&&b.bedNo;
+    if(!aB&&!bB) return (a.addedAt||0)-(b.addedAt||0);
+    if(!aB) return -1; if(!bB) return 1;
+    const si=sectionOrder.indexOf(a.section)-sectionOrder.indexOf(b.section);
+    return si!==0?si:parseInt(a.bedNo||0)-parseInt(b.bedNo||0);
+  });
+
+  const selPt = selectedPt ? patients.find(p=>p.id===selectedPt) : null;
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
+      {/* Header */}
+      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <div>
+              <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text}}>{setup.wardName}</div>
+              <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {!seniorMode&&(isLeader
+              ?<span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+              :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
+            )}
+            {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
+            {isLeader&&!seniorMode&&<button onClick={()=>setEditMode(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 100px"}}>
+
+        {/* Shadow HO Banner */}
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
+            {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {shadowHOs.map((ho,i)=>(
+              <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
+                <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+          {[
+            {label:"Patients",  val:patients.length,      color:theme},
+            {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.primary1||p.primary2).length}`, color:C.green},
+            {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
+          ].map(s=>(
+            <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+              <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
+              <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {isLeader&&!seniorMode&&(
+          <button onClick={()=>setShowAddPt(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+            <Icon name="plus" size={14} color={theme}/> Add Patient
+          </button>
+        )}
+
+        {/* Patient tiles */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {sortedPatients.map(pt=>{
+            const hasBed=pt.section&&pt.bedNo;
+            return (
+              <div key={pt.id}
+                onClick={seniorMode?undefined:()=>{ setSelectedPt(pt.id); setPtEdit({consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}
+                style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:14,padding:"14px",cursor:seniorMode?"default":"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.07)",position:"relative",transition:"transform 0.12s"}}
+                onMouseEnter={e=>{if(!seniorMode)e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}
+              >
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pt.diagnosis||pt.consultant||pt.notes?6:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.02em"}}>{pt.name}</span>
+                    {pt.age&&<span style={{fontSize:"0.75rem",color:C.textSub}}>{pt.age}y</span>}
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    {pt.historyTaken&&<Icon name="history" size={12} color={C.green}/>}
+                    {pt.isNew&&<span style={{animation:"blink 1.2s ease-in-out infinite",display:"inline-flex"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                    {hasBed&&<span style={{fontSize:"0.65rem",fontWeight:600,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,color:theme,borderRadius:6,padding:"2px 7px"}}>{pt.section}-{pt.bedNo}</span>}
+                  </div>
+                </div>
+                {pt.diagnosis&&<div style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",marginBottom:3,fontWeight:500}}>{pt.diagnosis}</div>}
+                {pt.consultant&&<div style={{fontSize:"0.68rem",color:C.textSub,marginBottom:3}}>{pt.consultant}</div>}
+                {pt.notes&&<div style={{fontSize:"0.65rem",color:C.textMuted,marginBottom:5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{pt.notes}</div>}
+                {pt.opStatus&&<div style={{display:"inline-block",marginBottom:5,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,background:pt.opStatus==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:pt.opStatus==="pre-op"?"#c2410c":"#0369a1",border:pt.opStatus==="pre-op"?"1px solid rgba(249,115,22,0.3)":"1px solid rgba(56,189,248,0.4)"}}>{pt.opStatus}</div>}
+                <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:4}}>
+                  {pt.primary1&&<span style={{fontSize:"0.65rem",background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:6,padding:"3px 8px",color:"#6366f1",fontWeight:500,display:"flex",alignItems:"center",gap:4}}><Icon name="user" size={10} color="#6366f1"/>{pt.primary1}</span>}
+                  {pt.primary2&&<span style={{fontSize:"0.65rem",background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:6,padding:"3px 8px",color:"#f97316",fontWeight:500,display:"flex",alignItems:"center",gap:4}}><Icon name="user" size={10} color="#f97316"/>{pt.primary2}</span>}
+                  {pt.shadow&&<span style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"3px 8px",color:C.textMuted,display:"flex",alignItems:"center",gap:4}}><Icon name="shadow" size={10} color={C.textMuted}/>{pt.shadow}</span>}
+                </div>
+              </div>
+            );
+          })}
+          {patients.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No patients yet.{isLeader?" Tap Add Patient to start.":""}</div>}
+        </div>
+      </div>
+
+      {/* Patient detail sheet */}
+      {selectedPt&&selPt&&!seniorMode&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
+          <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
+              <div>
+                <h2 style={{margin:0,fontSize:"1.5rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em"}}>{selPt.name}</h2>
+                {selPt.age&&<div style={{fontSize:"0.82rem",color:C.textSub,marginTop:2}}>{selPt.age} years old</div>}
+              </div>
+              <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
+                <Icon name="close" size={13} color={C.textSub}/>
+              </button>
+            </div>
+
+            {isLeader&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+              <button onClick={()=>setAssignTarget(selPt.id)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
+                <Icon name="user" size={12} color="#fff"/> Assign Students
+              </button>
+            </div>}
+
+            {/* New patient toggle */}
+            <div onClick={()=>{ const v=!ptEdit.isNew; setPtEdit(b=>({...b,isNew:v})); updatePatient(selPt.id,{isNew:v}); }}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:ptEdit.isNew?`rgba(${hexToRgb(C.red)},0.06)`:C.surfaceEl,border:`1px solid ${ptEdit.isNew?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:8,userSelect:"none"}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${ptEdit.isNew?C.red:C.borderMid}`,background:ptEdit.isNew?C.red:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {ptEdit.isNew&&<Icon name="check" size={11} color="#fff"/>}
+              </div>
+              <span style={{fontSize:"0.86rem",color:ptEdit.isNew?C.red:C.text,fontWeight:500}}>New Patient</span>
+              <div style={{marginLeft:"auto"}}><Icon name="newdot" size={13} color={ptEdit.isNew?C.red:C.textMuted}/></div>
+            </div>
+
+            {/* History taken */}
+            <div onClick={()=>{ const v=!ptEdit.historyTaken; setPtEdit(b=>({...b,historyTaken:v})); updatePatient(selPt.id,{historyTaken:v,isNew:v?false:selPt.isNew}); }}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.07)`:C.surfaceEl,border:`1px solid ${ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${ptEdit.historyTaken?C.green:C.borderMid}`,background:ptEdit.historyTaken?C.green:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {ptEdit.historyTaken&&<Icon name="check" size={11} color="#fff"/>}
+              </div>
+              <span style={{fontSize:"0.86rem",color:ptEdit.historyTaken?C.green:C.text,fontWeight:500}}>History Taken</span>
+              <div style={{marginLeft:"auto"}}><Icon name="history" size={13} color={ptEdit.historyTaken?C.green:C.textMuted}/></div>
+            </div>
+
+            {/* Bed */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Bed Location</label>
+              <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                {sections.map(sec=>(
+                  <button key={sec.name} onClick={()=>setPtEdit(b=>({...b,section:b.section===sec.name?"":sec.name,bedNo:b.section===sec.name?"":b.bedNo}))}
+                    style={{background:ptEdit.section===sec.name?theme:C.surfaceEl,border:`1px solid ${ptEdit.section===sec.name?theme:C.border}`,color:ptEdit.section===sec.name?"#fff":C.textSub,borderRadius:8,padding:"6px 12px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
+                    {sec.name}
+                  </button>
+                ))}
+              </div>
+              {ptEdit.section&&(
+                <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:"0.82rem",color:C.textSub,fontWeight:500}}>{ptEdit.section} — Bed</span>
+                  <select value={ptEdit.bedNo} onChange={e=>setPtEdit(b=>({...b,bedNo:e.target.value}))} style={{...iS,padding:"6px 10px",fontSize:"0.82rem"}}>
+                    <option value="">Select</option>
+                    {Array.from({length:sections.find(s=>s.name===ptEdit.section)?.count||0},(_,i)=>(
+                      <option key={i+1} value={i+1}>{i+1}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Op status */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Op Status</label>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                {[{val:"pre-op",aB:"rgba(249,115,22,0.18)",aR:"#f97316",col:"#c2410c",bg:"rgba(249,115,22,0.1)",bor:"rgba(249,115,22,0.35)"},
+                  {val:"post-op",aB:"rgba(56,189,248,0.18)",aR:"#38bdf8",col:"#0369a1",bg:"rgba(56,189,248,0.08)",bor:"rgba(56,189,248,0.3)"}
+                ].map(o=>{ const act=ptEdit.opStatus===o.val; return (
+                  <button key={o.val} onClick={()=>setPtEdit(b=>({...b,opStatus:act?"":o.val}))}
+                    style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:act?700:500,textTransform:"capitalize",background:act?o.aB:o.bg,border:`1px solid ${act?o.aR:o.bor}`,color:act?o.col:C.textSub}}>
+                    {o.val}
+                  </button>
+                );})}
+              </div>
+            </div>
+
+            {/* Consultant */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Consultant</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                {consultants.length>0
+                  ?consultants.map((c,i)=>{ const cN=typeof c==="object"?c.name:c; const cC=typeof c==="object"?c.color:"#6366f1"; const act=ptEdit.consultant===cN;
+                    return <button key={i} onClick={()=>setPtEdit(b=>({...b,consultant:b.consultant===cN?"":cN}))}
+                      style={{display:"flex",alignItems:"center",gap:7,background:act?`rgba(${hexToRgb(cC)},0.12)`:C.surfaceEl,border:`1px solid ${act?cC:C.border}`,color:act?cC:C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:act?600:400}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:cC}}/>{cN}
+                    </button>; })
+                  :<input value={ptEdit.consultant} onChange={e=>setPtEdit(b=>({...b,consultant:e.target.value}))} placeholder="Consultant name" style={{...iS,width:"100%",boxSizing:"border-box"}}/>
+                }
+              </div>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Diagnosis</label>
+              <input value={ptEdit.diagnosis} onChange={e=>setPtEdit(b=>({...b,diagnosis:e.target.value}))} placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={labelStyle}>Notes</label>
+              <textarea value={ptEdit.notes} onChange={e=>setPtEdit(b=>({...b,notes:e.target.value}))} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
+            </div>
+
+            <button onClick={async()=>{ await updatePatient(selPt.id,ptEdit); setSelectedPt(null); }}
+              style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>
+              Save
+            </button>
+
+            {!showClearConfirm
+              ?<button onClick={()=>setShowClearConfirm(true)} style={{marginTop:10,width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:13,padding:"12px",fontSize:"0.85rem",cursor:"pointer",fontFamily:SF}}>Remove Patient</button>
+              :<div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
+                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Remove {selPt.name}?</p>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                  <button onClick={()=>removePatient(selPt.id)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Remove</button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Add patient modal */}
+      {showAddPt&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"26px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+            <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
+            <div style={{marginBottom:12}}><label style={labelStyle}>Name</label><input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addPatient()} placeholder="Patient full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:20}}><label style={labelStyle}>Age</label><input value={newPt.age} onChange={e=>setNewPt(p=>({...p,age:e.target.value}))} placeholder="e.g. 5" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",age:""}); }} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={addPatient} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paed Assign modal */}
+      {assignTarget&&(
+        <PaedAssignModal patient={patients.find(p=>p.id===assignTarget)} groups={groups} allStudents={allStudents} theme={theme} rgb={rgb}
+          onConfirm={async(p1,p2,sh)=>{ await updatePatient(assignTarget,{primary1:p1,primary2:p2,shadow:sh}); setAssignTarget(null); showToast("Assigned"); }}
+          onClose={()=>setAssignTarget(null)}/>
+      )}
+
+      {/* Shadow HO edit */}
+      {shadowEditing&&shadowForm&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"26px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+            <h3 style={{margin:"0 0 14px",color:C.text,fontWeight:600}}>Shadow HO Posts</h3>
+            {shadowForm.map((ho,i)=>(
+              <div key={i} style={{marginBottom:12}}>
+                <label style={labelStyle}>{ho.post}</label>
+                <input value={ho.name} onChange={e=>setShadowForm(f=>{const a=[...f];a[i]={...a[i],name:e.target.value};return a;})} placeholder="Student name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              <button onClick={()=>setShadowEditing(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>saveShadowHOs(shadowForm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PIN modal */}
+      {showPin&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><Icon name="key" size={16} color={theme}/><h3 style={{margin:0,color:C.text,fontWeight:600}}>Leader Access</h3></div>
+            <input type="password" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="PIN"
+              style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",marginTop:12,borderColor:pinError?C.red:undefined}}/>
+            {pinError&&<div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={()=>{setShowPin(false);setPinInput("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={tryPin} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Unlock</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {showDelete&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>Permanently removes this ward and all patient data.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowDelete(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{setShowDelete(false);onDelete&&onDelete(wardId);}} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit settings */}
+      {editMode&&(
+        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",backdropFilter:"blur(20px)"}}>
+            <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+              <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+              <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
+            </div>
+          </div>
+          <div style={{maxWidth:520,margin:"0 auto",padding:"24px 20px 60px"}}>
+            <div style={{marginBottom:18}}><label style={labelStyle}>Ward Name</label><input value={setup.wardName||""} onChange={e=>save({...ward,setup:{...setup,wardName:e.target.value}})} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={setup.appointmentType||""} onChange={e=>save({...ward,setup:{...setup,appointmentType:e.target.value}})} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:24}}>
+              <label style={labelStyle}>Accent Colour</label>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px"}}>
+                <input type="color" value={setup.themeColor||"#007aff"} onChange={e=>save({...ward,setup:{...setup,themeColor:e.target.value}})} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
+                <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setup.themeColor||"#007aff"})`}}/>
+              </div>
+            </div>
+            <button onClick={()=>{setEditMode(false);showToast("Saved");}} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Done</button>
+            <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
+          </div>
+          <BrandingBar theme={theme}/>
+        </div>
+      )}
+
+      <BrandingBar theme={theme}/>
+      <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}`}</style>
+    </div>
+  );
+}
+
+// ── Paed Assign Modal ──────────────────────────────────────────────────────────
+function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, onClose }) {
+  const [p1, setP1] = useState(patient?.primary1||null);
+  const [p2, setP2] = useState(patient?.primary2||null);
+  const [sh, setSh] = useState(patient?.shadow||null);
+
+  const g0 = groups[0]||{name:"Group A",students:[]};
+  const g1 = groups[1]||{name:"Group B",students:[]};
+  const g0s = (g0.students||[]).filter(s=>s.name);
+  const g1s = (g1.students||[]).filter(s=>s.name);
+
+  const SRow = ({students,selected,onSelect,label,color}) => (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:"0.65rem",fontWeight:600,color,letterSpacing:"0.04em",marginBottom:6,textTransform:"uppercase"}}>{label}</div>
+      {students.map(s=>(
+        <div key={s.name} onClick={()=>onSelect(selected===s.name?null:s.name)}
+          style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,background:selected===s.name?`rgba(${hexToRgb(color)},0.1)`:C.surfaceEl,border:`1px solid ${selected===s.name?color:C.border}`}}>
+          <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${selected===s.name?color:C.borderMid}`,background:selected===s.name?color:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {selected===s.name&&<Icon name="check" size={10} color="#fff"/>}
+          </div>
+          <span style={{fontSize:"0.88rem",color:C.text,flex:1}}>{s.name}</span>
+          {s.no&&<span style={{fontSize:"0.65rem",color:C.textMuted,fontFamily:"monospace"}}>{s.no}</span>}
+        </div>
+      ))}
+      {students.length===0&&<div style={{fontSize:"0.75rem",color:C.textMuted,padding:"6px 0"}}>No students in this group</div>}
+    </div>
+  );
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+        <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+        <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Assign — {patient?.name}</h3>
+        <p style={{margin:"0 0 16px",color:C.textMuted,fontSize:"0.76rem"}}>One primary from each group · one shadow from either</p>
+        <SRow students={g0s} selected={p1} onSelect={setP1} label={`Primary — ${g0.name}`} color="#6366f1"/>
+        <SRow students={g1s} selected={p2} onSelect={setP2} label={`Primary — ${g1.name}`} color="#f97316"/>
+        {/* Shadow */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:"0.65rem",fontWeight:600,color:C.textSub,letterSpacing:"0.04em",marginBottom:6,textTransform:"uppercase"}}>Shadow (any group)</div>
+          {allStudents.filter(s=>s.name).map(s=>(
+            <div key={s.name+s.groupName} onClick={()=>setSh(sh===s.name?null:s.name)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,background:sh===s.name?"rgba(0,0,0,0.04)":C.surface,border:`1px dashed ${sh===s.name?C.textSub:C.border}`}}>
+              <div style={{width:18,height:18,borderRadius:5,border:`2px dashed ${sh===s.name?C.textSub:C.borderMid}`,background:sh===s.name?"rgba(0,0,0,0.06)":"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {sh===s.name&&<Icon name="check" size={10} color={C.textSub}/>}
+              </div>
+              <span style={{fontSize:"0.88rem",color:C.text,flex:1}}>{s.name}</span>
+              <span style={{fontSize:"0.62rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>{s.groupName}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+          <button onClick={()=>onConfirm(p1,p2,sh)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
 }
