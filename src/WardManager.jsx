@@ -104,6 +104,7 @@ function BrandingBar({ theme }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const seniorMode = new URLSearchParams(window.location.search).get("view")==="senior";
+  const directWard = new URLSearchParams(window.location.search).get("ward");
   const [screen, setScreen]     = useState("loading"); // loading | home | ward | create
   const [wards,  setWards]      = useState([]);
   const [activeWardId, setActiveWardId] = useState(null);
@@ -145,7 +146,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    (async () => { await loadAll(); setScreen("home"); })();
+    (async () => {
+      await loadAll();
+      if (directWard) {
+        setActiveWardId(directWard);
+        setScreen("ward");
+      } else {
+        setScreen("home");
+      }
+    })();
 
     // Poll for homepage updates every 8s
     const homePoll = setInterval(async () => {
@@ -283,6 +292,19 @@ function WardCard({ ward, onOpen }) {
             <span style={{fontSize:"0.65rem",color:C.textMuted}}>{s.label}</span>
           </div>
         ))}
+      </div>
+      {/* Share links */}
+      <div style={{display:"flex",gap:12,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
+        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}`;navigator.clipboard?.writeText(u).then(()=>alert("Ward link copied!")).catch(()=>alert(u));}}
+          style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
+          Ward link
+        </button>
+        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}&view=senior`;navigator.clipboard?.writeText(u).then(()=>alert("Senior link copied!")).catch(()=>alert(u));}}
+          style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
+          Senior link
+        </button>
       </div>
     </div>
   );
@@ -1249,6 +1271,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const [pinError,  setPinError]  = useState(false);
   const [showPin,   setShowPin]   = useState(false);
   const [editMode,  setEditMode]  = useState(false);
+  const [editForm,  setEditForm]  = useState({});
   const [showDelete,setShowDelete]= useState(false);
   const [selectedPt,setSelectedPt]= useState(null);
   const [showAddPt, setShowAddPt] = useState(false);
@@ -1326,7 +1349,18 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>setEditMode(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{
+              setEditForm({
+                wardName: setup.wardName||"",
+                appointmentType: setup.appointmentType||"",
+                themeColor: setup.themeColor||"#007aff",
+                paedGroups: setup.paedGroups?.map(g=>({...g,students:(g.students||[]).map(s=>({...s}))})) || [{name:"Group A",students:[{name:"",no:""}]},{name:"Group B",students:[{name:"",no:""}]}],
+                wardSections: (setup.wardSections||[{name:"General",count:""},{name:"HDU",count:""},{name:"NICU",count:""},{name:"NBU",count:""}]).map(s=>({...s})),
+                shadowHOs: (setup.shadowHOs||[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}]).map(h=>({...h})),
+                consultants: (setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})),
+              });
+              setEditMode(true);
+            }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
           </div>
         </div>
       </div>
@@ -1623,23 +1657,38 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
       {/* Edit settings */}
       {editMode&&(
         <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
-          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",backdropFilter:"blur(20px)"}}>
-            <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)"}}>
+            <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
               <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
               <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
             </div>
           </div>
-          <div style={{maxWidth:520,margin:"0 auto",padding:"24px 20px 60px"}}>
-            <div style={{marginBottom:18}}><label style={labelStyle}>Ward Name</label><input value={setup.wardName||""} onChange={e=>save({...ward,setup:{...setup,wardName:e.target.value}})} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
-            <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={setup.appointmentType||""} onChange={e=>save({...ward,setup:{...setup,appointmentType:e.target.value}})} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
-            <div style={{marginBottom:24}}>
+          <div style={{maxWidth:560,margin:"0 auto",padding:"24px 20px 80px"}}>
+            {/* Basic fields */}
+            <div style={{marginBottom:18}}><label style={labelStyle}>Ward Name</label><input value={editForm.wardName} onChange={e=>setEditForm(f=>({...f,wardName:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={editForm.appointmentType} onChange={e=>setEditForm(f=>({...f,appointmentType:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:22}}>
               <label style={labelStyle}>Accent Colour</label>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px"}}>
-                <input type="color" value={setup.themeColor||"#007aff"} onChange={e=>save({...ward,setup:{...setup,themeColor:e.target.value}})} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
-                <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setup.themeColor||"#007aff"})`}}/>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+                <input type="color" value={editForm.themeColor} onChange={e=>setEditForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
+                <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${editForm.themeColor})`}}/>
+                <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{editForm.themeColor}</span>
               </div>
             </div>
-            <button onClick={()=>{setEditMode(false);showToast("Saved");}} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Done</button>
+            {/* Full paed fields */}
+            <PaedSetupFields form={editForm} setForm={setEditForm}/>
+            <button onClick={async()=>{
+              await save({...ward, setup:{...setup,
+                wardName:editForm.wardName, appointmentType:editForm.appointmentType, themeColor:editForm.themeColor,
+                paedGroups:editForm.paedGroups||setup.paedGroups,
+                wardSections:editForm.wardSections||setup.wardSections,
+                shadowHOs:editForm.shadowHOs||setup.shadowHOs,
+                consultants:editForm.consultants||setup.consultants,
+              }});
+              setEditMode(false); showToast("Settings saved!");
+            }} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>
+              Save Changes
+            </button>
             <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
           </div>
           <BrandingBar theme={theme}/>
@@ -1654,33 +1703,49 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
 // ── Paed Student Tab ───────────────────────────────────────────────────────────
 function PaedStudentTab({ patients, groups, theme, rgb }) {
-  const [selected, setSelected] = useState(null);
+  const [selected,  setSelected]  = useState(null);
+  const [activeGrp, setActiveGrp] = useState("all");
 
   const allStudents = groups.flatMap(g =>
     (g.students||[]).filter(s=>s.name).map(s=>({...s, groupName:g.name, groupIdx:groups.indexOf(g)}))
   );
 
-  // Sort groups then alpha within group
   const sorted = [...allStudents].sort((a,b) =>
     a.groupIdx !== b.groupIdx ? a.groupIdx - b.groupIdx : a.name.localeCompare(b.name)
   );
+
+  const filtered = activeGrp==="all" ? sorted : sorted.filter(s=>s.groupName===activeGrp);
+
+  const groupColors = ["#6366f1","#f97316"];
+  const tabOptions = [{id:"all",label:"All"}, ...groups.map((g,i)=>({id:g.name,label:g.name,color:groupColors[i]}))];
 
   const getStudentPatients = (name) => ({
     primary: patients.filter(p => p.primary1===name || p.primary2===name),
     shadow:  patients.filter(p => p.shadow===name),
   });
 
-  const g0color = "#6366f1";
-  const g1color = "#f97316";
-  const groupColors = [g0color, g1color];
-
   if (allStudents.length===0) return (
     <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students added in setup.</div>
   );
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {sorted.map(s => {
+    <div>
+      {/* Group sub-tabs */}
+      <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
+        {tabOptions.map(t=>(
+          <button key={t.id} onClick={()=>{setActiveGrp(t.id);setSelected(null);}}
+            style={{padding:"8px 14px",fontSize:"0.78rem",fontWeight:activeGrp===t.id?600:400,fontFamily:SF,
+              background:"none",border:"none",cursor:"pointer",
+              color:activeGrp===t.id?(t.color||theme):C.textMuted,
+              borderBottom:activeGrp===t.id?`2px solid ${t.color||theme}`:"2px solid transparent",
+              marginBottom:"-1px",transition:"color 0.15s"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map(s => {
         const {primary, shadow} = getStudentPatients(s.name);
         const total = primary.length + shadow.length;
         const isOpen = selected===s.name;
@@ -1756,6 +1821,7 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
