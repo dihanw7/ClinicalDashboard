@@ -270,7 +270,7 @@ function WardCard({ ward, onOpen }) {
   // Paed stats
   const paedNew  = patients.filter(p=>p.isNew).length;
   const paedHist = patients.filter(p=>p.historyTaken).length;
-  const paedAssigned = patients.filter(p=>p.primary1||p.primary2).length;
+  const paedTotal = patients.filter(p=>p.name).length;
 
   return (
     <div onClick={onOpen} style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:18,padding:"18px 18px 14px",cursor:"pointer",boxShadow:"0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
@@ -291,7 +291,7 @@ function WardCard({ ward, onOpen }) {
       <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
         {(isPaed ? [
           { icon:"newdot",  color:C.red,   label:"New",      val:paedNew },
-          { icon:"history", color:C.green, label:"Hx taken", val:`${paedHist}/${paedAssigned}` },
+          { icon:"history", color:C.green, label:"Hx taken", val:`${paedHist}/${paedTotal}` },
         ] : [
           { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
           { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
@@ -1453,7 +1453,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
           {[
             {label:"Patients",  val:patients.length,      color:theme},
-            {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.primary1||p.primary2).length}`, color:C.green},
+            {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
             {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
           ].map(s=>(
             <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
