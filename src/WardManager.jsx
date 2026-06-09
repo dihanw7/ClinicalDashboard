@@ -792,7 +792,17 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </button>
             )}
             {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader && !seniorMode && <button onClick={()=>{ setEditMode(true); setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", bedCount:setup.bedCount||"", themeColor:setup.themeColor||"#007aff", students:setup.students?.length?setup.students:[{name:"",group:""}], consultants:setup.consultants?.length?setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c):[{name:"",color:"#6366f1"}] }); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
+            {isLeader && !seniorMode && <button onClick={()=>{
+              setEditMode(true);
+              setSetupForm({
+                wardName: setup.wardName||"",
+                appointmentType: setup.appointmentType||"",
+                bedCount: setup.bedCount||"",
+                themeColor: setup.themeColor||"#007aff",
+                students: setup.students?.length ? setup.students.map(s=>typeof s==="string"?{name:s,group:""}:s) : [{name:"",group:""}],
+                consultants: setup.consultants?.length ? setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c) : [{name:"",color:"#6366f1"}],
+              });
+            }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
             </button>}
           </div>
@@ -1033,10 +1043,12 @@ function PaedWardViewPlaceholder() { return null; } // Components defined below
 // ══════════════════════════════════════════════════════════════════════════════
 
 function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField }) {
-  const addField      = (f)     => setForm(p => ({ ...p, [f]: f==="students" ? [...p[f],{name:"",group:""}] : [...p[f],{name:"",color:"#6366f1"}] }));
-  const removeField   = (f,i)   => setForm(p => ({ ...p, [f]:p[f].filter((_,idx)=>idx!==i) }));
-  const updateStudent    = (i,k,v) => setForm(p => { const a=[...p.students]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
-  const updateConsultant = (i,k,v) => setForm(p => { const a=[...p.consultants]; a[i]={...a[i],[k]:v}; return {...p,consultants:a}; });
+  const students    = form.students    || [{name:"",group:""}];
+  const consultants = form.consultants || [{name:"",color:"#6366f1"}];
+  const addField      = (f)     => setForm(p => ({ ...p, [f]: f==="students" ? [...(p[f]||[]),{name:"",group:""}] : [...(p[f]||[]),{name:"",color:"#6366f1"}] }));
+  const removeField   = (f,i)   => setForm(p => ({ ...p, [f]:(p[f]||[]).filter((_,idx)=>idx!==i) }));
+  const updateStudent    = (i,k,v) => setForm(p => { const a=[...(p.students||[])]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
+  const updateConsultant = (i,k,v) => setForm(p => { const a=[...(p.consultants||[])]; a[i]={...a[i],[k]:v}; return {...p,consultants:a}; });
 
   return (
     <div>
@@ -1067,11 +1079,11 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
           <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
           <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>GRP NO.</span>
         </div>
-        {form.students.map((s,i)=>(
+        {students.map((s,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
             <input value={s.name} onChange={e=>updateStudent(i,"name",e.target.value)} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"10px 12px"}}/>
             <input value={s.group} onChange={e=>updateStudent(i,"group",e.target.value)} placeholder="1" style={{...iS,width:48,padding:"10px 8px",textAlign:"center",flexShrink:0}}/>
-            {form.students.length>1 && <button onClick={()=>removeField("students",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            {students.length>1 && <button onClick={()=>removeField("students",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
           </div>
         ))}
         <button onClick={()=>addField("students")} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
@@ -1079,11 +1091,11 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       {/* Consultants */}
       <div style={{marginBottom:28}}>
         <label style={labelStyle}>Consultants</label>
-        {form.consultants.map((c,i)=>(
+        {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updateConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
             <input value={c.name} onChange={e=>updateConsultant(i,"name",e.target.value)} placeholder="Name or title" style={{...iS,flex:1}}/>
-            {form.consultants.length>1 && <button onClick={()=>removeField("consultants",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+            {consultants.length>1 && <button onClick={()=>removeField("consultants",i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
           </div>
         ))}
         <button onClick={()=>addField("consultants")} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
