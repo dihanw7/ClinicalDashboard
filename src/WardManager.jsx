@@ -1484,7 +1484,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             const hasBed=pt.section&&pt.bedNo;
             return (
               <div key={pt.id}
-                onClick={seniorMode?undefined:()=>{ setSelectedPt(pt.id); setPtEdit({consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}
+                onClick={seniorMode?undefined:()=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}
                 style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:14,padding:"14px",cursor:seniorMode?"default":"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.07)",position:"relative",transition:"transform 0.12s"}}
                 onMouseEnter={e=>{if(!seniorMode)e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}
@@ -1527,11 +1527,19 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
-              <div>
-                <h2 style={{margin:0,fontSize:"1.5rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em"}}>{selPt.name}</h2>
-                {selPt.age&&<div style={{fontSize:"0.82rem",color:C.textSub,marginTop:2}}>{selPt.age}</div>}
+              <div style={{flex:1,marginRight:12}}>
+                <input value={ptEdit.name||""} onChange={e=>setPtEdit(b=>({...b,name:e.target.value}))}
+                  style={{...iS,fontSize:"1.15rem",fontWeight:700,letterSpacing:"-0.02em",width:"100%",boxSizing:"border-box",padding:"6px 10px",marginBottom:6}}/>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <input value={ptEdit.ageYears||""} onChange={e=>setPtEdit(b=>({...b,ageYears:e.target.value}))} type="number" min="0" max="17" placeholder="0"
+                    style={{...iS,width:52,padding:"5px 8px",textAlign:"center",fontSize:"0.8rem"}}/>
+                  <span style={{fontSize:"0.72rem",color:C.textMuted}}>y</span>
+                  <input value={ptEdit.ageMonths||""} onChange={e=>setPtEdit(b=>({...b,ageMonths:e.target.value}))} type="number" min="0" max="11" placeholder="0"
+                    style={{...iS,width:52,padding:"5px 8px",textAlign:"center",fontSize:"0.8rem"}}/>
+                  <span style={{fontSize:"0.72rem",color:C.textMuted}}>m</span>
+                </div>
               </div>
-              <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
+              <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4,flexShrink:0}}>
                 <Icon name="close" size={13} color={C.textSub}/>
               </button>
             </div>
@@ -1615,7 +1623,10 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               <textarea value={ptEdit.notes} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,notes:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
             </div>
 
-            <button onClick={async()=>{ await updatePatient(selPt.id,ptEdit); setSelectedPt(null); }}
+            <button onClick={async()=>{
+              const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
+              await updatePatient(selPt.id,{...ptEdit,name:ptEdit.name||selPt.name,age:ageStr||selPt.age}); setSelectedPt(null);
+            }}
               style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>
               Save
             </button>
