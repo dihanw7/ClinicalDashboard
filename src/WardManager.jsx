@@ -1483,7 +1483,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pt.diagnosis||pt.consultant||pt.notes?6:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.02em"}}>{pt.name}</span>
-                    {pt.age&&<span style={{fontSize:"0.75rem",color:C.textSub}}>{pt.age}y</span>}
+                    {pt.age&&<span style={{fontSize:"0.75rem",color:C.textSub}}>{pt.age}</span>}
                   </div>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
                     {pt.historyTaken&&<Icon name="history" size={12} color={C.green}/>}
@@ -1520,7 +1520,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
               <div>
                 <h2 style={{margin:0,fontSize:"1.5rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em"}}>{selPt.name}</h2>
-                {selPt.age&&<div style={{fontSize:"0.82rem",color:C.textSub,marginTop:2}}>{selPt.age} years old</div>}
+                {selPt.age&&<div style={{fontSize:"0.82rem",color:C.textSub,marginTop:2}}>{selPt.age}</div>}
               </div>
               <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
                 <Icon name="close" size={13} color={C.textSub}/>
@@ -1905,7 +1905,7 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
                             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pt.diagnosis?4:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <span style={{fontWeight:700,color:C.text,fontSize:"0.92rem"}}>{pt.name}</span>
-                                {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}y</span>}
+                                {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}</span>}
                               </div>
                               <div style={{display:"flex",gap:5,alignItems:"center"}}>
                                 {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
@@ -1926,7 +1926,7 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
                             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <span style={{fontWeight:600,color:C.text,fontSize:"0.9rem"}}>{pt.name}</span>
-                                {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}y</span>}
+                                {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}</span>}
                               </div>
                               {pt.section&&pt.bedNo&&<span style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:5,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`}}><span style={{fontSize:"0.58rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"1px 5px"}}>{pt.section}</span><span style={{fontSize:"0.58rem",fontWeight:500,color:C.textSub,padding:"1px 5px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span></span>}
                             </div>
