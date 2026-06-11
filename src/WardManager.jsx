@@ -653,6 +653,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showPin,    setShowPin]    = useState(false);
   const [view,       setView]       = useState("home");
   const [activeTab,  setActiveTab]  = useState("ward");
+  const [archiveWeek,setArchiveWeek]= useState("");
+  const [showChangeBed, setShowChangeBed] = useState(false);
   const [selectedBed,setSelectedBed]= useState(null);
   const [bedEdit,    setBedEdit]    = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
   const [assignModal,setAssignModal]= useState(null);
@@ -715,6 +717,48 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     await updateBed(bedNum, { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, opStatus:"" });
     setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
     setShowClearConfirm(false); showToast("Bed cleared");
+  };
+
+  // ── Archive ────────────────────────────────────────────────────────────────
+  const getWeekKey = (date=new Date()) => {
+    const y = date.getFullYear();
+    const start = new Date(y, 0, 1);
+    const week = Math.ceil(((date - start) / 86400000 + start.getDay() + 1) / 7);
+    return `${y}-W${String(week).padStart(2,"0")}`;
+  };
+
+  const archiveBed = async (bedNum) => {
+    const bed = beds[bedNum];
+    const weekKey = getWeekKey();
+    const archive = ward.archive || {};
+    const weekArchive = archive[weekKey] || {};
+    weekArchive[bedNum] = { ...bed, archivedAt: new Date().toISOString() };
+    const cleared = { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+    await save({ ...ward, beds:{ ...beds, [bedNum]:cleared }, archive:{ ...archive, [weekKey]:weekArchive } });
+    setView("home"); setSelectedBed(null); showToast("Bed archived");
+  };
+
+  const restoreBed = async (weekKey, bedNum) => {
+    const bed = beds[bedNum];
+    const hasAlloc = bed && (bed.assigned?.length>0 || bed.shadows?.length>0 || bed.diagnosis || bed.consultant || bed.notes);
+    if (hasAlloc) { showToast("Cannot restore — bed has current allocations","error"); return; }
+    const archivedBed = (ward.archive||{})[weekKey]?.[bedNum];
+    if (!archivedBed) return;
+    const { archivedAt, ...restoredData } = archivedBed;
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...archive[weekKey] };
+    delete weekArchive[bedNum];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, beds:{ ...beds, [bedNum]:restoredData }, archive });
+    showToast("Bed restored");
+  };
+
+  const changeBedNumber = async (fromBed, toBed) => {
+    const bedData = { ...beds[fromBed] };
+    const cleared  = { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+    await save({ ...ward, beds:{ ...beds, [fromBed]:cleared, [toBed]:bedData } });
+    setShowChangeBed(false); setView("home"); setSelectedBed(null); showToast(`Moved to Bed ${toBed}`);
   };
   const assignStudents = async (bedNum, assigned, shadows) => {
     await updateBed(bedNum, { assigned, shadows });
@@ -859,7 +903,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       {/* Tabs */}
       <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"57px",zIndex:49,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",padding:"0 16px"}}>
-          {[{id:"ward",label:"Ward"},...(!seniorMode?[{id:"students",label:"Students"}]:[])].map(t=>(
+          {[{id:"ward",label:"Ward"},...(!seniorMode?[{id:"students",label:"Students"}]:[]),{id:"archive",label:"Archive"}].map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{padding:"11px 16px",fontSize:"0.8rem",fontWeight:500,fontFamily:SF,background:"none",border:"none",cursor:"pointer",color:activeTab===t.id?theme:C.textMuted,borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",marginBottom:"-1px",transition:"color 0.15s",letterSpacing:"-0.01em"}}>
               {t.label}
             </button>
@@ -925,11 +969,15 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         </>}
         {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb}/>}
+
+        {activeTab==="archive" && (
+          <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed}/>
+        )}
       </div>
 
       {/* Bed sheet */}
       {!seniorMode && view==="bed" && selectedBed && selBed && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);setShowClearConfirm(false);}}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);setShowClearConfirm(false);setShowChangeBed(false);}}}>
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 22px"}}/>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
@@ -937,7 +985,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:500}}>{selBed.isFloor?"Floor Patient":"Bed"}</div>
                 <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{selectedBed}</h2>
               </div>
-              <button onClick={()=>{setView("home");setSelectedBed(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
+              <button onClick={()=>{setView("home");setSelectedBed(null);setShowClearConfirm(false);setShowChangeBed(false);}} style={{background:C.surfaceEl,border:"none",color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
                 <Icon name="close" size={13} color={C.textSub}/>
               </button>
             </div>
@@ -1013,16 +1061,57 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
             <button onClick={async()=>{await saveBedEdit(selectedBed);setView("home");setSelectedBed(null);}} style={{...accentBtn(theme,rgb),width:"100%",padding:"14px",fontSize:"0.95rem"}}>Save</button>
 
-            {!showClearConfirm
-              ? <button onClick={()=>setShowClearConfirm(true)} style={{marginTop:10,width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:13,padding:"12px",fontSize:"0.85rem",cursor:"pointer",fontFamily:SF}}>Clear Bed Data</button>
-              : <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
-                  <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patient data for this bed?</p>
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>Cancel</button>
-                    <button onClick={()=>clearBed(selectedBed)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontSize:"0.85rem",fontFamily:SF}}>Clear</button>
-                  </div>
+            {/* Bottom action buttons */}
+            {!showClearConfirm && !showChangeBed && (
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button onClick={()=>setShowChangeBed(true)}
+                  style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
+                  Change Bed
+                </button>
+                <button onClick={()=>archiveBed(selectedBed)}
+                  style={{flex:1,background:`rgba(${hexToRgb("#f97316")},0.07)`,border:"1px solid rgba(249,115,22,0.3)",color:"#c2410c",borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
+                  Archive
+                </button>
+                <button onClick={()=>setShowClearConfirm(true)}
+                  style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {/* Change bed picker */}
+            {showChangeBed && (
+              <div style={{marginTop:10,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:13,padding:"14px"}}>
+                <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:600,marginBottom:10}}>Move to which bed?</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                  {bedKeys.filter(k=>!isNaN(k)&&k!==selectedBed).map(k=>{
+                    const b = beds[k];
+                    const occupied = b&&(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
+                    return (
+                      <button key={k} onClick={()=>!occupied&&changeBedNumber(selectedBed,k)} disabled={occupied}
+                        style={{padding:"10px 4px",borderRadius:9,fontSize:"0.82rem",fontWeight:700,cursor:occupied?"default":"pointer",letterSpacing:"-0.02em",transition:"all 0.1s",fontFamily:SF,
+                          background:occupied?"rgba(0,0,0,0.04)":`rgba(${rgb},0.1)`,
+                          border:`1px solid ${occupied?"rgba(0,0,0,0.1)":`rgba(${rgb},0.3)`}`,
+                          color:occupied?C.textMuted:theme,
+                          opacity:occupied?0.5:1}}>
+                        {k}
+                      </button>
+                    );
+                  })}
                 </div>
-            }
+                <button onClick={()=>setShowChangeBed(false)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem"}}>Cancel</button>
+              </div>
+            )}
+
+            {showClearConfirm && (
+              <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
+                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patient data for this bed?</p>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>Cancel</button>
+                  <button onClick={()=>clearBed(selectedBed)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontSize:"0.85rem",fontFamily:SF}}>Clear</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1148,6 +1237,90 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
         <button onClick={()=>addField("consultants")} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
       </div>
       <button onClick={onSubmit} style={{...accentBtn(form.themeColor,hexToRgb(form.themeColor)),width:"100%",padding:"15px",fontSize:"0.95rem"}}>{submitLabel}</button>
+    </div>
+  );
+}
+
+// ── Archive Tab ────────────────────────────────────────────────────────────────
+function ArchiveTab({ archive, beds, theme, rgb, onRestore }) {
+  const weeks = Object.keys(archive||{}).sort().reverse();
+  const [selectedWeek, setSelectedWeek] = useState(weeks[0]||"");
+  const [restoreMsg, setRestoreMsg] = useState(null);
+
+  if (weeks.length===0) return (
+    <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem",fontFamily:SF}}>
+      No archived beds yet. Archive beds from the bed detail sheet.
+    </div>
+  );
+
+  const weekData = archive[selectedWeek]||{};
+  const archivedBedKeys = Object.keys(weekData).sort((a,b)=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b));
+
+  const canRestore = (bedNum) => {
+    const b = beds[bedNum];
+    return !b || !(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
+  };
+
+  const formatWeek = (wk) => {
+    const [yr,wNum] = wk.split("-W");
+    return `Week ${parseInt(wNum)}, ${yr}`;
+  };
+
+  return (
+    <div>
+      <div style={{marginBottom:18}}>
+        <label style={labelStyle}>Select Week</label>
+        <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
+          {weeks.map(w=><option key={w} value={w}>{formatWeek(w)}</option>)}
+        </select>
+      </div>
+      {archivedBedKeys.length===0
+        ? <div style={{textAlign:"center",padding:"30px",color:C.textMuted,fontSize:"0.85rem"}}>No beds archived this week.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {archivedBedKeys.map(bedNum=>{
+              const bed = weekData[bedNum];
+              const ok = canRestore(bedNum);
+              return (
+                <div key={bedNum} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"14px",boxShadow:"0 4px 14px rgba(0,0,0,0.06)"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:"0.6rem",color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500,marginBottom:2}}>{bed.isFloor?"Floor":"Bed"}</div>
+                      <div style={{fontSize:"1.2rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</div>
+                    </div>
+                    <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                      {bed.historyTaken&&<Icon name="history" size={12} color={C.green}/>}
+                      {bed.isNew&&<Icon name="newdot" size={10} color={C.red}/>}
+                      <div style={{fontSize:"0.62rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:6,padding:"2px 7px"}}>
+                        {bed.archivedAt ? new Date(bed.archivedAt).toLocaleDateString() : "Archived"}
+                      </div>
+                    </div>
+                  </div>
+                  {bed.diagnosis&&<div style={{fontSize:"0.75rem",color:C.text,fontStyle:"italic",marginBottom:3,fontWeight:500}}>{bed.diagnosis}</div>}
+                  {bed.consultant&&<div style={{fontSize:"0.7rem",color:C.textSub,marginBottom:3}}>{bed.consultant}</div>}
+                  {bed.notes&&<div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:8,lineHeight:1.4}}>{bed.notes}</div>}
+                  {(bed.assigned?.length>0||bed.shadows?.length>0)&&(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+                      {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"2px 8px",color:theme,fontWeight:500}}>{n}</span>;})}
+                      {(bed.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"2px 8px",color:C.textMuted}}>{n}</span>;})}
+                    </div>
+                  )}
+                  <button
+                    onClick={()=>{
+                      if(!ok){setRestoreMsg(`Bed ${bedNum} currently has allocations — clear it first.`);setTimeout(()=>setRestoreMsg(null),3500);return;}
+                      onRestore(selectedWeek,bedNum);
+                    }}
+                    style={{width:"100%",padding:"9px",borderRadius:10,fontSize:"0.82rem",cursor:ok?"pointer":"not-allowed",fontFamily:SF,fontWeight:500,
+                      background:ok?`rgba(${rgb},0.08)`:C.surfaceEl,
+                      border:`1px solid ${ok?`rgba(${rgb},0.25)`:C.border}`,
+                      color:ok?theme:C.textMuted,opacity:ok?1:0.6}}>
+                    Restore to Bed {bedNum}
+                  </button>
+                  {restoreMsg&&restoreMsg.startsWith(`Bed ${bedNum}`)&&<div style={{fontSize:"0.72rem",color:C.red,marginTop:6,textAlign:"center"}}>{restoreMsg}</div>}
+                </div>
+              );
+            })}
+          </div>
+      }
     </div>
   );
 }
