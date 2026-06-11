@@ -1698,7 +1698,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   };
 
   const saveBedEdit = async (bedNum) => {
-    await updateBed(bedNum, bedEdit);
+    const {patientSide, ...rest} = bedEdit;
+    await updateBed(bedNum, rest);
   };
 
   const addFloorPatient = async () => {
@@ -1912,7 +1913,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               const secName = getBedSection(bedNum);
               return (
                 <div key={bedNum}
-                  onClick={seniorMode?undefined:()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||""}); setView("bed"); }}
+                  onClick={seniorMode?undefined:()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",dualPatient:!!bed.dualPatient,patientSide:"L",diagnosisL:bed.diagnosisL||"",diagnosisR:bed.diagnosisR||"",notesL:bed.notesL||"",notesR:bed.notesR||"",consultantL:bed.consultantL||"",consultantR:bed.consultantR||"",opStatusL:bed.opStatusL||"",opStatusR:bed.opStatusR||""}); setView("bed"); }}
                   style={{background:cRgb?`rgba(${cRgb},0.07)`:C.surface,border:bed.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.2)`:cRgb?`1px solid rgba(${cRgb},0.22)`:`1px solid rgba(0,0,0,${filled?0.1:0.08})`,boxShadow:cRgb?`0 6px 20px rgba(${cRgb},0.1),0 1px 4px rgba(0,0,0,0.05)`:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04)",borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
                   onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.12)"}}}
                   onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=cRgb?`0 6px 20px rgba(${cRgb},0.1),0 1px 4px rgba(0,0,0,0.05)`:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04)";}}
@@ -1923,10 +1924,27 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                   </div>
                   <div style={{fontSize:"0.58rem",color:C.textMuted,marginBottom:3,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":secName||"Bed"}</div>
                   <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em"}}>{bedNum}</div>
-                  {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
-                  {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
-                  {bed.notes&&<div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
-                  {bed.opStatus&&<div style={{display:"inline-block",marginTop:6,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,background:bed.opStatus==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:bed.opStatus==="pre-op"?"#c2410c":"#0369a1",border:bed.opStatus==="pre-op"?"1px solid rgba(249,115,22,0.3)":"1px solid rgba(56,189,248,0.4)"}}>{bed.opStatus}</div>}
+                  {bed.dualPatient ? (
+                    <div style={{marginTop:5}}>
+                      {[{side:"L",diag:bed.diagnosisL,con:bed.consultantL,op:bed.opStatusL},{side:"R",diag:bed.diagnosisR,con:bed.consultantR,op:bed.opStatusR}].map(({side,diag,con,op})=>(
+                        <div key={side} style={{display:"flex",alignItems:"flex-start",gap:5,marginBottom:3}}>
+                          <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.15)`,color:theme,borderRadius:3,padding:"1px 4px",marginTop:1,flexShrink:0}}>{side}</span>
+                          <div>
+                            {diag&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100}}>{diag}</div>}
+                            {con&&<div style={{fontSize:"0.58rem",color:C.textSub}}>{con}</div>}
+                            {op&&<div style={{display:"inline-block",fontSize:"0.5rem",fontWeight:700,textTransform:"uppercase",padding:"1px 5px",borderRadius:4,background:op==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:op==="pre-op"?"#c2410c":"#0369a1"}}>{op}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
+                      {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
+                      {bed.notes&&<div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
+                      {bed.opStatus&&<div style={{display:"inline-block",marginTop:6,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,background:bed.opStatus==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:bed.opStatus==="pre-op"?"#c2410c":"#0369a1",border:bed.opStatus==="pre-op"?"1px solid rgba(249,115,22,0.3)":"1px solid rgba(56,189,248,0.4)"}}>{bed.opStatus}</div>}
+                    </>
+                  )}
                   {!seniorMode&&(hasAssigned||hasShadow)&&(
                     <div style={{marginTop:7,display:"flex",flexWrap:"wrap",gap:3}}>
                       {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{fontSize:"0.58rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:5,padding:"2px 5px",color:theme,display:"inline-flex",alignItems:"baseline",gap:2,fontWeight:500}}>{n.split(" ")[0]}{g&&<span style={{fontSize:"0.45rem",lineHeight:1,position:"relative",top:"-1px",color:`rgba(${rgb},0.6)`}}>{g}</span>}</span>;})}
@@ -1968,6 +1986,30 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               </div>
             )}
 
+            {/* Dual patient toggle */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:bedEdit.dualPatient?10:0}}>
+                <span style={{fontSize:"0.78rem",color:C.textSub,fontWeight:500}}>Two patients this bed</span>
+                <div onClick={()=>setBedEdit(b=>({...b,dualPatient:!b.dualPatient,patientSide:!b.dualPatient?"L":"L"}))}
+                  style={{width:42,height:24,borderRadius:12,background:bedEdit.dualPatient?theme:"rgba(0,0,0,0.12)",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+                  <div style={{position:"absolute",top:3,left:bedEdit.dualPatient?20:3,width:18,height:18,borderRadius:9,background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}/>
+                </div>
+              </div>
+              {bedEdit.dualPatient && (
+                <div style={{display:"flex",gap:6}}>
+                  {["L","R"].map(side=>(
+                    <button key={side} onClick={()=>setBedEdit(b=>({...b,patientSide:side}))}
+                      style={{flex:1,padding:"8px",borderRadius:9,fontSize:"0.82rem",fontWeight:bedEdit.patientSide===side?700:500,cursor:"pointer",fontFamily:SF,
+                        background:bedEdit.patientSide===side?theme:C.surfaceEl,
+                        border:`1px solid ${bedEdit.patientSide===side?theme:C.border}`,
+                        color:bedEdit.patientSide===side?"#fff":C.textSub}}>
+                      {side==="L"?"← Left":"Right →"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* New patient toggle */}
             <div onClick={()=>toggleFlag(selectedBed,"isNew")} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:selBed.isNew?`rgba(${hexToRgb(C.red)},0.06)`:C.surfaceEl,border:`1px solid ${selBed.isNew?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:13,cursor:"pointer",marginBottom:10,userSelect:"none"}}>
               <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${selBed.isNew?C.red:C.borderMid}`,background:selBed.isNew?C.red:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>{selBed.isNew&&<Icon name="check" size={12} color="#fff"/>}</div>
@@ -1995,27 +2037,45 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 
             {/* Consultant */}
             <div style={{marginBottom:16}}>
-              <label style={labelStyle}>Consultant</label>
+              <label style={labelStyle}>Consultant{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
                 {consultants.length>0
-                  ?consultants.map((c,i)=>{const cN=typeof c==="object"?c.name:c;const cC=typeof c==="object"?c.color:"#6366f1";const act=bedEdit.consultant===cN;return<button key={i} onClick={()=>setBedEdit(b=>({...b,consultant:b.consultant===cN?"":cN}))} style={{display:"flex",alignItems:"center",gap:7,background:act?`rgba(${hexToRgb(cC)},0.12)`:C.surfaceEl,border:`1px solid ${act?cC:C.border}`,color:act?cC:C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:act?600:400}}><div style={{width:8,height:8,borderRadius:"50%",background:cC}}/>{cN}</button>;})
-                  :<input value={bedEdit.consultant} onChange={e=>setBedEdit(b=>({...b,consultant:e.target.value}))} placeholder="Consultant" style={{...iS,width:"100%",boxSizing:"border-box"}}/>
+                  ?consultants.map((c,i)=>{
+                    const cN=typeof c==="object"?c.name:c;const cC=typeof c==="object"?c.color:"#6366f1";
+                    const fieldKey = bedEdit.dualPatient ? (bedEdit.patientSide==="L"?"consultantL":"consultantR") : "consultant";
+                    const act=bedEdit[fieldKey]===cN;
+                    return<button key={i} onClick={()=>setBedEdit(b=>({...b,[fieldKey]:b[fieldKey]===cN?"":cN}))} style={{display:"flex",alignItems:"center",gap:7,background:act?`rgba(${hexToRgb(cC)},0.12)`:C.surfaceEl,border:`1px solid ${act?cC:C.border}`,color:act?cC:C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:act?600:400}}><div style={{width:8,height:8,borderRadius:"50%",background:cC}}/>{cN}</button>;})
+                  :<input value={bedEdit.dualPatient?(bedEdit.patientSide==="L"?bedEdit.consultantL||"":bedEdit.consultantR||""):bedEdit.consultant} onChange={e=>{const k=bedEdit.dualPatient?(bedEdit.patientSide==="L"?"consultantL":"consultantR"):"consultant";setBedEdit(b=>({...b,[k]:e.target.value}));}} placeholder="Consultant" style={{...iS,width:"100%",boxSizing:"border-box"}}/>
                 }
               </div>
             </div>
 
             {/* Op Status */}
             <div style={{marginBottom:14}}>
-              <label style={labelStyle}>Op Status</label>
+              <label style={labelStyle}>Op Status{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
               <div style={{display:"flex",gap:8,marginTop:8}}>
                 {[{val:"pre-op",aB:"rgba(249,115,22,0.18)",aR:"#f97316",col:"#c2410c",bg:"rgba(249,115,22,0.1)",bor:"rgba(249,115,22,0.35)"},
                   {val:"post-op",aB:"rgba(56,189,248,0.18)",aR:"#38bdf8",col:"#0369a1",bg:"rgba(56,189,248,0.08)",bor:"rgba(56,189,248,0.3)"}
-                ].map(o=>{const act=bedEdit.opStatus===o.val;return<button key={o.val} onClick={()=>setBedEdit(b=>({...b,opStatus:act?"":o.val}))} style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:act?700:500,textTransform:"capitalize",background:act?o.aB:o.bg,border:`1px solid ${act?o.aR:o.bor}`,color:act?o.col:C.textSub}}>{o.val}</button>;})}
+                ].map(o=>{
+                  const k=bedEdit.dualPatient?(bedEdit.patientSide==="L"?"opStatusL":"opStatusR"):"opStatus";
+                  const act=bedEdit[k]===o.val;
+                  return<button key={o.val} onClick={()=>setBedEdit(b=>({...b,[k]:act?"":o.val}))} style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:act?700:500,textTransform:"capitalize",background:act?o.aB:o.bg,border:`1px solid ${act?o.aR:o.bor}`,color:act?o.col:C.textSub}}>{o.val}</button>;
+                })}
               </div>
             </div>
 
-            <div style={{marginBottom:14}}><label style={labelStyle}>Diagnosis</label><input value={bedEdit.diagnosis} onChange={e=>setBedEdit(b=>({...b,diagnosis:e.target.value}))} placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/></div>
-            <div style={{marginBottom:20}}><label style={labelStyle}>Notes</label><textarea value={bedEdit.notes} onChange={e=>setBedEdit(b=>({...b,notes:e.target.value}))} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/></div>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Diagnosis{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
+              <input value={bedEdit.dualPatient?(bedEdit.patientSide==="L"?bedEdit.diagnosisL||"":bedEdit.diagnosisR||""):bedEdit.diagnosis}
+                onChange={e=>{const k=bedEdit.dualPatient?(bedEdit.patientSide==="L"?"diagnosisL":"diagnosisR"):"diagnosis";setBedEdit(b=>({...b,[k]:e.target.value}));}}
+                placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={labelStyle}>Notes{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
+              <textarea value={bedEdit.dualPatient?(bedEdit.patientSide==="L"?bedEdit.notesL||"":bedEdit.notesR||""):bedEdit.notes}
+                onChange={e=>{const k=bedEdit.dualPatient?(bedEdit.patientSide==="L"?"notesL":"notesR"):"notes";setBedEdit(b=>({...b,[k]:e.target.value}));}}
+                rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
+            </div>
 
             <button onClick={async()=>{await saveBedEdit(selectedBed);setView("home");setSelectedBed(null);}} style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>Save</button>
 
