@@ -1517,8 +1517,7 @@ function Toast({ toast }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
   const [activeTab, setActiveTab] = useState("ward");
-  const [isLeader,  setIsLeader]  = useState(false);
-  const [pinInput,  setPinInput]  = useState("");
+  const [isLeader,  setIsLeader]  = useState(false);  const [pinInput,  setPinInput]  = useState("");
   const [pinError,  setPinError]  = useState(false);
   const [showPin,   setShowPin]   = useState(false);
   const [editMode,  setEditMode]  = useState(false);
@@ -1600,6 +1599,46 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
     setSelectedPt(null); setShowClearConfirm(false);
   };
 
+  // ── Archive ────────────────────────────────────────────────────────────────
+  const getWeekKey = (date=new Date()) => {
+    const y=date.getFullYear(), start=new Date(y,0,1);
+    return `${y}-W${String(Math.ceil(((date-start)/86400000+start.getDay()+1)/7)).padStart(2,"0")}`;
+  };
+
+  const archivePatient = async (id) => {
+    const pt = patients.find(p=>p.id===id);
+    if (!pt) return;
+    const weekKey = getWeekKey();
+    const archive = ward.archive||{};
+    const weekArchive = archive[weekKey]||{};
+    weekArchive[id] = { ...pt, archivedAt: new Date().toISOString() };
+    await save({ ...ward, patients:patients.filter(p=>p.id!==id), archive:{ ...archive, [weekKey]:weekArchive } });
+    setSelectedPt(null); setShowClearConfirm(false); showToast("Patient archived");
+  };
+
+  const deleteArchivedPatient = async (weekKey, id) => {
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...(archive[weekKey]||{}) };
+    delete weekArchive[id];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, archive });
+    showToast("Archived record deleted");
+  };
+
+  const restorePatient = async (weekKey, id) => {
+    const archivedPt = (ward.archive||{})[weekKey]?.[id];
+    if (!archivedPt) return;
+    const { archivedAt, ...ptData } = archivedPt;
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...(archive[weekKey]||{}) };
+    delete weekArchive[id];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, patients:[...patients, ptData], archive });
+    showToast("Patient restored");
+  };
+
   const saveShadowHOs = async (newHOs) => {
     await save({...ward, setup:{...setup, shadowHOs:newHOs}});
     setShadowEditing(false); showToast("Shadow HO posts updated");
@@ -1654,7 +1693,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
       {/* Tab bar */}
       <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"53px",zIndex:49,backdropFilter:"blur(20px)"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",padding:"0 16px"}}>
-          {[{id:"ward",label:"Ward"},{id:"students",label:"Students"}].map(t=>(
+          {[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}].map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)}
               style={{padding:"11px 16px",fontSize:"0.8rem",fontWeight:500,fontFamily:SF,background:"none",border:"none",cursor:"pointer",
                 color:activeTab===t.id?theme:C.textMuted,
@@ -1746,6 +1785,8 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
         </>}
 
         {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb}/>}
+
+        {activeTab==="archive" && <PaedArchiveTab archive={ward.archive||{}} theme={theme} rgb={rgb} onRestore={restorePatient} onDelete={deleteArchivedPatient}/>}
       </div>
 
       {/* Patient detail sheet */}
@@ -1859,12 +1900,15 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             </button>
 
             {!showClearConfirm
-              ?<button onClick={()=>setShowClearConfirm(true)} style={{marginTop:10,width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:13,padding:"12px",fontSize:"0.85rem",cursor:"pointer",fontFamily:SF}}>Remove Patient</button>
+              ?<div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={()=>archivePatient(selPt.id)} style={{flex:1,background:`rgba(${hexToRgb("#f97316")},0.07)`,border:"1px solid rgba(249,115,22,0.3)",color:"#c2410c",borderRadius:12,padding:"11px",fontSize:"0.82rem",cursor:"pointer",fontFamily:SF}}>Archive</button>
+                  <button onClick={()=>setShowClearConfirm(true)} style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.82rem",cursor:"pointer",fontFamily:SF}}>Delete</button>
+                </div>
               :<div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
-                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Remove {selPt.name}?</p>
+                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Permanently delete {selPt.name}? This cannot be undone.</p>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-                  <button onClick={()=>removePatient(selPt.id)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Remove</button>
+                  <button onClick={()=>removePatient(selPt.id)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Delete</button>
                 </div>
               </div>
             }
@@ -2059,6 +2103,119 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       <BrandingBar theme={theme}/>
       <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}`}</style>
+    </div>
+  );
+}
+
+// ── Paed Archive Tab ───────────────────────────────────────────────────────────
+function PaedArchiveTab({ archive, theme, rgb, onRestore, onDelete }) {
+  const weeks = Object.keys(archive||{}).sort().reverse();
+  const [selectedWeek, setSelectedWeek] = useState(weeks[0]||"");
+  const [expanded,     setExpanded]     = useState({});
+  const [confirmDelete,setConfirmDelete]= useState(null);
+
+  if (weeks.length===0) return (
+    <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem",fontFamily:SF}}>
+      No archived patients yet. Use the Archive button in the patient detail sheet.
+    </div>
+  );
+
+  const weekData = archive[selectedWeek]||{};
+  const archivedIds = Object.keys(weekData).sort((a,b)=>(weekData[a].addedAt||0)-(weekData[b].addedAt||0));
+
+  const formatWeek = (wk) => {
+    const [yr,wNum] = wk.split("-W");
+    return `Week ${parseInt(wNum)}, ${yr}`;
+  };
+
+  return (
+    <div>
+      <div style={{marginBottom:18}}>
+        <label style={labelStyle}>Select Week</label>
+        <select value={selectedWeek} onChange={e=>{setSelectedWeek(e.target.value);setExpanded({});setConfirmDelete(null);}}
+          style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
+          {weeks.map(w=><option key={w} value={w}>{formatWeek(w)}</option>)}
+        </select>
+      </div>
+
+      {archivedIds.length===0
+        ? <div style={{textAlign:"center",padding:"30px",color:C.textMuted,fontSize:"0.85rem"}}>No patients archived this week.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {archivedIds.map(id=>{
+              const pt = weekData[id];
+              const isOpen = !!expanded[id];
+              return (
+                <div key={id} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,boxShadow:"0 4px 14px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+                  {/* Collapsed header */}
+                  <div onClick={()=>setExpanded(e=>({...e,[id]:!e[id]}))} style={{display:"flex",alignItems:"center",padding:"13px 14px",cursor:"pointer",userSelect:"none",gap:10}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.02em"}}>{pt.name}</span>
+                        {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}</span>}
+                        {pt.diagnosis&&<span style={{fontSize:"0.7rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>{pt.diagnosis}</span>}
+                      </div>
+                      <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>
+                        {pt.archivedAt ? new Date(pt.archivedAt).toLocaleDateString() : "Archived"}
+                        {pt.consultant&&` · ${pt.consultant}`}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                      {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>
+                        <path d="M2 4l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Expanded */}
+                  {isOpen && (
+                    <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px 14px",background:C.surfaceEl}}>
+                      {pt.diagnosis&&<div style={{fontSize:"0.78rem",color:C.text,fontStyle:"italic",marginBottom:4,fontWeight:500}}>{pt.diagnosis}</div>}
+                      {pt.consultant&&<div style={{fontSize:"0.72rem",color:C.textSub,marginBottom:4}}>{pt.consultant}</div>}
+                      {pt.notes&&<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:8,lineHeight:1.4}}>{pt.notes}</div>}
+                      {(pt.primary1||pt.primary2||pt.shadow)&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+                          {pt.primary1&&<span style={{fontSize:"0.65rem",background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:6,padding:"2px 8px",color:"#6366f1",fontWeight:500}}>{pt.primary1}</span>}
+                          {pt.primary2&&<span style={{fontSize:"0.65rem",background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.2)",borderRadius:6,padding:"2px 8px",color:"#f97316",fontWeight:500}}>{pt.primary2}</span>}
+                          {pt.shadow&&<span style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"2px 8px",color:C.textMuted}}>{pt.shadow}</span>}
+                        </div>
+                      )}
+                      {pt.section&&pt.bedNo&&(
+                        <div style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:6,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`,marginBottom:10}}>
+                          <span style={{fontSize:"0.6rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"2px 6px"}}>{pt.section}</span>
+                          <span style={{fontSize:"0.6rem",fontWeight:500,color:C.textSub,padding:"2px 6px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span>
+                        </div>
+                      )}
+
+                      {confirmDelete===id
+                        ? <div style={{background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:10,padding:"12px"}}>
+                            <p style={{margin:"0 0 10px",fontSize:"0.8rem",color:C.textSub,textAlign:"center"}}>Delete this archived record permanently?</p>
+                            <div style={{display:"flex",gap:8}}>
+                              <button onClick={()=>setConfirmDelete(null)} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:9,padding:"9px",cursor:"pointer",fontFamily:SF,fontSize:"0.8rem"}}>Cancel</button>
+                              <button onClick={()=>{onDelete(selectedWeek,id);setConfirmDelete(null);}}
+                                style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:9,padding:"9px",cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.8rem"}}>Delete</button>
+                            </div>
+                          </div>
+                        : <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>onRestore(selectedWeek,id)}
+                              style={{flex:2,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:500,
+                                background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.25)`,color:theme}}>
+                              Restore Patient
+                            </button>
+                            <button onClick={()=>setConfirmDelete(id)}
+                              style={{flex:1,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,
+                                background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red}}>
+                              Delete
+                            </button>
+                          </div>
+                      }
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+      }
     </div>
   );
 }
