@@ -2027,18 +2027,52 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                 <button onClick={()=>setShowClearConfirm(true)} style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>Clear</button>
               </div>
             )}
-            {showChangeBed&&(
-              <div style={{marginTop:10,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:13,padding:"14px"}}>
-                <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:500,marginBottom:8}}>Move to which bed?</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-                  {bedKeys.filter(k=>!isNaN(k)&&k!==selectedBed).map(k=>{
-                    const b=beds[k]; const occupied=b&&(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
-                    return<button key={k} onClick={()=>!occupied&&changeBedNumber(selectedBed,k)} disabled={occupied} style={{padding:"10px 4px",borderRadius:9,fontSize:"0.82rem",fontWeight:700,cursor:occupied?"default":"pointer",fontFamily:SF,background:occupied?"rgba(0,0,0,0.04)":`rgba(${rgb},0.1)`,border:`1px solid ${occupied?"rgba(0,0,0,0.1)":`rgba(${rgb},0.3)`}`,color:occupied?C.textMuted:theme,opacity:occupied?0.5:1}}>{k}</button>;
-                  })}
+            {showChangeBed&&(()=>{
+              // Group all beds by section
+              const sectionOrder = sections.map(s=>s.name);
+              const grouped = {};
+              bedKeys.filter(k=>k!==selectedBed).forEach(k=>{
+                const sec = getBedSection(k) || (beds[k]?.isFloor?"Floor":"Other");
+                if(!grouped[sec]) grouped[sec]=[];
+                grouped[sec].push(k);
+              });
+              // Sort each section's beds: numeric first, then alpha
+              Object.keys(grouped).forEach(sec=>{
+                grouped[sec].sort((a,b)=>{
+                  const an=Number(a),bn=Number(b);
+                  if(!isNaN(an)&&!isNaN(bn)) return an-bn;
+                  if(!isNaN(an)) return -1; if(!isNaN(bn)) return 1;
+                  return a.localeCompare(b);
+                });
+              });
+              const orderedSecs = [...sectionOrder.filter(s=>grouped[s]),...Object.keys(grouped).filter(s=>!sectionOrder.includes(s))];
+              return (
+                <div style={{marginTop:10,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:13,padding:"14px",maxHeight:360,overflowY:"auto"}}>
+                  <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:600,marginBottom:10}}>Move to which bed?</div>
+                  {orderedSecs.map(sec=>(
+                    <div key={sec} style={{marginBottom:14}}>
+                      <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:6}}>{sec}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                        {grouped[sec].map(k=>{
+                          const b=beds[k];
+                          const occupied=b&&(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
+                          return(
+                            <button key={k} onClick={()=>!occupied&&changeBedNumber(selectedBed,k)} disabled={occupied}
+                              style={{padding:"10px 4px",borderRadius:9,fontSize:"0.8rem",fontWeight:700,cursor:occupied?"default":"pointer",fontFamily:SF,
+                                background:occupied?"rgba(0,0,0,0.04)":`rgba(${rgb},0.1)`,
+                                border:`1px solid ${occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.3)`}`,
+                                color:occupied?C.textMuted:theme,opacity:occupied?0.45:1}}>
+                              {k}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={()=>setShowChangeBed(false)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",marginTop:4}}>Cancel</button>
                 </div>
-                <button onClick={()=>setShowChangeBed(false)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem"}}>Cancel</button>
-              </div>
-            )}
+              );
+            })()}
             {showClearConfirm&&(
               <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
                 <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patient data for this bed?</p>
