@@ -392,15 +392,23 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
         consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
       };
     } else if (form.template==="medicine") {
-      const count = parseInt(form.bedCount);
-      if (isNaN(count)||count<1||count>80) { setError("Bed count must be between 1 and 80."); return; }
+      const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim()&&s.range?.trim());
+      if (wardSections.length===0) { setError("Add at least one ward section with a bed range."); return; }
+      // Derive bed count from the highest bed number across all ranges
+      let maxBed = 0;
+      for (const sec of wardSections) {
+        const parts = sec.range.split("-").map(Number);
+        const hi = Math.max(...parts.filter(n=>!isNaN(n)));
+        if (hi > maxBed) maxBed = hi;
+      }
+      const count = maxBed || 80;
       const beds = {};
       for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
       const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
       const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-      const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range||""}));
+      const sections    = wardSections.map(s=>({name:s.name.trim(),range:s.range.trim()}));
       const shadowHOs   = form.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
-      await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:"medicine", students, consultants, wardSections, shadowHOs }, beds });
+      await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:"medicine", students, consultants, wardSections:sections, shadowHOs }, beds });
       showToast("Ward created!"); onCreated(); return;
     }
     await onSave(form.groupId, { setup, patients:[], beds:{} });
@@ -527,6 +535,8 @@ function MedicineSetupFields({ form, setForm }) {
   const updSection   = (i,k,v) => setForm(f=>{ const s=[...(f.wardSections||wardSections)]; s[i]={...s[i],[k]:v}; return {...f,wardSections:s}; });
   const remSection   = (i) => setForm(f=>({...f,wardSections:(f.wardSections||wardSections).filter((_,idx)=>idx!==i)}));
   const updShadowHO  = (i,v) => setForm(f=>{ const s=[...(f.shadowHOs||shadowHOs)]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+  const addShadowHO  = () => { const n=(form.shadowHOs||shadowHOs).length+1; setForm(f=>({...f,shadowHOs:[...(f.shadowHOs||shadowHOs),{post:`Shadow HO ${n}`,name:""}]})); };
+  const remShadowHO  = (i) => setForm(f=>({...f,shadowHOs:(f.shadowHOs||shadowHOs).filter((_,idx)=>idx!==i)}));
   const addStudent   = () => setForm(f=>({...f,students:[...(f.students||students),{name:"",group:""}]}));
   const updStudent   = (i,k,v) => setForm(f=>{ const a=[...(f.students||students)]; a[i]={...a[i],[k]:v}; return {...f,students:a}; });
   const remStudent   = (i) => setForm(f=>({...f,students:(f.students||students).filter((_,idx)=>idx!==i)}));
@@ -558,8 +568,10 @@ function MedicineSetupFields({ form, setForm }) {
           <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
             <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
             <input value={ho.name} onChange={e=>updShadowHO(i,e.target.value)} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
+            {shadowHOs.length>1 && <button onClick={()=>remShadowHO(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
           </div>
         ))}
+        <button onClick={addShadowHO} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Shadow HO Post</button>
       </div>
 
       {/* Students */}
@@ -611,6 +623,8 @@ function PaedSetupFields({ form, setForm }) {
   const remSection  = (i) => setForm(f=>({...f,wardSections:(f.wardSections||wardSections).filter((_,idx)=>idx!==i)}));
 
   const updShadowHO   = (i,v) => setForm(f=>{ const s=[...(f.shadowHOs||shadowHOs)]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+  const addShadowHO   = () => { const n=(form.shadowHOs||shadowHOs).length+1; setForm(f=>({...f,shadowHOs:[...(f.shadowHOs||shadowHOs),{post:`Shadow HO ${n}`,name:""}]})); };
+  const remShadowHO   = (i) => setForm(f=>({...f,shadowHOs:(f.shadowHOs||shadowHOs).filter((_,idx)=>idx!==i)}));
   const updConsultant = (i,k,v) => setForm(f=>{ const a=[...(f.consultants||consultants)]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
 
   return (
@@ -660,8 +674,10 @@ function PaedSetupFields({ form, setForm }) {
           <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
             <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
             <input value={ho.name} onChange={e=>updShadowHO(i,e.target.value)} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
+            {shadowHOs.length>1 && <button onClick={()=>remShadowHO(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
           </div>
         ))}
+        <button onClick={addShadowHO} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Shadow HO Post</button>
       </div>
 
       {/* Consultants */}
