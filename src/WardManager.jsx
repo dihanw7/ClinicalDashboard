@@ -738,20 +738,28 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setView("home"); setSelectedBed(null); showToast("Bed archived");
   };
 
-  const restoreBed = async (weekKey, bedNum) => {
-    const bed = beds[bedNum];
-    const hasAlloc = bed && (bed.assigned?.length>0 || bed.shadows?.length>0 || bed.diagnosis || bed.consultant || bed.notes);
-    if (hasAlloc) { showToast("Cannot restore — bed has current allocations","error"); return; }
-    const archivedBed = (ward.archive||{})[weekKey]?.[bedNum];
+  const restoreBed = async (weekKey, archivedBedNum, targetBedNum) => {
+    const toBed = targetBedNum || archivedBedNum;
+    const archivedBed = (ward.archive||{})[weekKey]?.[archivedBedNum];
     if (!archivedBed) return;
     const { archivedAt, ...restoredData } = archivedBed;
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...archive[weekKey] };
+    delete weekArchive[archivedBedNum];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, beds:{ ...beds, [toBed]:restoredData }, archive });
+    showToast(`Bed restored to ${toBed}`);
+  };
+
+  const deleteArchivedBed = async (weekKey, bedNum) => {
     const archive = { ...(ward.archive||{}) };
     const weekArchive = { ...archive[weekKey] };
     delete weekArchive[bedNum];
     if (Object.keys(weekArchive).length===0) delete archive[weekKey];
     else archive[weekKey] = weekArchive;
-    await save({ ...ward, beds:{ ...beds, [bedNum]:restoredData }, archive });
-    showToast("Bed restored");
+    await save({ ...ward, archive });
+    showToast("Archived record deleted");
   };
 
   const changeBedNumber = async (fromBed, toBed) => {
@@ -971,7 +979,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb}/>}
 
         {activeTab==="archive" && (
-          <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed}/>
+          <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed} onDelete={deleteArchivedBed}/>
         )}
       </div>
 
@@ -1242,80 +1250,139 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
 }
 
 // ── Archive Tab ────────────────────────────────────────────────────────────────
-function ArchiveTab({ archive, beds, theme, rgb, onRestore }) {
+function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
   const weeks = Object.keys(archive||{}).sort().reverse();
   const [selectedWeek, setSelectedWeek] = useState(weeks[0]||"");
-  const [restoreMsg, setRestoreMsg] = useState(null);
+  const [expanded,     setExpanded]     = useState({});        // {bedNum: bool}
+  const [restorePicker,setRestorePicker]= useState(null);      // bedNum being restored
+  const [confirmDelete,setConfirmDelete]= useState(null);      // bedNum to delete
 
   if (weeks.length===0) return (
     <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem",fontFamily:SF}}>
-      No archived beds yet. Archive beds from the bed detail sheet.
+      No archived beds yet. Archive beds using the Archive button in the bed detail sheet.
     </div>
   );
 
   const weekData = archive[selectedWeek]||{};
   const archivedBedKeys = Object.keys(weekData).sort((a,b)=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b));
 
-  const canRestore = (bedNum) => {
+  const bedIsFree = (bedNum) => {
     const b = beds[bedNum];
     return !b || !(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
   };
+
+  const allBedNums = Object.keys(beds).filter(k=>!isNaN(k)).sort((a,b)=>Number(a)-Number(b));
 
   const formatWeek = (wk) => {
     const [yr,wNum] = wk.split("-W");
     return `Week ${parseInt(wNum)}, ${yr}`;
   };
 
+  const toggle = (bedNum) => setExpanded(e=>({...e,[bedNum]:!e[bedNum]}));
+
   return (
     <div>
+      {/* Week selector */}
       <div style={{marginBottom:18}}>
         <label style={labelStyle}>Select Week</label>
-        <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
+        <select value={selectedWeek} onChange={e=>{setSelectedWeek(e.target.value);setExpanded({});setRestorePicker(null);setConfirmDelete(null);}}
+          style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
           {weeks.map(w=><option key={w} value={w}>{formatWeek(w)}</option>)}
         </select>
       </div>
+
       {archivedBedKeys.length===0
         ? <div style={{textAlign:"center",padding:"30px",color:C.textMuted,fontSize:"0.85rem"}}>No beds archived this week.</div>
         : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {archivedBedKeys.map(bedNum=>{
               const bed = weekData[bedNum];
-              const ok = canRestore(bedNum);
+              const isOpen = !!expanded[bedNum];
+              const sameOk = bedIsFree(bedNum);
+
               return (
-                <div key={bedNum} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"14px",boxShadow:"0 4px 14px rgba(0,0,0,0.06)"}}>
-                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
-                    <div>
-                      <div style={{fontSize:"0.6rem",color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500,marginBottom:2}}>{bed.isFloor?"Floor":"Bed"}</div>
-                      <div style={{fontSize:"1.2rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</div>
-                    </div>
-                    <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                      {bed.historyTaken&&<Icon name="history" size={12} color={C.green}/>}
-                      {bed.isNew&&<Icon name="newdot" size={10} color={C.red}/>}
-                      <div style={{fontSize:"0.62rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:6,padding:"2px 7px"}}>
+                <div key={bedNum} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,boxShadow:"0 4px 14px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+
+                  {/* Collapsed header — always visible */}
+                  <div onClick={()=>toggle(bedNum)} style={{display:"flex",alignItems:"center",padding:"13px 14px",cursor:"pointer",userSelect:"none",gap:10}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:"0.6rem",color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500}}>{bed.isFloor?"Floor":"Bed"}</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</span>
+                        {bed.diagnosis&&<span style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:140}}>{bed.diagnosis}</span>}
+                      </div>
+                      <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>
                         {bed.archivedAt ? new Date(bed.archivedAt).toLocaleDateString() : "Archived"}
+                        {bed.consultant&&` · ${bed.consultant}`}
                       </div>
                     </div>
+                    <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                      {bed.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                      {bed.isNew&&<Icon name="newdot" size={9} color={C.red}/>}
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
+                        <path d="M2 4l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                   </div>
-                  {bed.diagnosis&&<div style={{fontSize:"0.75rem",color:C.text,fontStyle:"italic",marginBottom:3,fontWeight:500}}>{bed.diagnosis}</div>}
-                  {bed.consultant&&<div style={{fontSize:"0.7rem",color:C.textSub,marginBottom:3}}>{bed.consultant}</div>}
-                  {bed.notes&&<div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:8,lineHeight:1.4}}>{bed.notes}</div>}
-                  {(bed.assigned?.length>0||bed.shadows?.length>0)&&(
-                    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
-                      {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"2px 8px",color:theme,fontWeight:500}}>{n}</span>;})}
-                      {(bed.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"2px 8px",color:C.textMuted}}>{n}</span>;})}
+
+                  {/* Expanded content */}
+                  {isOpen && (
+                    <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px 14px",background:C.surfaceEl}}>
+                      {/* Details */}
+                      {bed.diagnosis&&<div style={{fontSize:"0.78rem",color:C.text,fontStyle:"italic",marginBottom:4,fontWeight:500}}>{bed.diagnosis}</div>}
+                      {bed.consultant&&<div style={{fontSize:"0.72rem",color:C.textSub,marginBottom:4}}>{bed.consultant}</div>}
+                      {bed.notes&&<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:8,lineHeight:1.4}}>{bed.notes}</div>}
+                      {(bed.assigned?.length>0||bed.shadows?.length>0)&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+                          {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"2px 8px",color:theme,fontWeight:500}}>{n}</span>;})}
+                          {(bed.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"2px 8px",color:C.textMuted}}>{n}</span>;})}
+                        </div>
+                      )}
+
+                      {/* Restore to same bed or pick different */}
+                      {restorePicker===bedNum ? (
+                        <div>
+                          <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:500,marginBottom:8}}>Restore to which bed?</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
+                            {allBedNums.map(k=>{
+                              const free = bedIsFree(k);
+                              return (
+                                <button key={k} onClick={()=>{if(!free)return; onRestore(selectedWeek,bedNum,k); setRestorePicker(null);}} disabled={!free}
+                                  style={{padding:"9px 4px",borderRadius:9,fontSize:"0.82rem",fontWeight:700,cursor:free?"pointer":"not-allowed",fontFamily:SF,
+                                    background:free?`rgba(${rgb},0.1)`:"rgba(0,0,0,0.03)",
+                                    border:`1px solid ${free?`rgba(${rgb},0.3)`:"rgba(0,0,0,0.08)"}`,
+                                    color:free?theme:C.textMuted,opacity:free?1:0.5}}>
+                                  {k}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button onClick={()=>setRestorePicker(null)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"8px",cursor:"pointer",fontFamily:SF,fontSize:"0.8rem"}}>Cancel</button>
+                        </div>
+                      ) : confirmDelete===bedNum ? (
+                        <div style={{background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:10,padding:"12px"}}>
+                          <p style={{margin:"0 0 10px",fontSize:"0.8rem",color:C.textSub,textAlign:"center"}}>Delete this archived record permanently?</p>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>setConfirmDelete(null)} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:9,padding:"9px",cursor:"pointer",fontFamily:SF,fontSize:"0.8rem"}}>Cancel</button>
+                            <button onClick={()=>{onDelete(selectedWeek,bedNum);setConfirmDelete(null);}}
+                              style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:9,padding:"9px",cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.8rem"}}>Delete</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>setRestorePicker(bedNum)}
+                            style={{flex:2,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:500,
+                              background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.25)`,color:theme}}>
+                            Restore
+                          </button>
+                          <button onClick={()=>setConfirmDelete(bedNum)}
+                            style={{flex:1,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,
+                              background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red}}>
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <button
-                    onClick={()=>{
-                      if(!ok){setRestoreMsg(`Bed ${bedNum} currently has allocations — clear it first.`);setTimeout(()=>setRestoreMsg(null),3500);return;}
-                      onRestore(selectedWeek,bedNum);
-                    }}
-                    style={{width:"100%",padding:"9px",borderRadius:10,fontSize:"0.82rem",cursor:ok?"pointer":"not-allowed",fontFamily:SF,fontWeight:500,
-                      background:ok?`rgba(${rgb},0.08)`:C.surfaceEl,
-                      border:`1px solid ${ok?`rgba(${rgb},0.25)`:C.border}`,
-                      color:ok?theme:C.textMuted,opacity:ok?1:0.6}}>
-                    Restore to Bed {bedNum}
-                  </button>
-                  {restoreMsg&&restoreMsg.startsWith(`Bed ${bedNum}`)&&<div style={{fontSize:"0.72rem",color:C.red,marginTop:6,textAlign:"center"}}>{restoreMsg}</div>}
                 </div>
               );
             })}
