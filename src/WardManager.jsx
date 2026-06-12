@@ -1086,7 +1086,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
             {bedKeys.map(bedNum=>{
               const bed = beds[bedNum];
-              const hasAssigned=bed.assigned?.length>0, hasShadow=bed.shadows?.length>0;
+              const hasAssigned=bed.assigned?.length>0||bed.assignedL?.length>0||bed.assignedR?.length>0;
+              const hasShadow  =bed.shadows?.length>0||bed.shadowsL?.length>0||bed.shadowsR?.length>0;
               const filled=hasAssigned||bed.diagnosis||bed.consultant;
               const cObj=(setup.consultants||[]).find(c=>(typeof c==="object"?c.name:c)===bed.consultant);
               const cRgb=cObj?.color?hexToRgb(cObj.color):null;
@@ -1672,7 +1673,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const [activeTab,  setActiveTab]  = useState("ward");
   const [selectedBed,setSelectedBed]= useState(null);
   const [bedEdit,    setBedEdit]    = useState({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
-  const [assignModal,setAssignModal]= useState(null);
+  const [assignModal,setAssignModal]= useState(null); // {bed, side:""|"L"|"R"}
   const [editMode,   setEditMode]   = useState(false);
   const [showReset,  setShowReset]  = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -1965,12 +1966,25 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                       </div>}
                     </>
                   )}
-                  {!seniorMode&&(hasAssigned||hasShadow)&&(
-                    <div style={{marginTop:7,display:"flex",flexWrap:"wrap",gap:3}}>
+                  {!seniorMode&&(()=>{
+                    if(bed.dualPatient){
+                      return(
+                        <div style={{marginTop:5,display:"flex",flexDirection:"column",gap:3}}>
+                          {[{side:"L",a:bed.assignedL||[],sh:bed.shadowsL||[]},{side:"R",a:bed.assignedR||[],sh:bed.shadowsR||[]}].map(({side,a,sh})=>(
+                            (a.length>0||sh.length>0)?<div key={side} style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                              <span style={{fontSize:"0.48rem",fontWeight:700,background:`rgba(${rgb},0.15)`,color:theme,borderRadius:3,padding:"1px 4px",flexShrink:0}}>{side}</span>
+                              {a.map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{fontSize:"0.55rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:500}}>{n.split(" ")[0]}{g&&<sup style={{fontSize:"0.42rem",color:`rgba(${rgb},0.6)`}}>{g}</sup>}</span>;})}
+                              {sh.map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.55rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>;})}
+                            </div>:null
+                          ))}
+                        </div>
+                      );
+                    }
+                    return(hasAssigned||hasShadow)?<div style={{marginTop:7,display:"flex",flexWrap:"wrap",gap:3}}>
                       {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{fontSize:"0.58rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:5,padding:"2px 5px",color:theme,display:"inline-flex",alignItems:"baseline",gap:2,fontWeight:500}}>{n.split(" ")[0]}{g&&<span style={{fontSize:"0.45rem",lineHeight:1,position:"relative",top:"-1px",color:`rgba(${rgb},0.6)`}}>{g}</span>}</span>;})}
                       {(bed.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.58rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:5,padding:"2px 5px",color:C.textMuted,display:"inline-flex",alignItems:"baseline",gap:2}}>{n.split(" ")[0]}</span>;})}
-                    </div>
-                  )}
+                    </div>:null;
+                  })()}
                 </div>
               );
             })}
@@ -1999,9 +2013,17 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                 <button onClick={()=>toggleFlag(selectedBed,"isNew")} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:selBed.isNew?`rgba(${hexToRgb(C.red)},0.08)`:C.surfaceEl,border:`1px solid ${selBed.isNew?C.red:C.border}`,color:selBed.isNew?C.red:C.textSub,borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>
                   <Icon name="newdot" size={11} color={selBed.isNew?C.red:C.textMuted}/>{selBed.isNew?"New Patient":"Mark New"}
                 </button>
-                <button onClick={()=>setAssignModal(selectedBed)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
-                  <Icon name="user" size={12} color="#fff"/> Assign
+                <button onClick={()=>setAssignModal({bed:selectedBed,side:""})} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
+                  <Icon name="user" size={12} color="#fff"/> {bedEdit.dualPatient?"Assign All":"Assign"}
                 </button>
+                {bedEdit.dualPatient&&<>
+                  <button onClick={()=>setAssignModal({bed:selectedBed,side:"L"})} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.3)`,color:theme,borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
+                    <span style={{fontSize:"0.6rem",fontWeight:700,background:`rgba(${rgb},0.2)`,borderRadius:3,padding:"1px 4px"}}>L</span> Assign
+                  </button>
+                  <button onClick={()=>setAssignModal({bed:selectedBed,side:"R"})} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.3)`,color:theme,borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
+                    <span style={{fontSize:"0.6rem",fontWeight:700,background:`rgba(${rgb},0.2)`,borderRadius:3,padding:"1px 4px"}}>R</span> Assign
+                  </button>
+                </>}
                 {selBed.isFloor&&<button onClick={async()=>{const b={...beds};delete b[selectedBed];await save({...ward,beds:b});setView("home");setSelectedBed(null);showToast("Floor patient removed");}} style={{display:"flex",alignItems:"center",justifyContent:"center",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:10,padding:"10px 12px",fontSize:"0.78rem",cursor:"pointer"}}><Icon name="close" size={13} color={C.red}/></button>}
               </div>
             )}
@@ -2177,11 +2199,19 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
       )}
 
       {/* Medicine assign modal — shadow restricted to Shadow HOs */}
-      {assignModal&&(
-        <MedicineAssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} shadowHOs={shadowHOs} theme={theme} rgb={rgb}
-          onConfirm={async(a,s)=>{ await updateBed(assignModal,{assigned:a,shadows:s}); setAssignModal(null); showToast("Students assigned"); }}
-          onClose={()=>setAssignModal(null)}/>
-      )}
+      {assignModal&&(()=>{
+        const {bed:aBed, side} = assignModal;
+        const assignedKey = side==="L"?"assignedL":side==="R"?"assignedR":"assigned";
+        const shadowsKey  = side==="L"?"shadowsL" :side==="R"?"shadowsR" :"shadows";
+        return <MedicineAssignModal
+          bedNum={aBed} side={side}
+          students={setup.students||[]}
+          currentAssigned={beds[aBed]?.[assignedKey]||[]}
+          currentShadows={beds[aBed]?.[shadowsKey]||[]}
+          shadowHOs={shadowHOs} theme={theme} rgb={rgb}
+          onConfirm={async(a,s)=>{ await updateBed(aBed,{[assignedKey]:a,[shadowsKey]:s}); setAssignModal(null); showToast("Students assigned"); }}
+          onClose={()=>setAssignModal(null)}/>;
+      })()}
 
       {/* Shadow HO edit */}
       {shadowEditing&&shadowForm&&(
@@ -2296,7 +2326,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 }
 
 // ── Medicine Assign Modal ───────────────────────────────────────────────────────
-function MedicineAssignModal({ bedNum, students, currentAssigned, currentShadows, shadowHOs, theme, rgb, onConfirm, onClose }) {
+function MedicineAssignModal({ bedNum, side, students, currentAssigned, currentShadows, shadowHOs, theme, rgb, onConfirm, onClose }) {
   const [assigned, setAssigned] = useState(currentAssigned);
   const [shadows,  setShadows]  = useState(currentShadows);
 
@@ -2316,7 +2346,7 @@ function MedicineAssignModal({ bedNum, students, currentAssigned, currentShadows
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"75vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
-        <h3 style={{margin:"0 0 6px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}</h3>
+        <h3 style={{margin:"0 0 6px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}{side&&<span style={{marginLeft:8,fontSize:"0.75rem",fontWeight:700,background:`rgba(${rgb},0.12)`,color:theme,border:`1px solid rgba(${rgb},0.25)`,borderRadius:5,padding:"2px 8px"}}>{side} side</span>}</h3>
 
         {/* Primary students */}
         <div style={{fontSize:"0.65rem",color:C.textSub,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Primary</div>
