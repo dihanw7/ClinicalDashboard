@@ -410,8 +410,9 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
       const shadowHOs   = form.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
       // Add special beds to the beds object
       const specialBeds = (form.specialBeds||[]).filter(b=>b.id?.trim());
-      specialBeds.forEach(b=>{ beds[b.id.trim()]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:b.section?.trim()||"" }; });
-      await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:"medicine", students, consultants, wardSections:sections, shadowHOs, specialBeds }, beds });
+      const customTags  = (form.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
+      specialBeds.forEach(b=>{ beds[b.id.trim()]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, specialBedSection:b.section?.trim()||"", tags:[] }; });
+      await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:"medicine", students, consultants, wardSections:sections, shadowHOs, specialBeds, customTags }, beds });
       showToast("Ward created!"); onCreated(); return;
     }
     await onSave(form.groupId, { setup, patients:[], beds:{} });
@@ -581,6 +582,21 @@ function MedicineSetupFields({ form, setForm }) {
         ))}
         <button onClick={addSpecialBed} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Special Bed</button>
       </div>
+
+      {/* Custom Tags */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Custom Tags</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Add your own tags e.g. Pre-op, Post-op, Dialysis, Isolation.</p>
+        {(form.customTags||[]).map((tag,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input type="color" value={tag.color||"#6366f1"} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],color:e.target.value};return{...f,customTags:a};})} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+            <input value={tag.label} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],label:e.target.value};return{...f,customTags:a};})} placeholder="Tag name" style={{...iS,flex:1}}/>
+            <button onClick={()=>setForm(f=>({...f,customTags:(f.customTags||[]).filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+          </div>
+        ))}
+        <button onClick={()=>setForm(f=>({...f,customTags:[...(f.customTags||[]),{label:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Tag</button>
+      </div>
+
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Shadow HO Posts</label>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>3-day rotating posts. Leaders can update names anytime.</p>
@@ -1827,7 +1843,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{ setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", bedCount:setup.bedCount||"", themeColor:setup.themeColor||"#007aff", students:(setup.students||[{name:"",group:""}]).map(s=>({...s})), consultants:(setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})), wardSections:(setup.wardSections||[]).map(s=>({...s})), shadowHOs:(setup.shadowHOs||[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}]).map(h=>({...h})), specialBeds:(setup.specialBeds||[]).map(b=>({...b})) }); setEditMode(true); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{ setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", bedCount:setup.bedCount||"", themeColor:setup.themeColor||"#007aff", students:(setup.students||[{name:"",group:""}]).map(s=>({...s})), consultants:(setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})), wardSections:(setup.wardSections||[]).map(s=>({...s})), shadowHOs:(setup.shadowHOs||[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}]).map(h=>({...h})), specialBeds:(setup.specialBeds||[]).map(b=>({...b})), customTags:(setup.customTags||[]).map(t=>({...t})) }); setEditMode(true); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
           </div>
         </div>
       </div>
@@ -1913,7 +1929,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               const secName = getBedSection(bedNum);
               return (
                 <div key={bedNum}
-                  onClick={seniorMode?undefined:()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",dualPatient:!!bed.dualPatient,patientSide:"L",diagnosisL:bed.diagnosisL||"",diagnosisR:bed.diagnosisR||"",notesL:bed.notesL||"",notesR:bed.notesR||"",consultantL:bed.consultantL||"",consultantR:bed.consultantR||"",opStatusL:bed.opStatusL||"",opStatusR:bed.opStatusR||""}); setView("bed"); }}
+                  onClick={seniorMode?undefined:()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,dualPatient:!!bed.dualPatient,patientSide:"L",diagnosisL:bed.diagnosisL||"",diagnosisR:bed.diagnosisR||"",notesL:bed.notesL||"",notesR:bed.notesR||"",consultantL:bed.consultantL||"",consultantR:bed.consultantR||"",tags:bed.tags||[],tagsL:bed.tagsL||[],tagsR:bed.tagsR||[]}); setView("bed"); }}
                   style={{background:cRgb?`rgba(${cRgb},0.07)`:C.surface,border:bed.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.2)`:cRgb?`1px solid rgba(${cRgb},0.22)`:`1px solid rgba(0,0,0,${filled?0.1:0.08})`,boxShadow:cRgb?`0 6px 20px rgba(${cRgb},0.1),0 1px 4px rgba(0,0,0,0.05)`:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04)",borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
                   onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.12)"}}}
                   onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=cRgb?`0 6px 20px rgba(${cRgb},0.1),0 1px 4px rgba(0,0,0,0.05)`:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04)";}}
@@ -1926,13 +1942,15 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                   <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em"}}>{bedNum}</div>
                   {bed.dualPatient ? (
                     <div style={{marginTop:5}}>
-                      {[{side:"L",diag:bed.diagnosisL,con:bed.consultantL,op:bed.opStatusL},{side:"R",diag:bed.diagnosisR,con:bed.consultantR,op:bed.opStatusR}].map(({side,diag,con,op})=>(
+                      {[{side:"L",diag:bed.diagnosisL,con:bed.consultantL,tags:bed.tagsL},{side:"R",diag:bed.diagnosisR,con:bed.consultantR,tags:bed.tagsR}].map(({side,diag,con,tags})=>(
                         <div key={side} style={{display:"flex",alignItems:"flex-start",gap:5,marginBottom:3}}>
                           <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.15)`,color:theme,borderRadius:3,padding:"1px 4px",marginTop:1,flexShrink:0}}>{side}</span>
                           <div>
                             {diag&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100}}>{diag}</div>}
                             {con&&<div style={{fontSize:"0.58rem",color:C.textSub}}>{con}</div>}
-                            {op&&<div style={{display:"inline-block",fontSize:"0.5rem",fontWeight:700,textTransform:"uppercase",padding:"1px 5px",borderRadius:4,background:op==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:op==="pre-op"?"#c2410c":"#0369a1"}}>{op}</div>}
+                            {(tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:2}}>
+                              {(tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                            </div>}
                           </div>
                         </div>
                       ))}
@@ -1942,7 +1960,9 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                       {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
                       {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
                       {bed.notes&&<div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
-                      {bed.opStatus&&<div style={{display:"inline-block",marginTop:6,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,background:bed.opStatus==="pre-op"?"rgba(249,115,22,0.12)":"rgba(56,189,248,0.15)",color:bed.opStatus==="pre-op"?"#c2410c":"#0369a1",border:bed.opStatus==="pre-op"?"1px solid rgba(249,115,22,0.3)":"1px solid rgba(56,189,248,0.4)"}}>{bed.opStatus}</div>}
+                      {(bed.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
+                        {(bed.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.52rem",fontWeight:700,padding:"2px 6px",borderRadius:5,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                      </div>}
                     </>
                   )}
                   {!seniorMode&&(hasAssigned||hasShadow)&&(
@@ -2050,19 +2070,29 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               </div>
             </div>
 
-            {/* Op Status */}
-            <div style={{marginBottom:14}}>
-              <label style={labelStyle}>Op Status{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
-              <div style={{display:"flex",gap:8,marginTop:8}}>
-                {[{val:"pre-op",aB:"rgba(249,115,22,0.18)",aR:"#f97316",col:"#c2410c",bg:"rgba(249,115,22,0.1)",bor:"rgba(249,115,22,0.35)"},
-                  {val:"post-op",aB:"rgba(56,189,248,0.18)",aR:"#38bdf8",col:"#0369a1",bg:"rgba(56,189,248,0.08)",bor:"rgba(56,189,248,0.3)"}
-                ].map(o=>{
-                  const k=bedEdit.dualPatient?(bedEdit.patientSide==="L"?"opStatusL":"opStatusR"):"opStatus";
-                  const act=bedEdit[k]===o.val;
-                  return<button key={o.val} onClick={()=>setBedEdit(b=>({...b,[k]:act?"":o.val}))} style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:act?700:500,textTransform:"capitalize",background:act?o.aB:o.bg,border:`1px solid ${act?o.aR:o.bor}`,color:act?o.col:C.textSub}}>{o.val}</button>;
-                })}
+            {/* Custom Tags */}
+            {(setup.customTags||[]).length>0&&(
+              <div style={{marginBottom:14}}>
+                <label style={labelStyle}>Tags{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                  {(setup.customTags||[]).map((tag,ti)=>{
+                    const tagKey = bedEdit.dualPatient?(bedEdit.patientSide==="L"?"tagsL":"tagsR"):"tags";
+                    const activeTags = bedEdit[tagKey]||[];
+                    const isActive = activeTags.includes(tag.label);
+                    const tagRgb = hexToRgb(tag.color||"#6366f1");
+                    return(
+                      <button key={ti} onClick={()=>setBedEdit(b=>{const k=bedEdit.dualPatient?(b.patientSide==="L"?"tagsL":"tagsR"):"tags";const cur=b[k]||[];return{...b,[k]:isActive?cur.filter(t=>t!==tag.label):[...cur,tag.label]};})}
+                        style={{padding:"6px 12px",borderRadius:20,fontSize:"0.78rem",fontWeight:isActive?600:400,cursor:"pointer",fontFamily:SF,transition:"all 0.1s",
+                          background:isActive?`rgba(${tagRgb},0.15)`:C.surfaceEl,
+                          border:`1px solid ${isActive?tag.color:C.border}`,
+                          color:isActive?tag.color:C.textSub}}>
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{marginBottom:14}}>
               <label style={labelStyle}>Diagnosis{bedEdit.dualPatient&&<span style={{marginLeft:6,fontSize:"0.65rem",color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px"}}>{bedEdit.patientSide}</span>}</label>
@@ -2248,7 +2278,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               // Add any new special beds to the beds object
               const newBeds = {...beds};
               specialBeds.forEach(b=>{ if(!newBeds[b.id]){ newBeds[b.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:b.section }; } else { newBeds[b.id]={...newBeds[b.id],specialBedSection:b.section}; } });
-              await save({...ward,beds:newBeds,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students,consultants,wardSections,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,specialBeds}});
+              const customTags  = (setupForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
+              await save({...ward,beds:newBeds,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students,consultants,wardSections,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,specialBeds,customTags}});
               setEditMode(false); showToast("Settings saved!");
             }} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Save Changes</button>
             <button onClick={()=>{setEditMode(false);setShowReset(true);}} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,marginBottom:8}}>Reset Ward (New Rotation)</button>
