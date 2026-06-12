@@ -1729,8 +1729,18 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   };
 
   const clearBed = async (bedNum) => {
-    await updateBed(bedNum, { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, opStatus:"" });
-    setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false, opStatus:"" });
+    const existing = beds[bedNum] || {};
+    await updateBed(bedNum, {
+      assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, opStatus:"",
+      dualPatient:false,
+      assignedL:[], shadowsL:[], diagnosisL:"", notesL:"", consultantL:"", tagsL:[],
+      assignedR:[], shadowsR:[], diagnosisR:"", notesR:"", consultantR:"", tagsR:[],
+      tags:[],
+      isFloor: existing.isFloor||false,
+      specialBedSection: existing.specialBedSection||"",
+    });
+    setBedEdit({ consultant:"", diagnosis:"", notes:"", historyTaken:false, dualPatient:false, patientSide:"L",
+      diagnosisL:"", diagnosisR:"", notesL:"", notesR:"", consultantL:"", consultantR:"", tags:[], tagsL:[], tagsR:[] });
     setShowClearConfirm(false); showToast("Bed cleared");
   };
 
