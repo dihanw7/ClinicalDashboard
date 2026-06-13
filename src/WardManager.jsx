@@ -924,11 +924,14 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showDelete, setShowDelete] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const [shadowEditing, setShadowEditing] = useState(false);
+  const [shadowForm, setShadowForm] = useState(null);
 
   const setup  = ward.setup || {};
   const beds   = ward.beds  || {};
   const theme  = setup.themeColor || "#007aff";
   const rgb    = hexToRgb(theme);
+  const shadowHOs = setup.shadowHOs || [];
 
   const save = useCallback(async (newWard) => {
     await saveWard(newWard);
@@ -941,16 +944,18 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     if (isNaN(count)||count<1||count>80) { showToast("Beds 1–80","error"); return; }
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
+    const shadowHOsSave = (setupForm.shadowHOs||[]);
     const bedObj = {};
     for (let i=1;i<=count;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants }, beds:bedObj });
+    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave }, beds:bedObj });
     showToast("Ward configured!");
   };
 
   const handleSaveEdit = async () => {
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants } });
+    const shadowHOsSave = (setupForm.shadowHOs||[]);
+    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave } });
     setEditMode(false); showToast("Settings saved!");
   };
 
@@ -1161,6 +1166,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 themeColor: setup.themeColor||"#007aff",
                 students: setup.students?.length ? setup.students.map(s=>typeof s==="string"?{name:s,group:""}:s) : [{name:"",group:""}],
                 consultants: setup.consultants?.length ? setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c) : [{name:"",color:"#6366f1"}],
+                shadowHOs: (setup.shadowHOs||[]).map(h=>({...h})),
               });
             }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
@@ -1182,6 +1188,23 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px 100px"}}>
         {activeTab==="ward" && <>
+          {/* Shadow HO Banner */}
+          {shadowHOs.length>0 && (
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
+                {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {shadowHOs.map((ho,i)=>(
+                  <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                    <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
+                    <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Stats */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
             {[
@@ -1387,7 +1410,27 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       )}
 
       {/* Assign modal */}
-      {assignModal && <AssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} theme={theme} rgb={rgb} onConfirm={(a,s)=>assignStudents(assignModal,a,s)} onClose={()=>setAssignModal(null)}/>}
+      {assignModal && <AssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} shadowHOs={shadowHOs} theme={theme} rgb={rgb} onConfirm={(a,s)=>assignStudents(assignModal,a,s)} onClose={()=>setAssignModal(null)}/>}
+
+      {/* Shadow HO edit modal */}
+      {shadowEditing && shadowForm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShadowEditing(false)}>
+          <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"60vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+            <h3 style={{margin:"0 0 14px",color:C.text,fontWeight:600}}>Update Shadow HO Posts</h3>
+            {shadowForm.map((ho,i)=>(
+              <div key={i} style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
+                <span style={{fontSize:"0.78rem",color:C.textSub,width:100,flexShrink:0,fontWeight:500}}>{ho.post}</span>
+                <input value={ho.name} onChange={e=>{const s=[...shadowForm];s[i]={...s[i],name:e.target.value};setShadowForm(s);}} placeholder="Student name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:10,marginTop:6}}>
+              <button onClick={()=>setShadowEditing(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={async()=>{ await save({...ward,setup:{...setup,shadowHOs:shadowForm}}); setShadowEditing(false); showToast("Shadow HO posts updated"); }} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pin modal */}
       {showPin && (
@@ -1451,10 +1494,21 @@ function PaedWardViewPlaceholder() { return null; } // Components defined below
 function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField }) {
   const students    = form.students    || [{name:"",group:""}];
   const consultants = form.consultants || [{name:"",color:"#6366f1"}];
+  const shadowHOs   = form.shadowHOs   || [];
   const addField      = (f)     => setForm(p => ({ ...p, [f]: f==="students" ? [...(p[f]||[]),{name:"",group:""}] : [...(p[f]||[]),{name:"",color:"#6366f1"}] }));
   const removeField   = (f,i)   => setForm(p => ({ ...p, [f]:(p[f]||[]).filter((_,idx)=>idx!==i) }));
   const updateStudent    = (i,k,v) => setForm(p => { const a=[...(p.students||[])]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
   const updateConsultant = (i,k,v) => setForm(p => { const a=[...(p.consultants||[])]; a[i]={...a[i],[k]:v}; return {...p,consultants:a}; });
+  const setShadowHOCount = (n) => {
+    const count = Math.max(0, Math.min(10, parseInt(n)||0));
+    const current = form.shadowHOs || [];
+    if (count > current.length) {
+      const added = Array.from({length: count - current.length}, (_,i) => ({post:`Shadow HO ${current.length+i+1}`, name:""}));
+      setForm(f=>({...f, shadowHOs:[...current, ...added]}));
+    } else {
+      setForm(f=>({...f, shadowHOs:current.slice(0, count)}));
+    }
+  };
 
   return (
     <div>
@@ -1477,6 +1531,33 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
           <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${form.themeColor})`}}/>
           <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{form.themeColor}</span>
         </div>
+      </div>
+      {/* Shadow HO count */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Shadow HO Posts</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Number of 3-day rotating Shadow HO posts (0 to hide banner).</p>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4}}>
+          {[0,1,2,3,4,5].map(n=>(
+            <button key={n} onClick={()=>setShadowHOCount(n)}
+              style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:"0.88rem",fontWeight:600,fontFamily:SF,cursor:"pointer",
+                background:shadowHOs.length===n?theme:C.surfaceEl,
+                border:`1px solid ${shadowHOs.length===n?theme:C.border}`,
+                color:shadowHOs.length===n?"#fff":C.textSub}}>
+              {n}
+            </button>
+          ))}
+        </div>
+        {shadowHOs.length>0 && (
+          <div style={{marginTop:12}}>
+            <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 8px"}}>Names can be updated anytime by the leader.</p>
+            {shadowHOs.map((ho,i)=>(
+              <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
+                <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
+                <input value={ho.name} onChange={e=>setForm(f=>{const s=[...(f.shadowHOs||[])];s[i]={...s[i],name:e.target.value};return{...f,shadowHOs:s};})} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {/* Students */}
       <div style={{marginBottom:22}}>
@@ -1722,15 +1803,26 @@ function BedPill({ bedNum, bed, type, rgb, theme }) {
   );
 }
 
-function AssignModal({ bedNum, students, currentAssigned, currentShadows, theme, rgb, onConfirm, onClose }) {
+function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadowHOs=[], theme, rgb, onConfirm, onClose }) {
   const [assigned, setAssigned] = useState(currentAssigned);
   const [shadows,  setShadows]  = useState(currentShadows);
+  const [blockedMsg, setBlockedMsg] = useState(null);
+
+  const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
   const sorted = [...students].sort((a,b)=>{const ag=parseInt(a.group)||999,bg=parseInt(b.group)||999;return ag!==bg?ag-bg:a.name.localeCompare(b.name);});
   const getName = s => typeof s==="object"?s.name:s;
   const isAssigned = s => assigned.some(x=>getName(x)===getName(s));
   const isShadow   = s => shadows.some(x=>getName(x)===getName(s));
-  const toggleAssigned = s => { if(isAssigned(s)){setAssigned([]);return;} setShadows(sh=>sh.filter(x=>getName(x)!==getName(s))); setAssigned([s]); };
-  const toggleShadow   = s => { if(isShadow(s)){setShadows([]);return;}   setAssigned(a=>a.filter(x=>getName(x)!==getName(s)));  setShadows([s]);  };
+  const isShadowHO = s => shadowHONames.has(getName(s));
+
+  const handlePrimary = (s) => {
+    if (isShadowHO(s)) { setBlockedMsg("Cannot assign Shadow HOs as primary"); setTimeout(()=>setBlockedMsg(null),2000); return; }
+    if(isAssigned(s)){setAssigned([]);return;} setShadows(sh=>sh.filter(x=>getName(x)!==getName(s))); setAssigned([s]);
+  };
+  const handleShadow = (s) => {
+    if (isShadowHO(s)) { setBlockedMsg("Cannot assign Shadow HOs as shadow"); setTimeout(()=>setBlockedMsg(null),2000); return; }
+    if(isShadow(s)){setShadows([]);return;} setAssigned(a=>a.filter(x=>getName(x)!==getName(s))); setShadows([s]);
+  };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -1741,19 +1833,25 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, theme,
           <div style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.72rem",color:C.textSub}}><div style={{width:12,height:12,borderRadius:3,background:`rgba(${rgb},0.2)`,border:`1px solid rgba(${rgb},0.4)`}}/>Primary</div>
           <div style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.72rem",color:C.textSub}}><div style={{width:12,height:12,borderRadius:3,border:`1px dashed ${C.borderMid}`}}/>Shadow</div>
         </div>
+        {blockedMsg && (
+          <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:"0.78rem",color:C.red,textAlign:"center"}}>
+            {blockedMsg}
+          </div>
+        )}
         {sorted.length===0
           ? <p style={{color:C.textMuted,fontSize:"0.82rem"}}>No students in setup.</p>
           : <div style={{display:"flex",flexDirection:"column",gap:7}}>
               {sorted.map(s=>{
-                const ip=isAssigned(s),is=isShadow(s);
+                const ip=isAssigned(s),is=isShadow(s),isHO=isShadowHO(s);
                 return (
-                  <div key={getName(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:ip?`rgba(${rgb},0.07)`:is?C.surfaceEl:C.surface,border:`1px solid ${ip?`rgba(${rgb},0.3)`:is?C.borderMid:C.border}`,borderRadius:12}}>
+                  <div key={getName(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:isHO?"rgba(0,0,0,0.02)":ip?`rgba(${rgb},0.07)`:is?C.surfaceEl:C.surface,border:`1px solid ${isHO?"rgba(0,0,0,0.06)":ip?`rgba(${rgb},0.3)`:is?C.borderMid:C.border}`,borderRadius:12,opacity:isHO?0.55:1}}>
                     {s.group&&<span style={{fontSize:"0.58rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 5px",fontFamily:"monospace",flexShrink:0}}>{s.group}</span>}
-                    <span style={{flex:1,color:C.text,fontSize:"0.88rem",fontWeight:ip?500:400}}>{s.name}</span>
-                    <button onClick={()=>toggleAssigned(s)} style={{display:"flex",alignItems:"center",gap:5,background:ip?theme:C.surfaceEl,border:`1px solid ${ip?theme:C.border}`,color:ip?"#fff":C.textSub,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:ip?600:400}}>
-                      <Icon name="user" size={11} color={ip?"#fff":C.textSub}/>Primary
+                    <span style={{flex:1,color:isHO?C.textMuted:C.text,fontSize:"0.88rem",fontWeight:ip?500:400}}>{s.name}</span>
+                    {isHO && <span style={{fontSize:"0.62rem",color:C.textMuted,fontStyle:"italic",flexShrink:0}}>Shadow HO</span>}
+                    <button onClick={()=>handlePrimary(s)} style={{display:"flex",alignItems:"center",gap:5,background:ip?theme:isHO?"rgba(0,0,0,0.04)":C.surfaceEl,border:`1px solid ${ip?theme:isHO?"rgba(0,0,0,0.08)":C.border}`,color:ip?"#fff":C.textMuted,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:isHO?"not-allowed":"pointer",fontFamily:SF,fontWeight:ip?600:400}}>
+                      <Icon name="user" size={11} color={ip?"#fff":C.textMuted}/>Primary
                     </button>
-                    <button onClick={()=>toggleShadow(s)} style={{display:"flex",alignItems:"center",gap:5,background:is?C.surfaceEl:C.surface,border:`1px dashed ${is?C.borderMid:C.border}`,color:is?C.textSub:C.textMuted,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
+                    <button onClick={()=>handleShadow(s)} style={{display:"flex",alignItems:"center",gap:5,background:is?C.surfaceEl:isHO?"rgba(0,0,0,0.04)":C.surface,border:`1px dashed ${is?C.borderMid:isHO?"rgba(0,0,0,0.08)":C.border}`,color:is?C.textSub:C.textMuted,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:isHO?"not-allowed":"pointer",fontFamily:SF}}>
                       <Icon name="shadow" size={11} color={is?C.textSub:C.textMuted}/>Shadow
                     </button>
                   </div>
