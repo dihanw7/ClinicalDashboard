@@ -3542,7 +3542,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
         </div>
         </>}
 
-        {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb}/>}
+        {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb} onSelectPatient={pt=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}/>}
 
         {activeTab==="archive" && <PaedArchiveTab archive={ward.archive||{}} theme={theme} rgb={rgb} onRestore={restorePatient} onDelete={deleteArchivedPatient}/>}
       </div>
@@ -3979,7 +3979,7 @@ function PaedArchiveTab({ archive, theme, rgb, onRestore, onDelete }) {
 }
 
 // ── Paed Student Tab ───────────────────────────────────────────────────────────
-function PaedStudentTab({ patients, groups, theme, rgb }) {
+function PaedStudentTab({ patients, groups, theme, rgb, onSelectPatient }) {
   const [selected,  setSelected]  = useState(null);
   const [activeGrp, setActiveGrp] = useState("all");
 
@@ -4064,7 +4064,10 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
                       {primary.length>0 && <>
                         <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Primary</div>
                         {primary.map(pt=>(
-                          <div key={pt.id} style={{background:C.surface,border:`1px solid rgba(${hexToRgb(gc)},0.2)`,borderRadius:12,padding:"11px 13px",marginBottom:7}}>
+                          <div key={pt.id} onClick={()=>onSelectPatient&&onSelectPatient(pt)}
+                            style={{background:C.surface,border:`1px solid rgba(${hexToRgb(gc)},0.2)`,borderRadius:12,padding:"11px 13px",marginBottom:7,cursor:onSelectPatient?"pointer":"default",transition:"box-shadow 0.12s"}}
+                            onMouseEnter={e=>{if(onSelectPatient)e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.1)";}}
+                            onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
                             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pt.diagnosis?4:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <span style={{fontWeight:700,color:C.text,fontSize:"0.92rem"}}>{pt.name}</span>
@@ -4074,6 +4077,7 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
                                 {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
                                 {pt.isNew&&<span style={{animation:"blink 1.2s ease-in-out infinite",display:"inline-flex"}}><Icon name="newdot" size={9} color={C.red}/></span>}
                                 {pt.section&&pt.bedNo&&<span style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:5,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`}}><span style={{fontSize:"0.58rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"1px 5px"}}>{pt.section}</span><span style={{fontSize:"0.58rem",fontWeight:500,color:C.textSub,padding:"1px 5px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span></span>}
+                                {onSelectPatient&&<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{flexShrink:0,opacity:0.35}}><path d="M4 2l4 4-4 4" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                               </div>
                             </div>
                             {pt.diagnosis&&<div style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic"}}>{pt.diagnosis}</div>}
@@ -4085,13 +4089,19 @@ function PaedStudentTab({ patients, groups, theme, rgb }) {
                       {shadow.length>0 && <>
                         <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:8,marginTop:primary.length>0?10:0}}>Shadow</div>
                         {shadow.map(pt=>(
-                          <div key={pt.id} style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:12,padding:"11px 13px",marginBottom:7}}>
+                          <div key={pt.id} onClick={()=>onSelectPatient&&onSelectPatient(pt)}
+                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:12,padding:"11px 13px",marginBottom:7,cursor:onSelectPatient?"pointer":"default",transition:"box-shadow 0.12s"}}
+                            onMouseEnter={e=>{if(onSelectPatient)e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.1)";}}
+                            onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
                             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <span style={{fontWeight:600,color:C.text,fontSize:"0.9rem"}}>{pt.name}</span>
                                 {pt.age&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{pt.age}</span>}
                               </div>
-                              {pt.section&&pt.bedNo&&<span style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:5,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`}}><span style={{fontSize:"0.58rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"1px 5px"}}>{pt.section}</span><span style={{fontSize:"0.58rem",fontWeight:500,color:C.textSub,padding:"1px 5px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span></span>}
+                              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                                {pt.section&&pt.bedNo&&<span style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:5,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`}}><span style={{fontSize:"0.58rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"1px 5px"}}>{pt.section}</span><span style={{fontSize:"0.58rem",fontWeight:500,color:C.textSub,padding:"1px 5px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span></span>}
+                                {onSelectPatient&&<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{flexShrink:0,opacity:0.35}}><path d="M4 2l4 4-4 4" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
                             </div>
                             {pt.diagnosis&&<div style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",marginTop:3}}>{pt.diagnosis}</div>}
                           </div>
