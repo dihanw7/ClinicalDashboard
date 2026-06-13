@@ -3524,15 +3524,28 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
   const allStudents = groups.flatMap(g => (g.students||[]).filter(s=>s.name).map(s=>({...s,groupName:g.name,groupIdx:groups.indexOf(g)})));
   const sectionOrder = sections.map(s=>s.name);
-  const sortedPatients = [...patients].sort((a,b)=>{
-    const aB=a.section&&a.bedNo, bB=b.section&&b.bedNo;
-    if(!aB&&!bB) return (a.addedAt||0)-(b.addedAt||0);
-    if(!aB) return -1; if(!bB) return 1;
-    const si=sectionOrder.indexOf(a.section)-sectionOrder.indexOf(b.section);
-    return si!==0?si:parseInt(a.bedNo||0)-parseInt(b.bedNo||0);
+
+  // Separate assigned (has section+bed) from unassigned
+  const assignedPatients   = patients.filter(p=>p.section&&p.bedNo);
+  const unassignedPatients = patients.filter(p=>!p.section||!p.bedNo);
+
+  // Sort assigned by section order then bed number
+  const sortedAssigned = [...assignedPatients].sort((a,b)=>{
+    const si = sectionOrder.indexOf(a.section) - sectionOrder.indexOf(b.section);
+    return si!==0 ? si : parseInt(a.bedNo||0)-parseInt(b.bedNo||0);
   });
 
+  const [sectionFilter, setSectionFilter] = useState("all");
+
+  const filteredPatients = sectionFilter==="unassigned"
+    ? unassignedPatients
+    : sectionFilter==="all"
+      ? [...unassignedPatients, ...sortedAssigned]
+      : sortedAssigned.filter(p=>p.section===sectionFilter);
+
   const selPt = selectedPt ? patients.find(p=>p.id===selectedPt) : null;
+
+  const openPt = (pt) => { setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); };
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
@@ -3544,6 +3557,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             <div>
               <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text}}>{setup.wardName}</div>
               <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
+              <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>Paediatrics</div>
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -3586,80 +3600,120 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 100px"}}>
         {activeTab==="ward" && <>
 
-        {/* Shadow HO Banner */}
-        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
-            {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+          {/* Shadow HO Banner */}
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
+              {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {shadowHOs.map((ho,i)=>(
+                <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                  <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
+                  <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {shadowHOs.map((ho,i)=>(
-              <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
-                <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
-                <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
+
+          {/* Stats */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+            {[
+              {label:"Patients",  val:patients.length,      color:theme},
+              {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
+              {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
+            ].map(s=>(
+              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+                <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
+                <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
-          {[
-            {label:"Patients",  val:patients.length,      color:theme},
-            {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
-            {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
-          ].map(s=>(
-            <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
-              <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
-              <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
+          {/* Section filter pills */}
+          {sections.length>0 && (
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+              {[
+                {id:"all",      label:"All"},
+                ...sections.map(s=>({id:s.name, label:s.name})),
+                {id:"unassigned", label:`Unassigned${unassignedPatients.length>0?" ("+unassignedPatients.length+")":""}`},
+              ].map(f=>(
+                <button key={f.id} onClick={()=>setSectionFilter(f.id)}
+                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===f.id?600:400,cursor:"pointer",fontFamily:SF,
+                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.surface,
+                    border:`1px solid ${sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.border}`,
+                    color:sectionFilter===f.id?"#fff":C.textSub}}>
+                  {f.label}
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
 
-        {isLeader&&!seniorMode&&(
-          <button onClick={()=>setShowAddPt(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
-            <Icon name="plus" size={14} color={theme}/> Add Patient
-          </button>
-        )}
+          {/* Add patient button */}
+          {isLeader&&!seniorMode&&(
+            <button onClick={()=>setShowAddPt(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+              <Icon name="plus" size={14} color={theme}/> Add Patient
+            </button>
+          )}
 
-        {/* Patient tiles */}
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {sortedPatients.map(pt=>{
-            const hasBed=pt.section&&pt.bedNo;
-            return (
-              <div key={pt.id}
-                onClick={seniorMode?undefined:()=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}
-                style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:14,padding:"14px",cursor:seniorMode?"default":"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.07)",position:"relative",transition:"transform 0.12s"}}
-                onMouseEnter={e=>{if(!seniorMode)e.currentTarget.style.transform="translateY(-2px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}
-              >
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pt.diagnosis||pt.consultant||pt.notes?6:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.02em"}}>{pt.name}</span>
-                    {pt.age&&<span style={{fontSize:"0.75rem",color:C.textSub}}>{pt.age}</span>}
-                  </div>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {pt.historyTaken&&<Icon name="history" size={12} color={C.green}/>}
-                    {pt.isNew&&<span style={{animation:"blink 1.2s ease-in-out infinite",display:"inline-flex"}}><Icon name="newdot" size={10} color={C.red}/></span>}
-                    {hasBed&&<span style={{display:"inline-flex",alignItems:"center",gap:0,borderRadius:6,overflow:"hidden",border:`1px solid rgba(${rgb},0.2)`}}>
-                      <span style={{fontSize:"0.6rem",fontWeight:600,background:`rgba(${rgb},0.1)`,color:theme,padding:"2px 6px"}}>{pt.section}</span>
-                      <span style={{fontSize:"0.6rem",fontWeight:500,color:C.textSub,padding:"2px 6px",background:C.surface}}>Bed {String(pt.bedNo).padStart(2,"0")}</span>
-                    </span>}
-                  </div>
-                </div>
-                {pt.diagnosis&&<div style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",marginBottom:3,fontWeight:500}}>{pt.diagnosis}</div>}
-                {pt.consultant&&<div style={{fontSize:"0.68rem",color:C.textSub,marginBottom:3}}>{pt.consultant}</div>}
-                {pt.notes&&<div style={{fontSize:"0.65rem",color:C.textMuted,marginBottom:5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{pt.notes}</div>}
-                <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:4}}>
-                  {pt.primary1&&(()=>{const s=allStudents.find(x=>x.name===pt.primary1); return <span style={{fontSize:"0.65rem",background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:6,padding:"3px 8px",color:"#6366f1",fontWeight:500,display:"flex",alignItems:"center",gap:4}}><Icon name="user" size={10} color="#6366f1"/>{pt.primary1}{s?.no&&<sup style={{fontSize:"0.5rem",color:"rgba(99,102,241,0.6)",lineHeight:1}}>{s.no}</sup>}</span>;})()}
-                  {pt.primary2&&(()=>{const s=allStudents.find(x=>x.name===pt.primary2); return <span style={{fontSize:"0.65rem",background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:6,padding:"3px 8px",color:"#f97316",fontWeight:500,display:"flex",alignItems:"center",gap:4}}><Icon name="user" size={10} color="#f97316"/>{pt.primary2}{s?.no&&<sup style={{fontSize:"0.5rem",color:"rgba(249,115,22,0.6)",lineHeight:1}}>{s.no}</sup>}</span>;})()}
-                  {pt.shadow&&(()=>{const s=allStudents.find(x=>x.name===pt.shadow); return <span style={{fontSize:"0.65rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:6,padding:"3px 8px",color:C.textMuted,display:"flex",alignItems:"center",gap:4}}><Icon name="shadow" size={10} color={C.textMuted}/>{pt.shadow}{s?.no&&<sup style={{fontSize:"0.5rem",color:C.textMuted,lineHeight:1}}>{s.no}</sup>}</span>;})()}
-                </div>
+          {/* Patient grid */}
+          {filteredPatients.length===0
+            ? <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>{patients.length===0?(isLeader?"No patients yet. Tap Add Patient to start.":"No patients yet."):"No patients in this section."}</div>
+            : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                {filteredPatients.map(pt=>{
+                  const hasBed = pt.section&&pt.bedNo;
+                  const isUnassigned = !hasBed;
+                  const filled = pt.diagnosis||pt.consultant||pt.primary1||pt.primary2;
+                  return (
+                    <div key={pt.id}
+                      onClick={seniorMode?undefined:()=>openPt(pt)}
+                      style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:isUnassigned?`1px dashed ${C.borderMid}`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
+                      onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}
+                    >
+                      {/* Top-right flags */}
+                      <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
+                        {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                        {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                      </div>
+
+                      {/* Bed label + number OR Unassigned */}
+                      {hasBed ? (
+                        <>
+                          <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section}</div>
+                          <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>
+                            {String(pt.bedNo).padStart(2,"0")}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{fontSize:"0.58rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:4}}>Unassigned</div>
+                      )}
+
+                      {/* Patient name + age — always visible, compact */}
+                      <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:3,flexWrap:"wrap"}}>
+                        <span style={{fontSize:"0.78rem",fontWeight:700,color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{pt.name}</span>
+                        {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
+                      </div>
+
+                      {/* Diagnosis */}
+                      {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
+
+                      {/* Consultant */}
+                      {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{pt.consultant}</div>}
+
+                      {/* Student chips — compact */}
+                      {(pt.primary1||pt.primary2||pt.shadow)&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>
+                          {pt.primary1&&(()=>{const s=allStudents.find(x=>x.name===pt.primary1);return<span style={{fontSize:"0.52rem",background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.22)",borderRadius:4,padding:"1px 5px",color:"#6366f1",fontWeight:600}}>{pt.primary1.split(" ")[0]}{s?.no&&<sup style={{fontSize:"0.42rem"}}>{s.no}</sup>}</span>;})()}
+                          {pt.primary2&&(()=>{const s=allStudents.find(x=>x.name===pt.primary2);return<span style={{fontSize:"0.52rem",background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.22)",borderRadius:4,padding:"1px 5px",color:"#f97316",fontWeight:600}}>{pt.primary2.split(" ")[0]}{s?.no&&<sup style={{fontSize:"0.42rem"}}>{s.no}</sup>}</span>;})()}
+                          {pt.shadow&&<span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.14)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{pt.shadow.split(" ")[0]}</span>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-          {patients.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No patients yet.{isLeader?" Tap Add Patient to start.":""}</div>}
-        </div>
+          }
         </>}
 
         {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb} onSelectPatient={pt=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); }}/>}
