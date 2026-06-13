@@ -1251,8 +1251,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   </div>
                   <div style={{fontSize:"0.58rem",color:C.textMuted,marginBottom:3,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":"Bed"}</div>
                   <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em"}}>{bedNum}</div>
-                  {bed.diagnosis && <div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
-                  {bed.consultant && <div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
+                  {bed.consultant && <div style={{fontSize:"0.62rem",color:C.textSub,marginTop:5,fontWeight:500}}>{bed.consultant}</div>}
+                  {bed.diagnosis && <div style={{fontSize:"0.65rem",color:C.text,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
                   {bed.notes && <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
                   {bed.opStatus && <div style={{display:"inline-block",marginTop:6,fontSize:"0.55rem",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",padding:"2px 7px",borderRadius:5,background:DEFAULT_OP_COLORS[bed.opStatus]?.bg,color:DEFAULT_OP_COLORS[bed.opStatus]?.color,border:`1px solid ${DEFAULT_OP_COLORS[bed.opStatus]?.border}`}}>{bed.opStatus}</div>}
                   {!seniorMode && (hasAssigned||hasShadow)&&<div style={{marginTop:7,display:"flex",flexWrap:"wrap",gap:3}}>
@@ -2210,8 +2210,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                     </div>
                   ) : (
                     <>
-                      {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
-                      {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
+                      {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:5,fontWeight:500}}>{bed.consultant}</div>}
+                      {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
                       {bed.notes&&<div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
                       {(bed.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
                         {(bed.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.52rem",fontWeight:700,padding:"2px 6px",borderRadius:5,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
@@ -2964,8 +2964,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </div>
                   ) : (
                     <>
-                      {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:5,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
-                      {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:2,fontWeight:500}}>{bed.consultant}</div>}
+                      {bed.consultant&&<div style={{fontSize:"0.62rem",color:C.textSub,marginTop:5,fontWeight:500}}>{bed.consultant}</div>}
+                      {bed.diagnosis&&<div style={{fontSize:"0.65rem",color:C.text,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
                       {bed.notes&&<div style={{fontSize:"0.6rem",color:C.textSub,marginTop:4,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{bed.notes}</div>}
                       {(bed.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
                         {(bed.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.52rem",fontWeight:700,padding:"2px 6px",borderRadius:5,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
@@ -3695,11 +3695,11 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
                         {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
                       </div>
 
+                      {/* Consultant */}
+                      {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.consultant}</div>}
+
                       {/* Diagnosis */}
                       {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
-
-                      {/* Consultant */}
-                      {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{pt.consultant}</div>}
 
                       {/* Notes */}
                       {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
