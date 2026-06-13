@@ -945,9 +945,10 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
     const shadowHOsSave = (setupForm.shadowHOs||[]);
+    const rotationDays = setupForm.rotationDays||7;
     const bedObj = {};
     for (let i=1;i<=count;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave }, beds:bedObj });
+    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays }, beds:bedObj });
     showToast("Ward configured!");
   };
 
@@ -955,7 +956,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
     const shadowHOsSave = (setupForm.shadowHOs||[]);
-    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave } });
+    const rotationDays = setupForm.rotationDays||7;
+    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays } });
     setEditMode(false); showToast("Settings saved!");
   };
 
@@ -1167,6 +1169,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 students: setup.students?.length ? setup.students.map(s=>typeof s==="string"?{name:s,group:""}:s) : [{name:"",group:""}],
                 consultants: setup.consultants?.length ? setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c) : [{name:"",color:"#6366f1"}],
                 shadowHOs: (setup.shadowHOs||[]).map(h=>({...h})),
+                rotationDays: setup.rotationDays||7,
               });
             }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
@@ -1192,7 +1195,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           {shadowHOs.length>0 && (
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
+                <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · {setup.rotationDays||7}-day rotation</span>
                 {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1421,7 +1424,11 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {shadowForm.map((ho,i)=>(
               <div key={i} style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
                 <span style={{fontSize:"0.78rem",color:C.textSub,width:100,flexShrink:0,fontWeight:500}}>{ho.post}</span>
-                <input value={ho.name} onChange={e=>{const s=[...shadowForm];s[i]={...s[i],name:e.target.value};setShadowForm(s);}} placeholder="Student name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+                <select value={ho.name} onChange={e=>{const s=[...shadowForm];s[i]={...s[i],name:e.target.value};setShadowForm(s);}}
+                  style={{...iS,flex:1,padding:"9px 12px"}}>
+                  <option value="">— Unassigned —</option>
+                  {(setup.students||[]).filter(s=>s.name).map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
+                </select>
               </div>
             ))}
             <div style={{display:"flex",gap:10,marginTop:6}}>
@@ -1495,6 +1502,7 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
   const students    = form.students    || [{name:"",group:""}];
   const consultants = form.consultants || [{name:"",color:"#6366f1"}];
   const shadowHOs   = form.shadowHOs   || [];
+  const rotationDays = form.rotationDays || 7;
   const addField      = (f)     => setForm(p => ({ ...p, [f]: f==="students" ? [...(p[f]||[]),{name:"",group:""}] : [...(p[f]||[]),{name:"",color:"#6366f1"}] }));
   const removeField   = (f,i)   => setForm(p => ({ ...p, [f]:(p[f]||[]).filter((_,idx)=>idx!==i) }));
   const updateStudent    = (i,k,v) => setForm(p => { const a=[...(p.students||[])]; a[i]={...a[i],[k]:v}; return {...p,students:a}; });
@@ -1510,6 +1518,8 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
     }
   };
 
+  const studentNames = students.map(s=>s.name).filter(Boolean);
+
   return (
     <div>
       <div style={{marginBottom:18}}>
@@ -1524,6 +1534,22 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
         <label style={labelStyle}>Number of Beds</label>
         <input type="number" value={form.bedCount} onChange={e=>setForm(f=>({...f,bedCount:e.target.value}))} placeholder="e.g. 20" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
       </div>}
+      {/* Rotation length */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Rotation Length (days)</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Used in the Shadow HO banner label.</p>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+          {[1,2,3,5,7,10,14].map(n=>(
+            <button key={n} onClick={()=>setForm(f=>({...f,rotationDays:n}))}
+              style={{padding:"8px 14px",borderRadius:9,fontSize:"0.84rem",fontWeight:600,fontFamily:SF,cursor:"pointer",
+                background:rotationDays===n?theme:C.surfaceEl,
+                border:`1px solid ${rotationDays===n?theme:C.border}`,
+                color:rotationDays===n?"#fff":C.textSub}}>
+              {n}d
+            </button>
+          ))}
+        </div>
+      </div>
       <div style={{marginBottom:24}}>
         <label style={labelStyle}>Accent Colour</label>
         <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
@@ -1535,7 +1561,7 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       {/* Shadow HO count */}
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Shadow HO Posts</label>
-        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Number of 3-day rotating Shadow HO posts (0 to hide banner).</p>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Number of rotating Shadow HO posts (0 to hide banner).</p>
         <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4}}>
           {[0,1,2,3,4,5].map(n=>(
             <button key={n} onClick={()=>setShadowHOCount(n)}
@@ -1553,7 +1579,11 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
             {shadowHOs.map((ho,i)=>(
               <div key={i} style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
                 <span style={{fontSize:"0.78rem",color:C.textSub,width:96,flexShrink:0,fontWeight:500}}>{ho.post}</span>
-                <input value={ho.name} onChange={e=>setForm(f=>{const s=[...(f.shadowHOs||[])];s[i]={...s[i],name:e.target.value};return{...f,shadowHOs:s};})} placeholder="Assigned student" style={{...iS,flex:1,padding:"8px 12px"}}/>
+                <select value={ho.name} onChange={e=>setForm(f=>{const s=[...(f.shadowHOs||[])];s[i]={...s[i],name:e.target.value};return{...f,shadowHOs:s};})}
+                  style={{...iS,flex:1,padding:"8px 12px"}}>
+                  <option value="">— Unassigned —</option>
+                  {studentNames.map(n=><option key={n} value={n}>{n}</option>)}
+                </select>
               </div>
             ))}
           </div>
