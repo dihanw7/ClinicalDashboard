@@ -3701,6 +3701,9 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
                       {/* Consultant */}
                       {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{pt.consultant}</div>}
 
+                      {/* Notes */}
+                      {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
+
                       {/* Student chips — compact */}
                       {(pt.primary1||pt.primary2||pt.shadow)&&(
                         <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>
