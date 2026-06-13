@@ -1538,17 +1538,9 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Rotation Length (days)</label>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Used in the Shadow HO banner label.</p>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-          {[1,2,3,5,7,10,14].map(n=>(
-            <button key={n} onClick={()=>setForm(f=>({...f,rotationDays:n}))}
-              style={{padding:"8px 14px",borderRadius:9,fontSize:"0.84rem",fontWeight:600,fontFamily:SF,cursor:"pointer",
-                background:rotationDays===n?theme:C.surfaceEl,
-                border:`1px solid ${rotationDays===n?theme:C.border}`,
-                color:rotationDays===n?"#fff":C.textSub}}>
-              {n}d
-            </button>
-          ))}
-        </div>
+        <input type="number" min="1" max="365" value={rotationDays}
+          onChange={e=>setForm(f=>({...f,rotationDays:Math.max(1,parseInt(e.target.value)||1)}))}
+          placeholder="e.g. 7" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/>
       </div>
       <div style={{marginBottom:24}}>
         <label style={labelStyle}>Accent Colour</label>
