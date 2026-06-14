@@ -3262,28 +3262,103 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             </div>
           </div>
           <div style={{maxWidth:560,margin:"0 auto",padding:"20px 18px 100px"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 100px",gap:10,marginBottom:14}}>
-              <div><label style={labelStyle}>BHT</label><input value={ptEdit.bht||""} onChange={e=>setPtEdit(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/></div>
-              <div><label style={labelStyle}>Bed No.</label><input value={ptEdit.bedNo||""} onChange={e=>setPtEdit(p=>({...p,bedNo:e.target.value}))} placeholder="12" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>BHT</label>
+              <input value={ptEdit.bht||""} onChange={e=>setPtEdit(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/>
             </div>
             <div style={{marginBottom:14}}><label style={labelStyle}>Patient Name</label><input value={ptEdit.patientName||""} onChange={e=>setPtEdit(p=>({...p,patientName:e.target.value}))} placeholder="Name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
               <div><label style={labelStyle}>Age (years)</label><input type="number" value={ptEdit.ageYears||""} onChange={e=>setPtEdit(p=>({...p,ageYears:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
               <div><label style={labelStyle}>Age (months)</label><input type="number" value={ptEdit.ageMonths||""} onChange={e=>setPtEdit(p=>({...p,ageMonths:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              <div><label style={labelStyle}>Section</label>
-                <select value={ptEdit.section||""} onChange={e=>setPtEdit(p=>({...p,section:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}>
-                  {sections.map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
-                </select>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Section & Bed</label>
+              {/* Section pills */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:10}}>
+                {sections.map(s=>{
+                  const isSel = ptEdit.section===s.name;
+                  return (
+                    <button key={s.name} onClick={()=>setPtEdit(p=>({...p,section:s.name,bedNo:"",side:"single"}))}
+                      style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
+                        background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>
+                      {s.name}
+                    </button>
+                  );
+                })}
               </div>
-              <div><label style={labelStyle}>Bed side</label>
-                <select value={ptEdit.side||"single"} onChange={e=>setPtEdit(p=>({...p,side:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}>
-                  <option value="single">Single</option>
-                  <option value="L">Left (L)</option>
-                  <option value="R">Right (R)</option>
-                </select>
-              </div>
+              {/* Bed pill grid — show beds already in use in this section */}
+              {ptEdit.section&&(()=>{
+                // Collect all bed numbers mentioned by patients in this section
+                const sectionPts = patients.filter(p=>p.section===ptEdit.section);
+                const bedNums = [...new Set(sectionPts.map(p=>p.bedNo).filter(Boolean))].sort((a,b)=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b));
+                // For a given bed+side, is it occupied by someone other than the current patient?
+                const isOccupied = (bed, side) => sectionPts.some(p=>p.bedNo===bed && p.id!==selectedPt && (
+                  side==="single" ? true : (p.side===side || p.side==="single")
+                ));
+                const isFullyOccupied = (bed) => {
+                  const others = sectionPts.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
+                  if (others.length===0) return false;
+                  // Occupied if there's a single patient, or both L and R are taken
+                  return others.some(p=>p.side==="single") || (others.some(p=>p.side==="L")&&others.some(p=>p.side==="R"));
+                };
+                return (
+                  <div>
+                    {bedNums.length>0&&(
+                      <div>
+                        <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Existing beds</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                          {bedNums.map(bed=>{
+                            const isSel = ptEdit.bedNo===bed;
+                            const full = isFullyOccupied(bed);
+                            return (
+                              <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:bed}))}
+                                style={{padding:"6px 14px",borderRadius:10,fontSize:"0.82rem",fontWeight:isSel?700:500,cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                                  background:isSel?theme:full?"rgba(0,0,0,0.04)":C.surfaceEl,
+                                  border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.1)":C.border}`,
+                                  color:isSel?"#fff":full?C.textMuted:C.text,
+                                  opacity:full&&!isSel?0.5:1}}>
+                                {bed}{full&&!isSel&&<span style={{fontSize:"0.6rem",marginLeft:4}}>full</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {/* New bed number input */}
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <input value={ptEdit.bedNo||""} onChange={e=>setPtEdit(p=>({...p,bedNo:e.target.value}))}
+                        placeholder="Or type a new bed no." style={{...iS,flex:1,padding:"9px 12px"}}/>
+                    </div>
+                    {/* Side picker — only show if bed selected and that bed has a patient */}
+                    {ptEdit.bedNo&&(()=>{
+                      const others = sectionPts.filter(p=>p.bedNo===ptEdit.bedNo&&p.id!==selectedPt);
+                      const lTaken = others.some(p=>p.side==="L"||p.side==="single");
+                      const rTaken = others.some(p=>p.side==="R"||p.side==="single");
+                      return (
+                        <div style={{marginTop:10}}>
+                          <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed side</div>
+                          <div style={{display:"flex",gap:6}}>
+                            {[{val:"single",label:"Single"},{val:"L",label:"Left (L)"},{val:"R",label:"Right (R)"}].map(({val,label})=>{
+                              const isSel=ptEdit.side===val;
+                              const taken = val==="L"?lTaken:val==="R"?rTaken:others.length>0;
+                              return (
+                                <button key={val} onClick={()=>!taken&&setPtEdit(p=>({...p,side:val}))}
+                                  style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                                    background:isSel?theme:taken?"rgba(0,0,0,0.03)":C.surfaceEl,
+                                    border:`1px solid ${isSel?theme:taken?"rgba(0,0,0,0.08)":C.border}`,
+                                    color:isSel?"#fff":taken?C.textMuted:C.textSub,
+                                    opacity:taken&&!isSel?0.45:1}}>
+                                  {label}{taken&&!isSel&&" ✗"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
             </div>
             {isLeader&&!seniorMode&&pairings.length>0&&(
               <div style={{marginBottom:14}}>
