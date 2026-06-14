@@ -2762,7 +2762,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
 
   const removePatient = async (id) => {
-    await save({...ward, patients:patients.filter(p=>p.id!==id)});
+    const pt = patients.find(p=>p.id===id);
+    let newPatients = patients.filter(p=>p.id!==id);
+    if (pt&&(pt.side==="L"||pt.side==="R")) {
+      const mate = newPatients.find(p=>p.bedNo===pt.bedNo&&p.section===pt.section);
+      if (mate) newPatients = newPatients.map(p=>p.id===mate.id?{...p,side:"single"}:p);
+    }
+    await save({...ward, patients:newPatients});
     setSelectedPt(null); setShowClearConfirm(false);
   };
 
@@ -2772,7 +2778,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const wk=`${y}-W${String(Math.ceil(((d-s2)/86400000+s2.getDay()+1)/7)).padStart(2,"0")}`;
     const archive={...(ward.archive||{})};
     archive[wk]={...(archive[wk]||{}),[id]:{...pt,archivedAt:new Date().toISOString()}};
-    await save({...ward,patients:patients.filter(p=>p.id!==id),archive});
+    let newPatients = patients.filter(p=>p.id!==id);
+    if (pt.side==="L"||pt.side==="R") {
+      const mate = newPatients.find(p=>p.bedNo===pt.bedNo&&p.section===pt.section);
+      if (mate) newPatients = newPatients.map(p=>p.id===mate.id?{...p,side:"single"}:p);
+    }
+    await save({...ward,patients:newPatients,archive});
     setSelectedPt(null); showToast("Patient archived");
   };
 
