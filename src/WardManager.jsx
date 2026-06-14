@@ -2922,7 +2922,25 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px 14px"}}>
                 {pairingEdit ? (
                   <div>
-                    <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 12px"}}>Each pairing is a sub-team of 2–3 students. Tap names to add or remove. Shadow HOs are grayed out.</p>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <p style={{fontSize:"0.72rem",color:C.textMuted,margin:0}}>Tap names to add or remove. Shadow HOs are grayed out.</p>
+                      <button onClick={()=>{
+                        // Shuffle eligible students into pairs of 2 (last group gets 3 if odd)
+                        const eligible = activeStudents.map(s=>s.name).sort(()=>Math.random()-0.5);
+                        const newForm = [];
+                        for (let i=0; i<eligible.length; i+=2) {
+                          const members = [eligible[i]];
+                          if (eligible[i+1]) members.push(eligible[i+1]);
+                          // If this is second-to-last pair and one student left after, add them here
+                          if (i+2===eligible.length-1) { members.push(eligible[i+2]); i++; }
+                          newForm.push({members});
+                        }
+                        setPairingForm(newForm);
+                      }} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:600,flexShrink:0}}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h8M2 8h5M2 12h3M12 3l2 2-2 2M12 9l2 2-2 2M14 5h-3a2 2 0 00-2 2v2a2 2 0 002 2h3" stroke={theme} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Randomize
+                      </button>
+                    </div>
                     {pairingForm.map((pair,i)=>{
                       const members=(pair.members||[]).filter(Boolean);
                       // Which students are in OTHER pairings (not this one)
