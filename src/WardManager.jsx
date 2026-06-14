@@ -3305,9 +3305,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
                   return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
-                const hasSingleOccupant=(bed)=>{
-                  const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
-                  return others.some(p=>p.side==="single"||!p.side);
+                const hasAnyOccupant=(bed)=>{
+                  return patients.some(p=>p.bedNo===bed&&p.section===newPt.section);
                 };
                 if(allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:8}}>No bed range for this section — edit settings to add one.</div>;
                 return (
@@ -3333,19 +3332,35 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     {newPt.bedNo&&(()=>{
                       const others=patients.filter(p=>p.bedNo===newPt.bedNo&&p.section===newPt.section);
                       const singleOccupant=others.find(p=>p.side==="single"||!p.side);
-                      const lTaken=others.some(p=>p.side==="L");
-                      const rTaken=others.some(p=>p.side==="R");
+                      const lOccupant=others.find(p=>p.side==="L");
+                      const rOccupant=others.find(p=>p.side==="R");
+                      const lTaken=!!lOccupant;
+                      const rTaken=!!rOccupant;
                       const hasMate=others.length>0;
+                      // For a given new side, which existing patient needs to move and where?
+                      const getConflict=(val)=>{
+                        if(val==="L"&&singleOccupant) return {id:singleOccupant.id,toSide:"R"};
+                        if(val==="R"&&singleOccupant) return {id:singleOccupant.id,toSide:"L"};
+                        if(val==="L"&&rOccupant&&!lOccupant) return null; // no conflict
+                        if(val==="R"&&lOccupant&&!rOccupant) return null; // no conflict
+                        if(val==="R"&&rOccupant) return {id:rOccupant.id,toSide:"L"};
+                        if(val==="L"&&lOccupant) return {id:lOccupant.id,toSide:"R"};
+                        return null;
+                      };
+                      const warningMsg = singleOccupant
+                        ? "This bed has a single-slot patient — selecting L or R will move them to the other side."
+                        : hasMate ? "This bed already has a patient — select which side to place the new patient." : null;
                       return (
                         <div>
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
-                          {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
+                          {warningMsg&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>{warningMsg}</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken&&!singleOccupant},{val:"R",label:"Right",taken:rTaken&&!singleOccupant}].map(({val,label,taken})=>{
                               const isSel=newPt.side===val;
                               return <button key={val} onClick={()=>{
                                 if(taken&&!isSel) return;
-                                setNewPt(p=>({...p,side:val,_conflictId:singleOccupant&&(val==="L"||val==="R")?singleOccupant.id:null,_conflictSide:singleOccupant&&(val==="L"||val==="R")?(val==="L"?"R":"L"):null}));
+                                const conf=getConflict(val);
+                                setNewPt(p=>({...p,side:val,_conflictId:conf?conf.id:null,_conflictSide:conf?conf.toSide:null}));
                               }}
                                 style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
                                   cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
@@ -3358,7 +3373,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             })}
                           </div>
                           {newPt._conflictId&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
-                            New patient takes <strong>{newPt.side}</strong> — existing patient moves to <strong>{newPt._conflictSide}</strong> on add.
+                            New patient → <strong>{newPt.side==="L"?"Left":"Right"}</strong>, existing patient moves to <strong>{newPt._conflictSide==="L"?"Left":"Right"}</strong>.
                           </div>}
                         </div>
                       );
@@ -3462,9 +3477,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   const others = patients.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
                   return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
-                const hasSingleOccupant = (bed) => {
-                  const others = patients.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
-                  return others.some(p=>p.side==="single"||!p.side);
+                const hasAnyOccupant = (bed) => {
+                  return patients.some(p=>p.bedNo===bed&&p.id!==selectedPt);
                 };
                 if (allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No bed range configured for this section. Edit ward settings to add one.</div>;
                 return (
@@ -3474,14 +3488,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel = ptEdit.bedNo===bed;
                         const full = isFullyOccupied(bed);
-                        const hasSingle = hasSingleOccupant(bed);
+                        const hasOccupant = hasAnyOccupant(bed);
                         return (
-                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel&&!hasSingle?"":bed,side:"single",_conflictId:null,_conflictSide:null}))}
+                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel&&!hasOccupant?"":bed,side:hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
                             style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                               cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
-                              background:isSel?theme:full?"rgba(0,0,0,0.04)":hasSingle?"rgba(245,158,11,0.08)":C.surface,
-                              border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasSingle?"rgba(245,158,11,0.4)":C.border}`,
-                              color:isSel?"#fff":full?C.textMuted:hasSingle?"rgb(161,104,0)":C.text,
+                              background:isSel?theme:full?"rgba(0,0,0,0.04)":hasOccupant?"rgba(245,158,11,0.08)":C.surface,
+                              border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasOccupant?"rgba(245,158,11,0.4)":C.border}`,
+                              color:isSel?"#fff":full?C.textMuted:hasOccupant?"rgb(161,104,0)":C.text,
                               opacity:full&&!isSel?0.4:1,
                               boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>
                             {bed}
@@ -3492,28 +3506,35 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     {ptEdit.bedNo&&(()=>{
                       const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.id!==selectedPt);
                       const singleOccupant = others.find(p=>p.side==="single"||!p.side);
-                      const lTaken = others.some(p=>p.side==="L");
-                      const rTaken = others.some(p=>p.side==="R");
+                      const lOccupant = others.find(p=>p.side==="L");
+                      const rOccupant = others.find(p=>p.side==="R");
+                      const lTaken = !!lOccupant;
+                      const rTaken = !!rOccupant;
                       const hasMate = others.length>0;
+                      const getEditConflict=(val)=>{
+                        if(val==="L"&&singleOccupant) return {existingPtId:singleOccupant.id,newSide:val,otherSide:"R"};
+                        if(val==="R"&&singleOccupant) return {existingPtId:singleOccupant.id,newSide:val,otherSide:"L"};
+                        if(val==="R"&&rOccupant) return {existingPtId:rOccupant.id,newSide:val,otherSide:"L"};
+                        if(val==="L"&&lOccupant) return {existingPtId:lOccupant.id,newSide:val,otherSide:"R"};
+                        return null;
+                      };
+                      const warningMsg = singleOccupant
+                        ? "This bed has a single-slot patient — selecting L or R will move them to the other side."
+                        : hasMate ? "This bed already has a patient — select which side to place this patient." : null;
                       return (
                         <div>
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
-                          {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
+                          {warningMsg&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>{warningMsg}</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken&&!singleOccupant},{val:"R",label:"Right",taken:rTaken&&!singleOccupant}].map(({val,label,taken})=>{
                               const isSel=ptEdit.side===val;
-                              const wouldSplit = singleOccupant && (val==="L"||val==="R");
                               return (
                                 <button key={val} onClick={()=>{
                                   if(taken&&!isSel) return;
-                                  if(wouldSplit) {
-                                    // Auto-assign: this patient takes val, existing takes the other side
-                                    const otherSide = val==="L"?"R":"L";
-                                    setSideConflict({existingPtId:singleOccupant.id, newSide:val, otherSide});
-                                    setPtEdit(p=>({...p,side:val}));
-                                  } else {
-                                    setPtEdit(p=>({...p,side:val}));
-                                  }
+                                  const conf=getEditConflict(val);
+                                  if(conf) setSideConflict(conf);
+                                  else setSideConflict(null);
+                                  setPtEdit(p=>({...p,side:val}));
                                 }}
                                   style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
                                     cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
@@ -3527,7 +3548,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             })}
                           </div>
                           {sideConflict&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
-                            You'll take <strong>{sideConflict.newSide}</strong> — existing patient moves to <strong>{sideConflict.otherSide}</strong> on save.
+                            You → <strong>{sideConflict.newSide==="L"?"Left":"Right"}</strong>, existing patient moves to <strong>{sideConflict.otherSide==="L"?"Left":"Right"}</strong>.
                           </div>}
                         </div>
                       );
