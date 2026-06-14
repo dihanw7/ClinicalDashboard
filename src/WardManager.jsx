@@ -3359,53 +3359,30 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {isLeader&&!seniorMode&&pairings.length>0&&(
               <div style={{marginBottom:14}}>
                 <label style={labelStyle}>Pairing</label>
-                {(()=>{
-                  const studentPairingMap = {};
-                  pairings.forEach((p,pi)=>(p.members||[]).filter(Boolean).forEach(m=>{ studentPairingMap[m]=pi; }));
-                  const selPairingMembers = ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx] ? (pairings[ptEdit.pairingIdx].members||[]).filter(Boolean) : [];
-                  return (
-                    <>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginTop:6}}>
-                        {students.filter(s=>s.name).map(s=>{
-                          const isHO = shadowHONames.has(s.name);
-                          const inPairingIdx = studentPairingMap[s.name];
-                          const inCurrentPairing = selPairingMembers.includes(s.name);
-                          const inOtherPairing = inPairingIdx!=null && !inCurrentPairing;
-                          return (
-                            <div key={s.name}
-                              onClick={()=>{
-                                if (isHO) return;
-                                if (inOtherPairing) {
-                                  setSwitchConfirm({ studentName:s.name, fromPairingIdx:inPairingIdx, toPairingIdx:inPairingIdx, setter:(pi)=>setPtEdit(p=>({...p,pairingIdx:pi})), currentPairingIdx:ptEdit.pairingIdx });
-                                  return;
-                                }
-                                const pi = studentPairingMap[s.name];
-                                if (pi!=null) setPtEdit(p=>({...p,pairingIdx:inCurrentPairing?null:pi}));
-                              }}
-                              style={{padding:"8px 5px",borderRadius:9,cursor:isHO?"not-allowed":"pointer",textAlign:"center",position:"relative",transition:"all 0.1s",
-                                background:isHO?"rgba(0,0,0,0.03)":inCurrentPairing?`rgba(${rgb},0.1)`:inOtherPairing?"rgba(245,158,11,0.07)":C.surfaceEl,
-                                border:`1px solid ${isHO?C.border:inCurrentPairing?theme:inOtherPairing?"rgba(245,158,11,0.35)":C.border}`,
-                                opacity:isHO?0.4:1}}>
-                              {inCurrentPairing&&<div style={{position:"absolute",top:3,right:3,width:11,height:11,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={6} color="#fff"/></div>}
-                              <div style={{fontSize:"0.72rem",fontWeight:600,color:isHO?C.textMuted:inCurrentPairing?theme:inOtherPairing?"rgb(180,120,0)":C.text,lineHeight:1.2,marginBottom:1}}>{s.name.split(" ")[0]}</div>
-                              {s.group&&<div style={{fontSize:"0.52rem",fontFamily:"monospace",fontWeight:700,color:isHO?C.textMuted:inCurrentPairing?theme:C.textMuted}}>{s.group}</div>}
-                              {isHO&&<div style={{fontSize:"0.48rem",color:C.textMuted,marginTop:1}}>HO</div>}
-                              {inOtherPairing&&!inCurrentPairing&&<div style={{fontSize:"0.48rem",color:"rgb(180,120,0)",marginTop:1}}>P{inPairingIdx+1}</div>}
-                            </div>
-                          );
-                        })}
-                        <div onClick={()=>setPtEdit(p=>({...p,pairingIdx:null}))} style={{padding:"8px 5px",borderRadius:9,cursor:"pointer",textAlign:"center",background:ptEdit.pairingIdx===null?"rgba(0,0,0,0.05)":C.bg,border:`1px dashed ${C.border}`}}>
-                          <div style={{fontSize:"0.65rem",color:C.textMuted}}>None</div>
-                        </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                  {pairings.map((pair,pi)=>{
+                    const isSel = ptEdit.pairingIdx===pi;
+                    const members = (pair.members||[]).filter(m=>m&&!shadowHONames.has(m));
+                    const ptCount = patients.filter(p=>p.pairingIdx===pi&&p.id!==selectedPt).length;
+                    return (
+                      <div key={pi} onClick={()=>setPtEdit(p=>({...p,pairingIdx:isSel?null:pi}))}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:11,cursor:"pointer",
+                          background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
+                          border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s",position:"relative"}}>
+                        {isSel&&<div style={{position:"absolute",top:8,right:10,width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={8} color="#fff"/></div>}
+                        <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.12)`:C.surface,border:`1px solid ${isSel?`rgba(${rgb},0.25)`:C.border}`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                        <span style={{flex:1,fontSize:"0.88rem",fontWeight:500,color:isSel?theme:C.text}}>{members.join(" × ")||"—"}</span>
+                        <span style={{fontSize:"0.65rem",color:C.textMuted,flexShrink:0}}>{ptCount} pt</span>
                       </div>
-                      {ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]&&(
-                        <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500}}>
-                          {(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).join(" × ")}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
+                    );
+                  })}
+                  <div onClick={()=>setPtEdit(p=>({...p,pairingIdx:null}))}
+                    style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"9px",borderRadius:11,cursor:"pointer",
+                      background:ptEdit.pairingIdx===null?"rgba(0,0,0,0.04)":C.bg,
+                      border:`1px dashed ${ptEdit.pairingIdx===null?C.textSub:C.border}`}}>
+                    <span style={{fontSize:"0.75rem",color:C.textMuted}}>None</span>
+                  </div>
+                </div>
               </div>
             )}
             {isLeader&&!seniorMode&&(
