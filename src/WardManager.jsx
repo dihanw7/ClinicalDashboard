@@ -3452,9 +3452,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <label style={labelStyle}>Shadow HO</label>
                   {isLeader&&!seniorMode&&(
-                    <button onClick={()=>setShadowAutoAlloc(a=>!a)} style={{fontSize:"0.65rem",fontWeight:600,fontFamily:SF,cursor:"pointer",background:"none",border:"none",color:shadowAutoAlloc?theme:C.textMuted,padding:0}}>
-                      {shadowAutoAlloc?"Auto ✓":"Manual"}
-                    </button>
+                    <div onClick={()=>setShadowAutoAlloc(a=>!a)}
+                      style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",userSelect:"none"}}>
+                      <span style={{fontSize:"0.65rem",fontWeight:600,color:shadowAutoAlloc?theme:C.textMuted,fontFamily:SF}}>Auto</span>
+                      <div style={{width:34,height:20,borderRadius:10,background:shadowAutoAlloc?theme:"rgba(0,0,0,0.15)",transition:"background 0.2s",position:"relative",flexShrink:0}}>
+                        <div style={{position:"absolute",top:2,left:shadowAutoAlloc?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}/>
+                      </div>
+                    </div>
                   )}
                 </div>
                 {shadowAutoAlloc ? (
@@ -3674,17 +3678,35 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{marginBottom:14}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <label style={labelStyle}>Shadow HO</label>
-                  {isLeader&&<button onClick={()=>setShadowAutoAlloc(a=>!a)} style={{fontSize:"0.65rem",fontWeight:600,fontFamily:SF,cursor:"pointer",background:"none",border:"none",color:shadowAutoAlloc?theme:C.textMuted,padding:0}}>{shadowAutoAlloc?"Auto ✓":"Manual"}</button>}
+                  {isLeader&&(
+                    <div onClick={()=>setShadowAutoAlloc(a=>!a)}
+                      style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",userSelect:"none"}}>
+                      <span style={{fontSize:"0.65rem",fontWeight:600,color:shadowAutoAlloc?theme:C.textMuted,fontFamily:SF}}>Auto</span>
+                      <div style={{width:34,height:20,borderRadius:10,background:shadowAutoAlloc?theme:"rgba(0,0,0,0.15)",transition:"background 0.2s",position:"relative",flexShrink:0}}>
+                        <div style={{position:"absolute",top:2,left:shadowAutoAlloc?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}/>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {shadowAutoAlloc ? (
-                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:10}}>
-                    <span style={{fontSize:"0.7rem",color:C.textMuted,flex:1}}>Auto-assigned on save</span>
-                    {selPt.shadowHO&&<span style={{fontSize:"0.78rem",fontWeight:600,color:theme}}>{selPt.shadowHO}</span>}
+                  <div>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:6,lineHeight:1.4}}>Assigns the Shadow HO with fewest patients. Equal counts → random.</div>
+                    {(()=>{
+                      const suggested = getSuggestedShadow();
+                      const count = suggested ? patients.filter(p=>p.shadowHO===suggested.name&&p.id!==selectedPt).length : 0;
+                      return suggested ? (
+                        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:10}}>
+                          <span style={{fontSize:"0.78rem",fontWeight:600,color:theme,flex:1}}>{suggested.name}</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted}}>{count} pt</span>
+                          <span style={{fontSize:"0.6rem",color:C.textMuted,background:C.surfaceEl,borderRadius:4,padding:"1px 6px"}}>{suggested.post}</span>
+                        </div>
+                      ) : <div style={{fontSize:"0.75rem",color:C.textMuted}}>No Shadow HOs configured.</div>;
+                    })()}
                   </div>
                 ) : (
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {shadowHOs.filter(h=>h.name).map(ho=>{
-                      const count=patients.filter(p=>p.shadowHO===ho.name).length;
+                      const count=patients.filter(p=>p.shadowHO===ho.name&&p.id!==selectedPt).length;
                       const isSel=ptEdit.shadowHO===ho.name;
                       return (
                         <div key={ho.name} onClick={()=>setPtEdit(p=>({...p,shadowHO:isSel?"":ho.name}))}
