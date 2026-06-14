@@ -3504,16 +3504,32 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               const selected=shadowReplaceSelection[newName];
               return (
                 <div key={i} style={{marginBottom:20}}>
-                  <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:8}}>{newName} replaces:</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
+                  <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:8}}>
+                    <NameWithGroup name={newName} color={C.text} fontSize="0.72rem" fontWeight={600}/> replaces:
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
                     {outgoingOptions.map(outName=>{
                       const isSel=selected===outName;
                       const alreadyUsed=Object.entries(shadowReplaceSelection).some(([k,v])=>v===outName&&k!==newName);
+                      const g=getGroup(outName);
+                      // Find current pairing mates of outName
+                      const pair=pairings.find(p=>(p.members||[]).includes(outName));
+                      const mates=(pair?.members||[]).filter(m=>m&&m!==outName&&!shadowHONames.has(m));
                       return (
                         <div key={outName} onClick={()=>!alreadyUsed&&setShadowReplaceSelection(r=>({...r,[newName]:isSel?undefined:outName}))}
-                          style={{padding:"10px 8px",borderRadius:11,cursor:alreadyUsed?"not-allowed":"pointer",textAlign:"center",background:isSel?`rgba(${rgb},0.1)`:alreadyUsed?"rgba(0,0,0,0.02)":C.surfaceEl,border:`1px solid ${isSel?theme:alreadyUsed?C.border:C.borderMid}`,opacity:alreadyUsed?0.4:1}}>
-                          <div style={{fontSize:"0.8rem",fontWeight:isSel?700:500,color:isSel?theme:C.text}}>{outName.split(" ")[0]}</div>
-                          <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:2}}>{outName}</div>
+                          style={{padding:"10px 10px",borderRadius:11,cursor:alreadyUsed?"not-allowed":"pointer",textAlign:"center",background:isSel?`rgba(${rgb},0.1)`:alreadyUsed?"rgba(0,0,0,0.02)":C.surfaceEl,border:`1px solid ${isSel?theme:alreadyUsed?C.border:C.borderMid}`,opacity:alreadyUsed?0.4:1}}>
+                          <div style={{fontSize:"0.88rem",fontWeight:isSel?700:600,color:isSel?theme:C.text,marginBottom:2}}>
+                            {outName.split(" ")[0]}{g&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{g}</sup>}
+                          </div>
+                          {mates.length>0&&(
+                            <div style={{fontSize:"0.58rem",color:isSel?theme:C.textSub,marginTop:3,lineHeight:1.4}}>
+                              {mates.map((m,mi)=>{
+                                const mg=getGroup(m);
+                                return <span key={m}>{mi>0&&<span style={{margin:"0 2px",opacity:0.5}}>×</span>}{m.split(" ")[0]}{mg&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{mg}</sup>}</span>;
+                              })}
+                            </div>
+                          )}
+                          {!mates.length&&<div style={{fontSize:"0.56rem",color:C.textMuted,marginTop:3}}>No pairing</div>}
                         </div>
                       );
                     })}
