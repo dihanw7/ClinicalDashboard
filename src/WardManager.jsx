@@ -2709,6 +2709,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [selectedPt,        setSelectedPt]        = useState(null);
   const [ptEdit,            setPtEdit]            = useState({});
   const [showClearConfirm,  setShowClearConfirm]  = useState(false);
+  const [sideConflict,      setSideConflict]      = useState(null); // {existingPtId, newSide, otherSide}
   const [pairingOpen,       setPairingOpen]       = useState(false);
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
@@ -2787,7 +2788,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       section = "Floor";
     }
     const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:"single", isFloor, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
-    await save({...ward, patients:[...patients,pt]});
+    await save({...ward, patients:[...patients.map(p=>newPt._conflictId&&p.id===newPt._conflictId?{...p,side:newPt._conflictSide}:p),pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
     setShowAddPt(false); showToast("Patient added");
   };
@@ -3053,7 +3054,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel=getPairingLabel(pt.pairingIdx);
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew});}}
+                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]});}}
                             style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
@@ -3096,7 +3097,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       const ptR = bedPts.find(p=>p.side==="R");
                       const ptSingle = bedPts.filter(p=>!p.side||p.side==="single");
                       const isDual = ptL||ptR;
-                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew}); };
+                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]}); };
 
                       const Tile = ({pt, sideLabel}) => {
                         const pLabel = getPairingLabel(pt.pairingIdx);
@@ -3173,7 +3174,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         {pPts.length===0
                           ? <div style={{fontSize:"0.75rem",color:C.textMuted}}>No patients assigned</div>
                           : pPts.map(pt=>(
-                              <div key={pt.id} onClick={()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew});}}
+                              <div key={pt.id} onClick={()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]});}}
                                 style={{display:"flex",alignItems:"baseline",gap:8,padding:"7px 0",borderTop:`1px solid ${C.border}`,cursor:"pointer"}}>
                                 {pt.bedNo&&<span style={{fontSize:"0.68rem",background:`rgba(${rgb},0.08)`,color:theme,borderRadius:5,padding:"1px 6px",fontWeight:600,flexShrink:0}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
                                 <span style={{fontSize:"0.8rem",fontWeight:600,color:C.text}}>{pt.patientName||"Patient"}</span>
@@ -3292,16 +3293,21 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </div>
                     {newPt.bedNo&&(()=>{
                       const others=patients.filter(p=>p.bedNo===newPt.bedNo&&p.section===newPt.section);
-                      const lTaken=others.some(p=>p.side==="L"||p.side==="single");
-                      const rTaken=others.some(p=>p.side==="R"||p.side==="single");
+                      const singleOccupant=others.find(p=>p.side==="single");
+                      const lTaken=others.some(p=>p.side==="L");
+                      const rTaken=others.some(p=>p.side==="R");
                       const hasMate=others.length>0;
                       return (
                         <div>
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
+                          {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate&&!singleOccupant},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
                               const isSel=newPt.side===val;
-                              return <button key={val} onClick={()=>!taken&&setNewPt(p=>({...p,side:val}))}
+                              return <button key={val} onClick={()=>{
+                                if(taken&&!isSel) return;
+                                setNewPt(p=>({...p,side:val,_conflictId:singleOccupant&&(val==="L"||val==="R")?singleOccupant.id:null,_conflictSide:singleOccupant&&(val==="L"||val==="R")?(val==="L"?"R":"L"):null}));
+                              }}
                                 style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
                                   cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
                                   background:isSel?theme:taken?"rgba(0,0,0,0.03)":C.surfaceEl,
@@ -3312,6 +3318,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               </button>;
                             })}
                           </div>
+                          {newPt._conflictId&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
+                            New patient takes <strong>{newPt.side}</strong> — existing patient moves to <strong>{newPt._conflictSide}</strong> on add.
+                          </div>}
                         </div>
                       );
                     })()}
@@ -3367,7 +3376,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
             <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+                <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);setSideConflict(null);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
                 <span style={{fontWeight:700,color:theme,fontSize:"1.1rem"}}>{selPt.patientName||selPt.bht||"Patient"}</span>
               </div>
               {isLeader&&!seniorMode&&<button onClick={()=>archivePatient(selectedPt)} style={{fontSize:"0.72rem",color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:SF}}>Archive</button>}
@@ -3438,17 +3447,30 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </div>
                     {ptEdit.bedNo&&(()=>{
                       const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.section===ptEdit.section&&p.id!==selectedPt);
-                      const lTaken = others.some(p=>p.side==="L"||p.side==="single");
-                      const rTaken = others.some(p=>p.side==="R"||p.side==="single");
+                      const singleOccupant = others.find(p=>p.side==="single");
+                      const lTaken = others.some(p=>p.side==="L");
+                      const rTaken = others.some(p=>p.side==="R");
                       const hasMate = others.length>0;
                       return (
                         <div>
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
+                          {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate&&!singleOccupant},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
                               const isSel=ptEdit.side===val;
+                              const wouldSplit = singleOccupant && (val==="L"||val==="R");
                               return (
-                                <button key={val} onClick={()=>!taken&&setPtEdit(p=>({...p,side:val}))}
+                                <button key={val} onClick={()=>{
+                                  if(taken&&!isSel) return;
+                                  if(wouldSplit) {
+                                    // Auto-assign: this patient takes val, existing takes the other side
+                                    const otherSide = val==="L"?"R":"L";
+                                    setSideConflict({existingPtId:singleOccupant.id, newSide:val, otherSide});
+                                    setPtEdit(p=>({...p,side:val}));
+                                  } else {
+                                    setPtEdit(p=>({...p,side:val}));
+                                  }
+                                }}
                                   style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
                                     cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
                                     background:isSel?theme:taken?"rgba(0,0,0,0.03)":C.surfaceEl,
@@ -3460,6 +3482,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               );
                             })}
                           </div>
+                          {sideConflict&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
+                            You'll take <strong>{sideConflict.newSide}</strong> — existing patient moves to <strong>{sideConflict.otherSide}</strong> on save.
+                          </div>}
                         </div>
                       );
                     })()}
@@ -3497,13 +3522,19 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               </div>
             )}
             {isLeader&&!seniorMode&&(
-              <div style={{display:"flex",gap:8,marginBottom:14}}>
-                {[{flag:"isNew",label:"New",color:C.red},{flag:"historyTaken",label:"Hx Taken",color:C.green}].map(({flag,label,color})=>(
-                  <button key={flag} onClick={()=>updatePatient(selectedPt,{[flag]:!selPt[flag]})}
-                    style={{flex:1,padding:"9px",borderRadius:10,fontSize:"0.78rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:selPt[flag]?`rgba(${hexToRgb(color)},0.1)`:C.surface,border:`1px solid ${selPt[flag]?color:C.border}`,color:selPt[flag]?color:C.textMuted}}>
-                    {label}
-                  </button>
-                ))}
+              <div style={{marginBottom:14}}>
+                <button onClick={()=>updatePatient(selectedPt,{isNew:!selPt.isNew})}
+                  style={{width:"100%",padding:"9px",borderRadius:10,fontSize:"0.78rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:selPt.isNew?`rgba(${hexToRgb(C.red)},0.1)`:C.surface,border:`1px solid ${selPt.isNew?C.red:C.border}`,color:selPt.isNew?C.red:C.textMuted}}>
+                  New Patient
+                </button>
+              </div>
+            )}
+            {!seniorMode&&(
+              <div style={{marginBottom:14}}>
+                <button onClick={()=>{const newVal=!selPt.historyTaken;updatePatient(selectedPt,{historyTaken:newVal});setPtEdit(p=>({...p,historyTaken:newVal}));}}
+                  style={{width:"100%",padding:"9px",borderRadius:10,fontSize:"0.78rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:selPt.historyTaken?`rgba(${hexToRgb(C.green)},0.1)`:C.surface,border:`1px solid ${selPt.historyTaken?C.green:C.border}`,color:selPt.historyTaken?C.green:C.textMuted}}>
+                  {selPt.historyTaken?"✓ History Taken":"History Taken"}
+                </button>
               </div>
             )}
             <div style={{marginBottom:12}}><label style={labelStyle}>Consultant</label>
@@ -3513,14 +3544,35 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               </select>
             </div>
             <div style={{marginBottom:12}}><label style={labelStyle}>Diagnosis</label><input value={ptEdit.diagnosis||""} onChange={e=>setPtEdit(p=>({...p,diagnosis:e.target.value}))} placeholder="e.g. Acute appendicitis" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-            <div style={{marginBottom:20}}><label style={labelStyle}>Notes</label><textarea value={ptEdit.notes||""} onChange={e=>setPtEdit(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,resize:"vertical",lineHeight:1.5}}/></div>
+            <div style={{marginBottom:12}}><label style={labelStyle}>Notes</label><textarea value={ptEdit.notes||""} onChange={e=>setPtEdit(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,resize:"vertical",lineHeight:1.5}}/></div>
+            {/* Tags — visible to all */}
+            {(setup.customTags||[]).length>0&&!seniorMode&&(
+              <div style={{marginBottom:16}}>
+                <label style={labelStyle}>Tags</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+                  {(setup.customTags||[]).map(tag=>{
+                    const sel=(ptEdit.tags||[]).includes(tag.label);
+                    return (
+                      <button key={tag.label} onClick={()=>setPtEdit(p=>{const t=p.tags||[];return{...p,tags:sel?t.filter(x=>x!==tag.label):[...t,tag.label]};})}
+                        style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sel?600:400,cursor:"pointer",fontFamily:SF,
+                          background:sel?`rgba(${hexToRgb(tag.color)},0.15)`:C.surface,
+                          border:`1px solid ${sel?tag.color:C.border}`,color:sel?tag.color:C.textSub}}>
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {isLeader&&!seniorMode&&(
               <>
                 <button onClick={async()=>{
                   const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                   const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
-                  await updatePatient(selectedPt,{bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes});
-                  showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
+                  let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,tags:ptEdit.tags||[]}:p);
+                  if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
+                  await save({...ward,patients:newPatients});
+                  setSideConflict(null); showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
                 }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem",marginBottom:10}}>Save</button>
                 {!showClearConfirm
                   ?<button onClick={()=>setShowClearConfirm(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF,fontSize:"0.85rem"}}>Remove Patient</button>
@@ -3534,8 +3586,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {!isLeader&&!seniorMode&&(
               <button onClick={async()=>{
                 const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
-                await updatePatient(selectedPt,{bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken});
-                showToast("Saved"); setSelectedPt(null);
+                let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken,tags:ptEdit.tags||[]}:p);
+                if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
+                await save({...ward,patients:newPatients});
+                setSideConflict(null); showToast("Saved"); setSelectedPt(null);
               }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem"}}>Save</button>
             )}
           </div>
