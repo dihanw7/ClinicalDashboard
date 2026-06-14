@@ -2138,7 +2138,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {shadowHOs.map((ho,i)=>{
-                  const ptCount=patients.filter(p=>p.shadowHO===ho.name).length;
+                  const ptCount=Object.values(beds).filter(b=>(b.shadows||[]).some(s=>(typeof s==="object"?s.name:s)===ho.name)||(b.shadowsL||[]).some(s=>(typeof s==="object"?s.name:s)===ho.name)||(b.shadowsR||[]).some(s=>(typeof s==="object"?s.name:s)===ho.name)).length;
                   return (
                     <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
                       <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
