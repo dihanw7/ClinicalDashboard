@@ -3036,40 +3036,42 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               : orderedSections.map(secName=>(
                 <div key={secName} style={{marginBottom:24}}>
                   <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:10,paddingLeft:2}}>{secName}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {Object.entries(bedMap[secName]||{}).sort(([a],[b])=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b)).map(([bedNo,bedPts])=>{
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                    {Object.entries(bedMap[secName]||{}).sort(([a],[b])=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b)).flatMap(([bedNo,bedPts])=>{
                       const ptL = bedPts.find(p=>p.side==="L");
                       const ptR = bedPts.find(p=>p.side==="R");
                       const ptSingle = bedPts.filter(p=>!p.side||p.side==="single");
                       const isDual = ptL||ptR;
+                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew}); };
 
-                      const PtCard = ({pt,sideLabel})=>{
-                        if (!pt) return (
-                          <div style={{flex:1,background:"rgba(0,0,0,0.02)",border:`1px dashed ${C.border}`,borderRadius:10,padding:"10px",display:"flex",alignItems:"center",justifyContent:"center",minHeight:60}}>
-                            <span style={{fontSize:"0.68rem",color:C.textMuted}}>{sideLabel} — empty</span>
-                          </div>
-                        );
+                      const Tile = ({pt, sideLabel}) => {
                         const pLabel = getPairingLabel(pt.pairingIdx);
+                        const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew});}}
-                            style={{flex:1,background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:10,padding:"10px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"box-shadow 0.12s"}}
-                            onMouseEnter={e=>{if(!seniorMode)e.currentTarget.style.boxShadow="0 6px 18px rgba(0,0,0,0.11)";}}
-                            onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.06)";}}>
-                            <div style={{position:"absolute",top:6,right:6,display:"flex",gap:3}}>
-                              {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
-                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
+                          <div onClick={seniorMode?undefined:()=>openPtEdit(pt)}
+                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
+                            onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}>
+                            <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
+                              {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
                             </div>
-                            {isDual&&sideLabel&&<div style={{fontSize:"0.52rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 5px",display:"inline-block",marginBottom:4}}>{sideLabel}</div>}
-                            <div style={{display:"flex",alignItems:"baseline",gap:4,flexWrap:"wrap",marginBottom:2}}>
-                              <span style={{fontSize:"0.82rem",fontWeight:700,color:C.text}}>{pt.patientName||"Patient"}</span>
-                              {pt.age&&<span style={{fontSize:"0.62rem",color:C.textSub}}>{pt.age}</span>}
+                            {/* Section + bed number */}
+                            <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>
+                              {pt.section}{sideLabel&&<span style={{marginLeft:4,background:`rgba(${rgb},0.1)`,color:theme,borderRadius:3,padding:"0 4px",fontWeight:700}}>{sideLabel}</span>}
                             </div>
-                            {pt.bht&&<div style={{fontSize:"0.58rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
-                            {pt.consultant&&<div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:1}}>{pt.consultant}</div>}
+                            <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>{String(bedNo).padStart(2,"0")}</div>
+                            {/* Name + age */}
+                            <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:3,flexWrap:"wrap"}}>
+                              <span style={{fontSize:"0.78rem",fontWeight:700,color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{pt.patientName||"—"}</span>
+                              {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
+                            </div>
+                            {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
+                            {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{pt.consultant}</div>}
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
-                            {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
+                            {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
-                              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>
+                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
                                 <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
                                 {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
@@ -3078,20 +3080,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         );
                       };
 
-                      return (
-                        <div key={bedNo} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.06)"}}>
-                          <div style={{padding:"8px 14px 6px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>Bed {bedNo}</span>
-                            <span style={{fontSize:"0.62rem",color:C.textMuted}}>{bedPts.length} patient{bedPts.length!==1?"s":""}</span>
-                          </div>
-                          <div style={{padding:"10px 12px",display:"flex",gap:10}}>
-                            {isDual
-                              ?<><PtCard pt={ptL} sideLabel="L"/><PtCard pt={ptR} sideLabel="R"/></>
-                              :ptSingle.map(pt=><PtCard key={pt.id} pt={pt} sideLabel=""/>)
-                            }
-                          </div>
-                        </div>
-                      );
+                      if (isDual) {
+                        // L and R each get their own tile side by side
+                        return [
+                          ptL ? <Tile key={`${bedNo}-L`} pt={ptL} sideLabel="L"/> : null,
+                          ptR ? <Tile key={`${bedNo}-R`} pt={ptR} sideLabel="R"/> : null,
+                        ].filter(Boolean);
+                      }
+                      return ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel=""/>);
                     })}
                   </div>
                 </div>
