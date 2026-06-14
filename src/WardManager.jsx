@@ -3271,7 +3271,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 const allBeds=[...rangeBeds,...specBeds];
                 const isFullyOccupied=(bed)=>{
                   const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
-                  return others.some(p=>p.side==="single")||(others.some(p=>p.side==="L")&&others.some(p=>p.side==="R"));
+                  return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
                 if(allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:8}}>No bed range for this section — edit settings to add one.</div>;
                 return (
@@ -3420,9 +3420,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 const specBeds = (setup.specialBeds||[]).filter(b=>b.section===ptEdit.section).map(b=>b.id);
                 const allBeds = [...rangeBeds, ...specBeds];
                 const isFullyOccupied = (bed) => {
-                  const others = patients.filter(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
-                  // Only fully occupied if both L and R are taken — a single-occupant bed can still be split
+                  const others = patients.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
                   return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
+                };
+                const hasSingleOccupant = (bed) => {
+                  const others = patients.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
+                  return others.some(p=>p.side==="single"||!p.side);
                 };
                 if (allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No bed range configured for this section. Edit ward settings to add one.</div>;
                 return (
@@ -3432,8 +3435,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel = ptEdit.bedNo===bed;
                         const full = isFullyOccupied(bed);
-                        const others = patients.filter(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
-                        const hasSingle = others.some(p=>p.side==="single");
+                        const hasSingle = hasSingleOccupant(bed);
                         return (
                           <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel&&!hasSingle?"":bed,side:"single",_conflictId:null,_conflictSide:null}))}
                             style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
@@ -3449,8 +3451,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       })}
                     </div>
                     {ptEdit.bedNo&&(()=>{
-                      const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.section===ptEdit.section&&p.id!==selectedPt);
-                      const singleOccupant = others.find(p=>p.side==="single");
+                      const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.id!==selectedPt);
+                      const singleOccupant = others.find(p=>p.side==="single"||!p.side);
                       const lTaken = others.some(p=>p.side==="L");
                       const rTaken = others.some(p=>p.side==="R");
                       const hasMate = others.length>0;
