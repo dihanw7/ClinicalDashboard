@@ -2777,7 +2777,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const ageStr=[newPt.ageYears&&`${newPt.ageYears}y`,newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
     const pairingIdx = newPt.pairingIdx!=null ? newPt.pairingIdx : null;
     const members = pairingIdx!=null&&pairings[pairingIdx] ? (pairings[pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)) : [];
-    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo:newPt.bedNo.trim(), section:newPt.section, side:newPt.side, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
+    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo:newPt.bedNo?.trim()||"", section:newPt.section||"", side:newPt.bedNo?newPt.side:"single", pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
     await save({...ward, patients:[...patients,pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
     setShowAddPt(false); showToast("Patient added");
@@ -2828,7 +2828,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const sectionNames = sections.map(s=>s.name);
 
   const bedMap = {};
-  filteredPatients.forEach(pt=>{
+  filteredPatients.filter(p=>p.section&&p.bedNo).forEach(pt=>{
     const sec = pt.section||"Other";
     const bed = pt.bedNo||"?";
     if (!bedMap[sec]) bedMap[sec]={};
@@ -3024,16 +3024,61 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           )}
 
           {isLeader&&!seniorMode&&(
-            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
               <Icon name="plus" size={14} color={theme}/> Add Patient
             </button>
           )}
 
           {patients.length===0
             ? <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>{isLeader?"No patients yet. Tap Add Patient to start.":"No patients yet."}</div>
-            : orderedSections.length===0
-              ? <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No patients in this section.</div>
-              : orderedSections.map(secName=>(
+            : <>
+              {/* Unassigned patients — always at top */}
+              {(()=>{
+                const unassigned = filteredPatients.filter(p=>!p.section||!p.bedNo);
+                if (unassigned.length===0) return null;
+                return (
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:10,paddingLeft:2}}>Unassigned</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                      {unassigned.map(pt=>{
+                        const pLabel=getPairingLabel(pt.pairingIdx);
+                        const filled=pt.diagnosis||pt.consultant||pt.patientName;
+                        return (
+                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew});}}
+                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
+                            onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
+                            <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
+                              {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                            </div>
+                            <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>Unassigned</div>
+                            <div style={{fontSize:"1.25rem",fontWeight:700,color:C.textMuted,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>—</div>
+                            <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:3,flexWrap:"wrap"}}>
+                              <span style={{fontSize:"0.78rem",fontWeight:700,color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{pt.patientName||"—"}</span>
+                              {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
+                            </div>
+                            {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
+                            {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{pt.consultant}</div>}
+                            {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
+                            {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
+                            {pLabel&&(
+                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
+                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Assigned patients grouped by section → bed */}
+              {orderedSections.length===0&&filteredPatients.filter(p=>p.section&&p.bedNo).length===0
+                ? null
+                : orderedSections.map(secName=>(
                 <div key={secName} style={{marginBottom:24}}>
                   <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:10,paddingLeft:2}}>{secName}</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
@@ -3091,7 +3136,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     })}
                   </div>
                 </div>
-              ))
+              ))}
+            </>
           }
         </>}
 
@@ -3185,13 +3231,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div><label style={labelStyle}>Age (months)</label><input type="number" value={newPt.ageMonths} onChange={e=>setNewPt(p=>({...p,ageMonths:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
             </div>
 
-            {/* Section & Bed — same as edit sheet */}
+            {/* Section & Bed — optional */}
             <div style={{marginBottom:16}}>
-              <label style={labelStyle}>Section & Bed</label>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:10}}>
+              <label style={labelStyle}>Section & Bed <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span></label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:8}}>
                 {sections.map(s=>{
                   const isSel=newPt.section===s.name;
-                  return <button key={s.name} onClick={()=>setNewPt(p=>({...p,section:s.name,bedNo:"",side:"single"}))}
+                  return <button key={s.name} onClick={()=>setNewPt(p=>({...p,section:isSel?"":s.name,bedNo:"",side:"single"}))}
                     style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
                       background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>{s.name}</button>;
                 })}
@@ -3214,7 +3260,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel=newPt.bedNo===bed;
                         const full=isFullyOccupied(bed);
-                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:bed,side:"single"}))}
+                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:"single"}))}
                           style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                             cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
                             background:isSel?theme:full?"rgba(0,0,0,0.04)":C.surface,
