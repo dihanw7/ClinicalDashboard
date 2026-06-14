@@ -3421,7 +3421,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 const allBeds = [...rangeBeds, ...specBeds];
                 const isFullyOccupied = (bed) => {
                   const others = patients.filter(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
-                  return others.some(p=>p.side==="single") || (others.some(p=>p.side==="L")&&others.some(p=>p.side==="R"));
+                  // Only fully occupied if both L and R are taken — a single-occupant bed can still be split
+                  return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
                 if (allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No bed range configured for this section. Edit ward settings to add one.</div>;
                 return (
@@ -3431,13 +3432,15 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel = ptEdit.bedNo===bed;
                         const full = isFullyOccupied(bed);
+                        const others = patients.filter(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
+                        const hasSingle = others.some(p=>p.side==="single");
                         return (
-                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:bed,side:"single"}))}
+                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel&&!hasSingle?"":bed,side:"single",_conflictId:null,_conflictSide:null}))}
                             style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                               cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
-                              background:isSel?theme:full?"rgba(0,0,0,0.04)":C.surface,
-                              border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":C.border}`,
-                              color:isSel?"#fff":full?C.textMuted:C.text,
+                              background:isSel?theme:full?"rgba(0,0,0,0.04)":hasSingle?"rgba(245,158,11,0.08)":C.surface,
+                              border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasSingle?"rgba(245,158,11,0.4)":C.border}`,
+                              color:isSel?"#fff":full?C.textMuted:hasSingle?"rgb(161,104,0)":C.text,
                               opacity:full&&!isSel?0.4:1,
                               boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>
                             {bed}
