@@ -3352,14 +3352,20 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         : hasMate ? "This bed already has a patient — select which side to place the new patient." : null;
                       return (
                         <div>
-                          <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
-                          {warningMsg&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>{warningMsg}</div>}
+                          <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Bed Side</div>
+                          {/* Show current occupants */}
+                          <div style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"8px 12px",marginBottom:10}}>
+                            <div style={{fontSize:"0.62rem",color:"rgb(161,104,0)",fontWeight:600,marginBottom:5,letterSpacing:"0.04em",textTransform:"uppercase"}}>Currently in this bed</div>
+                            {singleOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"0.62rem",background:"rgba(0,0,0,0.08)",borderRadius:4,padding:"1px 6px",color:C.textSub}}>Single</span>{singleOccupant.patientName||singleOccupant.bht||"Patient"}{singleOccupant.age&&<span style={{fontSize:"0.65rem",color:C.textSub}}>{singleOccupant.age}</span>}</div>}
+                            {lOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8,marginBottom:rOccupant?4:0}}><span style={{fontSize:"0.62rem",background:`rgba(${rgb},0.1)`,borderRadius:4,padding:"1px 6px",color:theme}}>L</span>{lOccupant.patientName||lOccupant.bht||"Patient"}{lOccupant.age&&<span style={{fontSize:"0.65rem",color:C.textSub}}>{lOccupant.age}</span>}</div>}
+                            {rOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"0.62rem",background:`rgba(${rgb},0.1)`,borderRadius:4,padding:"1px 6px",color:theme}}>R</span>{rOccupant.patientName||rOccupant.bht||"Patient"}{rOccupant.age&&<span style={{fontSize:"0.65rem",color:C.textSub}}>{rOccupant.age}</span>}</div>}
+                          </div>
                           <div style={{display:"flex",gap:6}}>
                             {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken&&!singleOccupant},{val:"R",label:"Right",taken:rTaken&&!singleOccupant}].map(({val,label,taken})=>{
                               const isSel=newPt.side===val;
+                              const conf=getConflict(val);
                               return <button key={val} onClick={()=>{
                                 if(taken&&!isSel) return;
-                                const conf=getConflict(val);
                                 setNewPt(p=>({...p,side:val,_conflictId:conf?conf.id:null,_conflictSide:conf?conf.toSide:null}));
                               }}
                                 style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
@@ -3373,7 +3379,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             })}
                           </div>
                           {newPt._conflictId&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
-                            New patient → <strong>{newPt.side==="L"?"Left":"Right"}</strong>, existing patient moves to <strong>{newPt._conflictSide==="L"?"Left":"Right"}</strong>.
+                            New patient → <strong>{newPt.side==="L"?"Left":"Right"}</strong> · Existing patient moves to <strong>{newPt._conflictSide==="L"?"Left":"Right"}</strong> on add.
                           </div>}
                         </div>
                       );
