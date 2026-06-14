@@ -2731,6 +2731,19 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const shadowHONames = new Set(shadowHOs.map(h=>h.name).filter(Boolean));
   const activeStudents = students.filter(s=>s.name&&!shadowHONames.has(s.name));
 
+  // Lookup group number for a student name
+  const getGroup = (name) => students.find(s=>s.name===name)?.group||"";
+
+  // Render a name with superscript group number
+  const NameWithGroup = ({name, color, fontSize="0.88rem", fontWeight=500}) => {
+    const g = getGroup(name);
+    return (
+      <span style={{fontSize,fontWeight,color,lineHeight:1.3}}>
+        {name}{g&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{g}</sup>}
+      </span>
+    );
+  };
+
   const save = useCallback(async (w) => { await saveWard(w); }, [saveWard]);
 
   const tryPin = () => {
@@ -2903,7 +2916,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
                               <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {i+1}</span>
-                              {members.length>0&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{members.filter(m=>!shadowHONames.has(m)).join(" × ")}</span>}
+                              {members.length>0&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{members.filter(m=>!shadowHONames.has(m)).map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.5}}>×</span>}<NameWithGroup name={m} color={C.textSub} fontSize="0.72rem" fontWeight={500}/></span>)}</span>}
                             </div>
                             <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==i))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
                           </div>
@@ -2970,7 +2983,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               {activeMembers.map((m,mi)=>(
                                 <span key={m}>
                                   {mi>0&&<span style={{color:C.textMuted,fontWeight:400,margin:"0 4px"}}>×</span>}
-                                  {m}
+                                  <NameWithGroup name={m} color={C.text} fontSize="0.88rem" fontWeight={600}/>
                                 </span>
                               ))}
                             </div>
@@ -3054,7 +3067,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pLabel&&(
                               <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>
                                 <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
-                                {(pt.members||[]).map(m=><span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub}}>{m.split(" ")[0]}</span>)}
+                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
                           </div>
@@ -3097,7 +3110,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                           <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap"}}>
                             {members.map(m=>{
                               const isHO=shadowHONames.has(m);
-                              return <span key={m} style={{fontSize:"0.78rem",fontWeight:500,color:isHO?C.textMuted:C.text,opacity:isHO?0.5:1}}>{m}{isHO&&<span style={{fontSize:"0.6rem"}}> (HO)</span>}</span>;
+                              return <span key={m} style={{opacity:isHO?0.5:1}}><NameWithGroup name={m} color={isHO?C.textMuted:C.text} fontSize="0.78rem" fontWeight={500}/>{isHO&&<span style={{fontSize:"0.6rem"}}> (HO)</span>}</span>;
                             })}
                           </div>
                           <span style={{fontSize:"0.65rem",color:C.textMuted}}>{pPts.length}pt</span>
@@ -3237,8 +3250,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   })()
               }
               {newPt.pairingIdx!=null&&pairings[newPt.pairingIdx]&&(
-                <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500}}>
-                  {(pairings[newPt.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).join(" × ")}
+                <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500,display:"flex",flexWrap:"wrap",gap:2,alignItems:"baseline"}}>
+                  {(pairings[newPt.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.6}}>×</span>}<NameWithGroup name={m} color={theme} fontSize="0.72rem" fontWeight={600}/></span>)}
                 </div>
               )}
             </div>
@@ -3366,13 +3379,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     const ptCount = patients.filter(p=>p.pairingIdx===pi&&p.id!==selectedPt).length;
                     return (
                       <div key={pi} onClick={()=>setPtEdit(p=>({...p,pairingIdx:isSel?null:pi}))}
-                        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:11,cursor:"pointer",
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:11,cursor:"pointer",position:"relative",
                           background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
-                          border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s",position:"relative"}}>
-                        {isSel&&<div style={{position:"absolute",top:8,right:10,width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={8} color="#fff"/></div>}
+                          border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
                         <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.12)`:C.surface,border:`1px solid ${isSel?`rgba(${rgb},0.25)`:C.border}`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
-                        <span style={{flex:1,fontSize:"0.88rem",fontWeight:500,color:isSel?theme:C.text}}>{members.join(" × ")||"—"}</span>
-                        <span style={{fontSize:"0.65rem",color:C.textMuted,flexShrink:0}}>{ptCount} pt</span>
+                        <span style={{flex:1,display:"flex",flexWrap:"wrap",gap:2,alignItems:"baseline"}}>{members.length>0?members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",color:isSel?theme:C.textMuted,opacity:0.6}}>×</span>}<NameWithGroup name={m} color={isSel?theme:C.text} fontSize="0.88rem" fontWeight={500}/></span>):<span style={{color:C.textMuted}}>—</span>}</span>
+                        <span style={{fontSize:"0.65rem",color:isSel?theme:C.textMuted,flexShrink:0,marginRight:isSel?22:0}}>{ptCount} pt</span>
+                        {isSel&&<div style={{position:"absolute",top:"50%",right:10,transform:"translateY(-50%)",width:18,height:18,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="check" size={9} color="#fff"/></div>}
                       </div>
                     );
                   })}
@@ -3437,7 +3450,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Switch Pairing?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
-              <strong>{switchConfirm.studentName}</strong> is currently in <strong>Pairing {switchConfirm.fromPairingIdx+1}</strong> ({(pairings[switchConfirm.fromPairingIdx]?.members||[]).filter(m=>m&&!shadowHONames.has(m)&&m!==switchConfirm.studentName).join(" × ")||"solo"}).
+              <strong>{switchConfirm.studentName}{getGroup(switchConfirm.studentName)&&<sup style={{fontSize:"0.7em",marginLeft:"1px"}}>{getGroup(switchConfirm.studentName)}</sup>}</strong> is currently in <strong>Pairing {switchConfirm.fromPairingIdx+1}</strong> ({(pairings[switchConfirm.fromPairingIdx]?.members||[]).filter(m=>m&&!shadowHONames.has(m)&&m!==switchConfirm.studentName).join(" × ")||"solo"}).
               {" "}Move them to the pairing you selected?
             </p>
             <div style={{display:"flex",gap:10}}>
