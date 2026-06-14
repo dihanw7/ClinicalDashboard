@@ -3573,11 +3573,27 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </button>
               </div>
             )}
-            <div style={{marginBottom:12}}><label style={labelStyle}>Consultant</label>
-              <select value={ptEdit.consultant||""} onChange={e=>setPtEdit(p=>({...p,consultant:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}>
-                <option value="">— None —</option>
-                {consultants.map(c=>{const n=typeof c==="object"?c.name:c;return <option key={n} value={n}>{n}</option>;})}
-              </select>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Consultant</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+                {[{name:"",color:""},...consultants.map(c=>typeof c==="object"?c:{name:c,color:"#6366f1"})].map(c=>{
+                  const isSel = (ptEdit.consultant||"")===(c.name||"");
+                  const cRgb = c.color ? hexToRgb(c.color) : null;
+                  return (
+                    <button key={c.name||"none"} onClick={()=>setPtEdit(p=>({...p,consultant:c.name||""}))}
+                      style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:10,cursor:"pointer",fontFamily:SF,fontSize:"0.8rem",fontWeight:isSel?600:400,transition:"all 0.1s",
+                        background:isSel&&cRgb?`rgba(${cRgb},0.1)`:isSel?C.surfaceEl:C.surface,
+                        border:`1px solid ${isSel&&c.color?c.color:isSel?C.textSub:C.border}`,
+                        color:isSel&&c.color?c.color:isSel?C.textSub:C.textSub}}>
+                      {c.color
+                        ? <span style={{width:8,height:8,borderRadius:"50%",background:c.color,flexShrink:0,display:"inline-block"}}/>
+                        : <span style={{width:8,height:8,borderRadius:"50%",background:C.border,flexShrink:0,display:"inline-block"}}/>
+                      }
+                      {c.name||"None"}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div style={{marginBottom:12}}><label style={labelStyle}>Diagnosis</label><input value={ptEdit.diagnosis||""} onChange={e=>setPtEdit(p=>({...p,diagnosis:e.target.value}))} placeholder="e.g. Acute appendicitis" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
             <div style={{marginBottom:12}}><label style={labelStyle}>Notes</label><textarea value={ptEdit.notes||""} onChange={e=>setPtEdit(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,resize:"vertical",lineHeight:1.5}}/></div>
