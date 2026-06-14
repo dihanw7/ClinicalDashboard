@@ -3090,7 +3090,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
                             </div>
                             {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
-                            {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{pt.consultant}</div>}
+                            {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
@@ -3148,7 +3148,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               {pt.age&&<span style={{fontSize:"0.6rem",color:C.textSub,flexShrink:0}}>{pt.age}</span>}
                             </div>
                             {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
-                            {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{pt.consultant}</div>}
+                            {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
