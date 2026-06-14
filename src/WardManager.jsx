@@ -3316,7 +3316,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel=newPt.bedNo===bed;
                         const full=isFullyOccupied(bed);
-                        const hasSingle=hasSingleOccupant(bed);
+                        const hasSingle=hasAnyOccupant(bed);
                         const hasAny=patients.some(p=>p.bedNo===bed&&p.section===newPt.section);
                         const hasOccupant = patients.some(pt=>pt.bedNo===bed&&pt.section===newPt.section);
                         return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
