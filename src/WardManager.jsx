@@ -3167,10 +3167,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       };
 
                       if (isDual) {
-                        // L and R each get their own tile side by side
+                        // L and R each get their own tile; also show any orphaned single patients
                         return [
                           ptL ? <Tile key={`${bedNo}-L`} pt={ptL} sideLabel="L"/> : null,
                           ptR ? <Tile key={`${bedNo}-R`} pt={ptR} sideLabel="R"/> : null,
+                          ...ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel="?"/>),
                         ].filter(Boolean);
                       }
                       return ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel=""/>);
@@ -3333,7 +3334,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
                           {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate&&!singleOccupant},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
                               const isSel=newPt.side===val;
                               return <button key={val} onClick={()=>{
                                 if(taken&&!isSel) return;
@@ -3492,7 +3493,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                           <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
                           {singleOccupant&&<div style={{fontSize:"0.7rem",color:"rgb(161,104,0)",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8}}>This bed has a single-slot patient — selecting L or R will split the bed and move them to the other side.</div>}
                           <div style={{display:"flex",gap:6}}>
-                            {[{val:"single",label:"Single",taken:hasMate&&!singleOccupant},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
                               const isSel=ptEdit.side===val;
                               const wouldSplit = singleOccupant && (val==="L"||val==="R");
                               return (
