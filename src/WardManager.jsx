@@ -2697,41 +2697,92 @@ function MedicineAssignModal({ bedNum, side, students, currentAssigned, currentS
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW
 // ══════════════════════════════════════════════════════════════════════════════
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{background:C.surface,border:`1px solid rgba(${rgb},0.18)`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C.shadow}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",userSelect:"none"}}>
+        <span style={{fontSize:"0.68rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"2px 9px",flexShrink:0}}>P{pi+1}</span>
+        <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap",alignItems:"baseline"}}>
+          {members.filter(m=>!shadowHONames.has(m)).map((m,mi)=>(
+            <span key={m} style={{display:"inline-flex",alignItems:"baseline"}}>
+              {mi>0&&<span style={{margin:"0 3px",color:C.textMuted,opacity:0.5}}>×</span>}
+              <NameWithGroup name={m} color={C.text} fontSize="0.82rem" fontWeight={500}/>
+            </span>
+          ))}
+        </div>
+        <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0}}>{pPts.length} pt</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
+          <path d="M3 5l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      {open&&(
+        <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 12px 12px"}}>
+          {pPts.length===0
+            ? <div style={{fontSize:"0.75rem",color:C.textMuted,padding:"6px 0"}}>No patients assigned</div>
+            : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                {pPts.map(pt=>(
+                  <div key={pt.id} onClick={()=>onSelectPt(pt)}
+                    style={{background:C.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
+                    <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section||"Unassigned"}{pt.side&&pt.side!=="single"?` · ${pt.side}`:""}</div>
+                    {pt.bedNo&&<div style={{fontSize:"1.1rem",fontWeight:700,color:theme,lineHeight:1,marginBottom:3}}>{String(pt.bedNo).padStart(2,"0")}</div>}
+                    <div style={{fontSize:"0.78rem",fontWeight:700,color:C.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
+                    {pt.age&&<div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:1}}>{pt.age}</div>}
+                    {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C.text,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>}
+                    {pt.historyTaken&&<div style={{position:"absolute",top:7,right:7}}><svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt }) {
   const [expandedHO, setExpandedHO] = useState(null);
   const activeHOs = shadowHOs.filter(h=>h.name);
+  const C2 = C;
   return (
-    <div style={{marginBottom:16}}>
-      <div style={{fontSize:"0.65rem",color:"#666",letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:8,paddingLeft:2}}>Shadow HOs</div>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:"0.65rem",color:C2.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:10,paddingLeft:2}}>Shadow HOs</div>
       {activeHOs.map(ho=>{
         const hoPts = patients.filter(p=>p.shadowHO===ho.name);
         const isOpen = expandedHO===ho.name;
         return (
-          <div key={ho.name} style={{background:"#fff",border:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,marginBottom:8,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+          <div key={ho.name} style={{background:C2.surface,border:`1px solid ${C2.border}`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C2.shadow}}>
             <div onClick={()=>setExpandedHO(isOpen?null:ho.name)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
+              style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",userSelect:"none"}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:"0.86rem",fontWeight:600,color:"#1a1a1a"}}>{ho.name}</div>
-                <div style={{fontSize:"0.62rem",color:"#888",marginTop:1}}>{ho.post}</div>
+                <div style={{fontSize:"0.88rem",fontWeight:600,color:C2.text,lineHeight:1.2}}>{ho.name}</div>
+                <div style={{fontSize:"0.62rem",color:C2.textMuted,marginTop:1}}>{ho.post}</div>
               </div>
-              <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px"}}>{hoPts.length} pt</span>
+              <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0}}>{hoPts.length} pt</span>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
-                <path d="M3 5l4 4 4-4" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M3 5l4 4 4-4" stroke={C2.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             {isOpen&&(
-              <div style={{borderTop:`1px solid rgba(0,0,0,0.06)`,padding:"6px 14px 10px"}}>
+              <div style={{borderTop:`1px solid ${C2.border}`,padding:"10px 12px 12px"}}>
                 {hoPts.length===0
-                  ? <div style={{fontSize:"0.75rem",color:"#999",padding:"6px 0"}}>No patients assigned</div>
-                  : hoPts.map(pt=>(
-                      <div key={pt.id} onClick={()=>onSelectPt(pt)}
-                        style={{display:"flex",alignItems:"baseline",gap:8,padding:"7px 0",borderBottom:`1px solid rgba(0,0,0,0.05)`,cursor:"pointer"}}>
-                        {pt.bedNo&&<span style={{fontSize:"0.68rem",background:`rgba(${rgb},0.08)`,color:theme,borderRadius:5,padding:"1px 6px",fontWeight:600,flexShrink:0}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
-                        <span style={{fontSize:"0.8rem",fontWeight:600,color:"#1a1a1a"}}>{pt.patientName||"Patient"}</span>
-                        {pt.age&&<span style={{fontSize:"0.68rem",color:"#888"}}>{pt.age}</span>}
-                        {pt.diagnosis&&<span style={{fontSize:"0.68rem",color:"#999",fontStyle:"italic",marginLeft:"auto"}}>{pt.diagnosis}</span>}
-                      </div>
-                    ))
+                  ? <div style={{fontSize:"0.75rem",color:C2.textMuted,padding:"6px 0"}}>No patients assigned</div>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                      {hoPts.map(pt=>(
+                        <div key={pt.id} onClick={()=>onSelectPt(pt)}
+                          style={{background:C2.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
+                          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
+                          <div style={{fontSize:"0.55rem",color:C2.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section||"Unassigned"}{pt.side&&pt.side!=="single"?` · ${pt.side}`:""}</div>
+                          {pt.bedNo&&<div style={{fontSize:"1.1rem",fontWeight:700,color:theme,lineHeight:1,marginBottom:3}}>{String(pt.bedNo).padStart(2,"0")}</div>}
+                          <div style={{fontSize:"0.78rem",fontWeight:700,color:C2.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
+                          {pt.age&&<div style={{fontSize:"0.6rem",color:C2.textSub,marginBottom:1}}>{pt.age}</div>}
+                          {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C2.text,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>}
+                        </div>
+                      ))}
+                    </div>
                 }
               </div>
             )}
@@ -3271,31 +3322,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     const members=(pair.members||[]).filter(Boolean);
                     const pPts=patients.filter(p=>p.pairingIdx===pi);
                     return (
-                      <div key={pi} style={{background:C.surface,border:`1px solid rgba(${rgb},0.2)`,borderRadius:14,padding:"12px 14px",marginBottom:12,boxShadow:C.shadow}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                          <span style={{fontSize:"0.7rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"3px 9px"}}>Pairing {pi+1}</span>
-                          <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap"}}>
-                            {members.map(m=>{
-                              const isHO=shadowHONames.has(m);
-                              return <span key={m} style={{opacity:isHO?0.5:1}}><NameWithGroup name={m} color={isHO?C.textMuted:C.text} fontSize="0.78rem" fontWeight={500}/>{isHO&&<span style={{fontSize:"0.6rem"}}> (HO)</span>}</span>;
-                            })}
-                          </div>
-                          <span style={{fontSize:"0.65rem",color:C.textMuted}}>{pPts.length}pt</span>
-                        </div>
-                        {pPts.length===0
-                          ? <div style={{fontSize:"0.75rem",color:C.textMuted}}>No patients assigned</div>
-                          : pPts.map(pt=>(
-                              <div key={pt.id} onClick={()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
-                                style={{display:"flex",alignItems:"baseline",gap:8,padding:"7px 0",borderTop:`1px solid ${C.border}`,cursor:"pointer"}}>
-                                {pt.bedNo&&<span style={{fontSize:"0.68rem",background:`rgba(${rgb},0.08)`,color:theme,borderRadius:5,padding:"1px 6px",fontWeight:600,flexShrink:0}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
-                                <span style={{fontSize:"0.8rem",fontWeight:600,color:C.text}}>{pt.patientName||"Patient"}</span>
-                                {pt.age&&<span style={{fontSize:"0.68rem",color:C.textSub}}>{pt.age}</span>}
-                                {pt.bht&&<span style={{fontSize:"0.62rem",color:C.textMuted,fontFamily:"monospace"}}>BHT {pt.bht}</span>}
-                                {pt.diagnosis&&<span style={{fontSize:"0.68rem",color:C.textMuted,fontStyle:"italic",marginLeft:"auto"}}>{pt.diagnosis}</span>}
-                              </div>
-                            ))
-                        }
-                      </div>
+                      <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts}
+                        theme={theme} rgb={rgb} shadowHONames={shadowHONames}
+                        NameWithGroup={NameWithGroup}
+                        onSelectPt={(pt)=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
+                      />
                     );
                   })}
                   {activeStudents.filter(s=>!pairings.some(p=>(p.members||[]).includes(s.name))).map(s=>(
