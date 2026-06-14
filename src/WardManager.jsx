@@ -3319,7 +3319,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const full=isFullyOccupied(bed);
                         const hasSingle=hasSingleOccupant(bed);
                         const hasAny=patients.some(p=>p.bedNo===bed&&p.section===newPt.section);
-                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:"single",_conflictId:null,_conflictSide:null}))}
+                        const hasOccupant = patients.some(pt=>pt.bedNo===bed&&pt.section===newPt.section);
+                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
                           style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                             cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
                             background:isSel?theme:full?"rgba(0,0,0,0.04)":hasSingle?"rgba(245,158,11,0.08)":C.surface,
