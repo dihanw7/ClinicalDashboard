@@ -2778,6 +2778,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   const addPatient = async () => {
     if (!newPt.patientName.trim()&&!newPt.bht.trim()) { showToast("Enter a name or BHT","error"); return; }
+    if (newPt.bedNo&&!newPt.isFloor&&!newPt.side) { showToast("Please select a bed side (L or R)","error"); return; }
     const ageStr=[newPt.ageYears&&`${newPt.ageYears}y`,newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
     const pairingIdx = newPt.pairingIdx!=null ? newPt.pairingIdx : null;
     const members = pairingIdx!=null&&pairings[pairingIdx] ? (pairings[pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)) : [];
@@ -2790,7 +2791,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       bedNo = `F${floorCount+1}`;
       section = "Floor";
     }
-    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:"single", isFloor, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
+    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:newPt.side||"single", isFloor, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
     await save({...ward, patients:[...patients.map(p=>newPt._conflictId&&p.id===newPt._conflictId?{...p,side:newPt._conflictSide}:p),pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
     setShowAddPt(false); showToast("Patient added");
@@ -3171,7 +3172,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         return [
                           ptL ? <Tile key={`${bedNo}-L`} pt={ptL} sideLabel="L"/> : null,
                           ptR ? <Tile key={`${bedNo}-R`} pt={ptR} sideLabel="R"/> : null,
-                          ...ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel="?"/>),
+                          ...ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel="!"/>),
                         ].filter(Boolean);
                       }
                       return ptSingle.map(pt=><Tile key={pt.id} pt={pt} sideLabel=""/>);
