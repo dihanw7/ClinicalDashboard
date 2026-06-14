@@ -3078,6 +3078,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                                 {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
+                            {(pt.tags||[]).length>0&&(
+                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                                {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -3129,6 +3134,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
                                 <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
                                 {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                              </div>
+                            )}
+                            {(pt.tags||[]).length>0&&(
+                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                                {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
                               </div>
                             )}
                           </div>
