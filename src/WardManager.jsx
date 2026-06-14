@@ -2716,6 +2716,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [pairingOpen,       setPairingOpen]       = useState(false);
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
+  const [shadowAutoAlloc,   setShadowAutoAlloc]   = useState(true); // auto shadow allocation on by default
   const [switchConfirm,     setSwitchConfirm]     = useState(null); // {studentName, fromPairingIdx, toPairingIdx, setter}
   const [shadowEditing,     setShadowEditing]     = useState(false);
   const [shadowForm,        setShadowForm]        = useState(null);
@@ -2756,6 +2757,16 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
 
   const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
+
+  // Pick the shadow HO with fewest patients (ties broken randomly)
+  const getSuggestedShadow = () => {
+    const active = shadowHOs.filter(h=>h.name);
+    if (active.length===0) return null;
+    const counts = active.map(h=>({...h, count:patients.filter(p=>p.shadowHO===h.name).length}));
+    const minCount = Math.min(...counts.map(h=>h.count));
+    const eligible = counts.filter(h=>h.count===minCount);
+    return eligible[Math.floor(Math.random()*eligible.length)];
+  };
 
   const updatePatient = async (id, updates) => {
     await save({...ward, patients:patients.map(p=>p.id===id?{...p,...updates}:p)});
@@ -2802,7 +2813,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       bedNo = `F${floorCount+1}`;
       section = "Floor";
     }
-    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:newPt.side||"single", isFloor, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
+    const shadowHO = shadowAutoAlloc ? (getSuggestedShadow()?.name||"") : (newPt.shadowHO||"");
+    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:newPt.side||"single", isFloor, pairingIdx, members, shadowHO, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
     await save({...ward, patients:[...patients.map(p=>newPt._conflictId&&p.id===newPt._conflictId?{...p,side:newPt._conflictSide}:p),pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
     setShowAddPt(false); showToast("Patient added");
@@ -3067,7 +3079,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           )}
 
           {isLeader&&!seniorMode&&(
-            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
               <Icon name="plus" size={14} color={theme}/> Add Patient
             </button>
           )}
@@ -3087,7 +3099,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel=getPairingLabel(pt.pairingIdx);
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]});}}
+                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
                             style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
@@ -3135,7 +3147,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       const ptR = bedPts.find(p=>p.side==="R");
                       const ptSingle = bedPts.filter(p=>!p.side||p.side==="single");
                       const isDual = ptL||ptR;
-                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]}); };
+                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""}); };
 
                       const Tile = ({pt, sideLabel}) => {
                         const pLabel = getPairingLabel(pt.pairingIdx);
@@ -3218,7 +3230,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         {pPts.length===0
                           ? <div style={{fontSize:"0.75rem",color:C.textMuted}}>No patients assigned</div>
                           : pPts.map(pt=>(
-                              <div key={pt.id} onClick={()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[]});}}
+                              <div key={pt.id} onClick={()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
                                 style={{display:"flex",alignItems:"baseline",gap:8,padding:"7px 0",borderTop:`1px solid ${C.border}`,cursor:"pointer"}}>
                                 {pt.bedNo&&<span style={{fontSize:"0.68rem",background:`rgba(${rgb},0.08)`,color:theme,borderRadius:5,padding:"1px 6px",fontWeight:600,flexShrink:0}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
                                 <span style={{fontSize:"0.8rem",fontWeight:600,color:C.text}}>{pt.patientName||"Patient"}</span>
@@ -3434,6 +3446,59 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               }
             </div>
 
+            {/* Shadow HO Allocator */}
+            {shadowHOs.filter(h=>h.name).length>0&&(
+              <div style={{marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <label style={labelStyle}>Shadow HO</label>
+                  {isLeader&&!seniorMode&&(
+                    <button onClick={()=>setShadowAutoAlloc(a=>!a)} style={{fontSize:"0.65rem",fontWeight:600,fontFamily:SF,cursor:"pointer",background:"none",border:"none",color:shadowAutoAlloc?theme:C.textMuted,padding:0}}>
+                      {shadowAutoAlloc?"Auto ✓":"Manual"}
+                    </button>
+                  )}
+                </div>
+                {shadowAutoAlloc ? (
+                  <div>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:6,lineHeight:1.4}}>Automatically assigns the Shadow HO with fewest patients. When equal, picks randomly.</div>
+                    {(()=>{
+                      const suggested = getSuggestedShadow();
+                      const count = suggested ? patients.filter(p=>p.shadowHO===suggested.name).length : 0;
+                      return suggested ? (
+                        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:10}}>
+                          <span style={{fontSize:"0.78rem",fontWeight:600,color:theme,flex:1}}>{suggested.name}</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted}}>{count} pt</span>
+                          <span style={{fontSize:"0.6rem",color:C.textMuted,background:C.surfaceEl,borderRadius:4,padding:"1px 6px"}}>{suggested.post}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {shadowHOs.filter(h=>h.name).map(ho=>{
+                      const count=patients.filter(p=>p.shadowHO===ho.name).length;
+                      const isSel=newPt.shadowHO===ho.name;
+                      return (
+                        <div key={ho.name} onClick={()=>setNewPt(p=>({...p,shadowHO:isSel?"":ho.name}))}
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,cursor:"pointer",
+                            background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
+                            border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
+                          <span style={{flex:1,fontSize:"0.82rem",fontWeight:isSel?600:400,color:isSel?theme:C.text}}>{ho.name}</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted}}>{count} pt</span>
+                          <span style={{fontSize:"0.6rem",color:C.textMuted,background:C.surface,borderRadius:4,padding:"1px 6px",border:`1px solid ${C.border}`}}>{ho.post}</span>
+                          {isSel&&<div style={{width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="check" size={8} color="#fff"/></div>}
+                        </div>
+                      );
+                    })}
+                    <div onClick={()=>setNewPt(p=>({...p,shadowHO:""}))}
+                      style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"8px",borderRadius:10,cursor:"pointer",
+                        background:!newPt.shadowHO?"rgba(0,0,0,0.04)":C.bg,border:`1px dashed ${!newPt.shadowHO?C.textSub:C.border}`}}>
+                      <span style={{fontSize:"0.75rem",color:C.textMuted}}>None</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowAddPt(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
@@ -3604,6 +3669,43 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </div>
               </div>
             )}
+            {/* Shadow HO Allocator — edit patient */}
+            {shadowHOs.filter(h=>h.name).length>0&&!seniorMode&&(
+              <div style={{marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <label style={labelStyle}>Shadow HO</label>
+                  {isLeader&&<button onClick={()=>setShadowAutoAlloc(a=>!a)} style={{fontSize:"0.65rem",fontWeight:600,fontFamily:SF,cursor:"pointer",background:"none",border:"none",color:shadowAutoAlloc?theme:C.textMuted,padding:0}}>{shadowAutoAlloc?"Auto ✓":"Manual"}</button>}
+                </div>
+                {shadowAutoAlloc ? (
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:10}}>
+                    <span style={{fontSize:"0.7rem",color:C.textMuted,flex:1}}>Auto-assigned on save</span>
+                    {selPt.shadowHO&&<span style={{fontSize:"0.78rem",fontWeight:600,color:theme}}>{selPt.shadowHO}</span>}
+                  </div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {shadowHOs.filter(h=>h.name).map(ho=>{
+                      const count=patients.filter(p=>p.shadowHO===ho.name).length;
+                      const isSel=ptEdit.shadowHO===ho.name;
+                      return (
+                        <div key={ho.name} onClick={()=>setPtEdit(p=>({...p,shadowHO:isSel?"":ho.name}))}
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,cursor:"pointer",
+                            background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
+                          <span style={{flex:1,fontSize:"0.82rem",fontWeight:isSel?600:400,color:isSel?theme:C.text}}>{ho.name}</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted}}>{count} pt</span>
+                          <span style={{fontSize:"0.6rem",color:C.textMuted,background:C.surface,borderRadius:4,padding:"1px 6px",border:`1px solid ${C.border}`}}>{ho.post}</span>
+                          {isSel&&<div style={{width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="check" size={8} color="#fff"/></div>}
+                        </div>
+                      );
+                    })}
+                    <div onClick={()=>setPtEdit(p=>({...p,shadowHO:""}))}
+                      style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"8px",borderRadius:10,cursor:"pointer",
+                        background:!ptEdit.shadowHO?"rgba(0,0,0,0.04)":C.bg,border:`1px dashed ${!ptEdit.shadowHO?C.textSub:C.border}`}}>
+                      <span style={{fontSize:"0.75rem",color:C.textMuted}}>None</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {isLeader&&!seniorMode&&(
               <div style={{marginBottom:14}}>
                 <button onClick={()=>updatePatient(selectedPt,{isNew:!selPt.isNew})}
@@ -3668,7 +3770,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <button onClick={async()=>{
                   const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                   const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
-                  let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,tags:ptEdit.tags||[]}:p);
+                  const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
+                  let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,shadowHO,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,tags:ptEdit.tags||[]}:p);
                   if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
                   await save({...ward,patients:newPatients});
                   setSideConflict(null); showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
@@ -3685,7 +3788,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {!isLeader&&!seniorMode&&(
               <button onClick={async()=>{
                 const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
-                let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken,tags:ptEdit.tags||[]}:p);
+                const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
+                let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,shadowHO,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken,tags:ptEdit.tags||[]}:p);
                 if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
                 await save({...ward,patients:newPatients});
                 setSideConflict(null); showToast("Saved"); setSelectedPt(null);
