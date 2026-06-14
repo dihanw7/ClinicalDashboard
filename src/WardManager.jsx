@@ -256,7 +256,8 @@ function WardCard({ ward, onOpen }) {
   const patients = ward.patients || [];
   const theme    = setup.themeColor || "#007aff";
   const rgb      = hexToRgb(theme);
-  const isPaed   = setup.template === "paed";
+  const isPaed    = setup.template === "paed";
+  const isSurgery = setup.template === "surgery";
   const bedKeys  = Object.keys(beds);
 
   // Default template stats
@@ -264,15 +265,17 @@ function WardCard({ ward, onOpen }) {
   const histCount = bedKeys.filter(k=>beds[k]?.historyTaken).length;
   const assigned  = bedKeys.filter(k=>beds[k]?.assigned?.length>0||beds[k]?.shadows?.length>0).length;
 
-  // Patient count — paed uses patients array, default uses beds with any data
-  const patientCount = isPaed
-    ? patients.filter(p=>p.name).length
+  // Patient count
+  const patientCount = (isPaed||isSurgery)
+    ? patients.length
     : bedKeys.filter(k=>{ const b=beds[k]; return b&&(b.diagnosis||b.consultant||b.notes||b.assigned?.length>0||b.shadows?.length>0||b.isNew||b.historyTaken||b.opStatus); }).length;
 
-  // Paed stats
-  const paedNew  = patients.filter(p=>p.isNew).length;
-  const paedHist = patients.filter(p=>p.historyTaken).length;
-  const paedTotal = patients.filter(p=>p.name).length;
+  // Paed/Surgery stats
+  const ptNew  = patients.filter(p=>p.isNew).length;
+  const ptHist = patients.filter(p=>p.historyTaken).length;
+  const paedNew  = ptNew;
+  const paedHist = ptHist;
+  const paedTotal = patients.filter(p=>p.name||p.patientName).length;
 
   return (
     <div onClick={onOpen} style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:18,padding:"18px 18px 14px",cursor:"pointer",boxShadow:"0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
@@ -291,9 +294,9 @@ function WardCard({ ward, onOpen }) {
 
       {/* Stats row */}
       <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-        {(isPaed ? [
-          { icon:"newdot",  color:C.red,   label:"New",      val:paedNew },
-          { icon:"history", color:C.green, label:"Hx taken", val:`${paedHist}/${paedTotal}` },
+        {((isPaed||isSurgery) ? [
+          { icon:"newdot",  color:C.red,   label:"New",      val:ptNew },
+          { icon:"history", color:C.green, label:"Hx taken", val:`${ptHist}/${patientCount}` },
         ] : [
           { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
           { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
