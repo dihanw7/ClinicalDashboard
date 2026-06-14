@@ -657,7 +657,7 @@ function MedicineSetupFields({ form, setForm }) {
 }
 
 function SurgerySetupFields({ form, setForm }) {
-  const wardSections = form.wardSections || [{name:"Elective",range:""},{name:"Emergency",range:""},{name:"HDU",range:""}];
+  const wardSections = form.wardSections || [{name:"Acute"},{name:"Chronic"},{name:"Pre-Op"},{name:"HDU"}];
   const shadowHOs    = form.shadowHOs    || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
   const students     = form.students     || [{name:"",group:""}];
   const consultants  = form.consultants  || [{name:"",color:"#6366f1"}];
@@ -3361,7 +3361,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                   const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
                   await updatePatient(selectedPt,{bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes});
-                  showToast("Saved");
+                  showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
                 }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem",marginBottom:10}}>Save</button>
                 {!showClearConfirm
                   ?<button onClick={()=>setShowClearConfirm(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF,fontSize:"0.85rem"}}>Remove Patient</button>
@@ -3371,6 +3371,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   </div>
                 }
               </>
+            )}
+            {!isLeader&&!seniorMode&&(
+              <button onClick={async()=>{
+                const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
+                await updatePatient(selectedPt,{bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken});
+                showToast("Saved"); setSelectedPt(null);
+              }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem"}}>Save</button>
             )}
           </div>
         </div>
