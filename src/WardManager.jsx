@@ -2711,6 +2711,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [pairingOpen,       setPairingOpen]       = useState(false);
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
+  const [switchConfirm,     setSwitchConfirm]     = useState(null); // {studentName, fromPairingIdx, toPairingIdx, setter}
   const [shadowEditing,     setShadowEditing]     = useState(false);
   const [shadowForm,        setShadowForm]        = useState(null);
   const [shadowReplaceStep, setShadowReplaceStep] = useState(false);
@@ -2890,25 +2891,62 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px 14px"}}>
                 {pairingEdit ? (
                   <div>
-                    <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 12px"}}>Each pairing is a sub-team of 2–3 students who work together. Shadow HOs are excluded automatically.</p>
-                    {pairingForm.map((pair,i)=>(
-                      <div key={i} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:11,padding:"10px 12px",marginBottom:8}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                          <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {i+1}</span>
-                          <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==i))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
-                        </div>
-                        {[0,1,2].map(mi=>(
-                          <div key={mi} style={{display:"flex",gap:8,alignItems:"center",marginBottom:mi<2?6:0}}>
-                            <span style={{fontSize:"0.62rem",color:C.textMuted,fontWeight:600,width:60,flexShrink:0}}>{mi===2?"Member 3 (opt)":`Member ${mi+1}`}</span>
-                            <select value={(pair.members||[])[mi]||""} onChange={e=>{const f=[...pairingForm];const m=[...(f[i].members||[])];m[mi]=e.target.value;f[i]={...f[i],members:m};setPairingForm(f);}} style={{...iS,flex:1,padding:"7px 10px"}}>
-                              <option value="">— None —</option>
-                              {students.filter(s=>s.name).map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
-                            </select>
+                    <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 12px"}}>Each pairing is a sub-team of 2–3 students. Tap names to add or remove. Shadow HOs are grayed out.</p>
+                    {pairingForm.map((pair,i)=>{
+                      const members=(pair.members||[]).filter(Boolean);
+                      // Which students are in OTHER pairings (not this one)
+                      const otherPairingMap = {};
+                      pairingForm.forEach((p,pi)=>{ if(pi!==i)(p.members||[]).filter(Boolean).forEach(m=>{ otherPairingMap[m]=pi; }); });
+                      return (
+                        <div key={i} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {i+1}</span>
+                              {members.length>0&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{members.filter(m=>!shadowHONames.has(m)).join(" × ")}</span>}
+                            </div>
+                            <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==i))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
                           </div>
-                        ))}
-                      </div>
-                    ))}
-                    <button onClick={()=>setPairingForm(f=>[...f,{members:["",""]}])} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Pairing</button>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(76px,1fr))",gap:6}}>
+                            {students.filter(s=>s.name).map(s=>{
+                              const isHO = shadowHONames.has(s.name);
+                              const isSelected = members.includes(s.name);
+                              const inOtherIdx = otherPairingMap[s.name];
+                              const inOther = inOtherIdx!=null;
+                              const atMax = members.length>=3 && !isSelected;
+                              const disabled = isHO || (atMax && !inOther);
+                              return (
+                                <div key={s.name}
+                                  onClick={()=>{
+                                    if (isHO) return;
+                                    const f=[...pairingForm];
+                                    const m=[...(f[i].members||[])].filter(Boolean);
+                                    if (isSelected) {
+                                      f[i]={...f[i],members:m.filter(x=>x!==s.name)};
+                                    } else {
+                                      if (m.length>=3) return;
+                                      // Remove from other pairing if there
+                                      if (inOther) { const g=[...(f[inOtherIdx].members||[])].filter(Boolean); f[inOtherIdx]={...f[inOtherIdx],members:g.filter(x=>x!==s.name)}; }
+                                      f[i]={...f[i],members:[...m,s.name]};
+                                    }
+                                    setPairingForm(f);
+                                  }}
+                                  style={{padding:"8px 4px",borderRadius:8,cursor:disabled?"not-allowed":"pointer",textAlign:"center",transition:"all 0.1s",
+                                    background:isHO?"rgba(0,0,0,0.02)":isSelected?`rgba(${rgb},0.12)`:inOther?"rgba(245,158,11,0.07)":C.surface,
+                                    border:`1px solid ${isHO?C.border:isSelected?theme:inOther?"rgba(245,158,11,0.35)":C.border}`,
+                                    opacity:isHO?0.35:disabled?0.5:1}}>
+                                  <div style={{fontSize:"0.74rem",fontWeight:600,color:isHO?C.textMuted:isSelected?theme:inOther?"rgb(161,104,0)":C.text,lineHeight:1.2,marginBottom:1}}>{s.name.split(" ")[0]}</div>
+                                  {s.group&&<div style={{fontSize:"0.52rem",fontFamily:"monospace",fontWeight:700,color:isHO?C.textMuted:isSelected?theme:C.textMuted}}>{s.group}</div>}
+                                  {isHO&&<div style={{fontSize:"0.46rem",color:C.textMuted,marginTop:1}}>Shadow HO</div>}
+                                  {inOther&&!isSelected&&<div style={{fontSize:"0.46rem",color:"rgb(161,104,0)",marginTop:1}}>P{inOtherIdx+1}</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {members.length>=3&&<div style={{fontSize:"0.65rem",color:C.textMuted,marginTop:8,textAlign:"center"}}>Max 3 members reached</div>}
+                        </div>
+                      );
+                    })}
+                    <button onClick={()=>setPairingForm(f=>[...f,{members:[]}])} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Pairing</button>
                     <div style={{display:"flex",gap:10,marginTop:12}}>
                       <button onClick={()=>setPairingEdit(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
                       <button onClick={()=>savePairings(pairingForm.map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0))} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
@@ -2919,18 +2957,25 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 ) : (
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {pairings.map((pair,i)=>{
-                      const members=pair.members||[];
+                      const members=(pair.members||[]).filter(Boolean);
                       const ptCount=patients.filter(p=>p.pairingIdx===i).length;
+                      const activeMembers=members.filter(m=>!shadowHONames.has(m));
+                      const hoMembers=members.filter(m=>shadowHONames.has(m));
                       return (
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,background:C.bg,border:`1px solid rgba(${rgb},0.15)`}}>
-                          <span style={{fontSize:"0.65rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{i+1}</span>
-                          <div style={{display:"flex",gap:6,flex:1,flexWrap:"wrap"}}>
-                            {members.map(m=>{
-                              const isHO=shadowHONames.has(m);
-                              return <span key={m} style={{fontSize:"0.78rem",fontWeight:500,color:isHO?C.textMuted:C.text,opacity:isHO?0.5:1}}>{m}{isHO&&<span style={{fontSize:"0.6rem"}}> (HO)</span>}</span>;
-                            })}
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:C.bg,border:`1px solid rgba(${rgb},0.15)`}}>
+                          <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{i+1}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:"0.88rem",fontWeight:600,color:C.text,lineHeight:1.3}}>
+                              {activeMembers.map((m,mi)=>(
+                                <span key={m}>
+                                  {mi>0&&<span style={{color:C.textMuted,fontWeight:400,margin:"0 4px"}}>×</span>}
+                                  {m}
+                                </span>
+                              ))}
+                            </div>
+                            {hoMembers.length>0&&<div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>{hoMembers.join(", ")} — Shadow HO</div>}
                           </div>
-                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,borderRadius:5,padding:"2px 7px",flexShrink:0}}>{ptCount}pt</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,borderRadius:5,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{ptCount} pt</span>
                         </div>
                       );
                     })}
@@ -3145,27 +3190,56 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <label style={labelStyle}>Assign Pairing</label>
               {pairings.length===0
                 ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:6}}>No pairings configured yet.</div>
-                : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8,marginTop:8}}>
-                    {pairings.map((pair,pi)=>{
-                      const isSel=newPt.pairingIdx===pi;
-                      const members=(pair.members||[]).filter(m=>m&&!shadowHONames.has(m));
-                      const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
-                      return (
-                        <div key={pi} onClick={()=>setNewPt(p=>({...p,pairingIdx:isSel?null:pi}))}
-                          style={{padding:"10px 8px",borderRadius:11,cursor:"pointer",textAlign:"center",position:"relative",background:isSel?`rgba(${rgb},0.1)`:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
-                          {isSel&&<div style={{position:"absolute",top:4,right:4,width:13,height:13,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={7} color="#fff"/></div>}
-                          <div style={{fontSize:"0.7rem",fontWeight:700,color:isSel?theme:C.text,marginBottom:3}}>Pairing {pi+1}</div>
-                          {members.map(m=><div key={m} style={{fontSize:"0.6rem",color:isSel?theme:C.textSub,lineHeight:1.4}}>{m.split(" ")[0]}</div>)}
-                          <div style={{fontSize:"0.58rem",color:C.textMuted,marginTop:4,background:"rgba(0,0,0,0.05)",borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{ptCount}pt</div>
+                : (()=>{
+                    // Build student → pairingIdx map
+                    const studentPairingMap = {};
+                    pairings.forEach((p,pi)=>(p.members||[]).filter(Boolean).forEach(m=>{ studentPairingMap[m]=pi; }));
+                    const selPairingMembers = newPt.pairingIdx!=null&&pairings[newPt.pairingIdx] ? (pairings[newPt.pairingIdx].members||[]).filter(Boolean) : [];
+                    return (
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginTop:8}}>
+                        {students.filter(s=>s.name).map(s=>{
+                          const isHO = shadowHONames.has(s.name);
+                          const inPairingIdx = studentPairingMap[s.name];
+                          const inCurrentPairing = selPairingMembers.includes(s.name);
+                          const inOtherPairing = inPairingIdx!=null && !inCurrentPairing;
+                          const disabled = isHO;
+                          return (
+                            <div key={s.name}
+                              onClick={()=>{
+                                if (disabled) return;
+                                if (inOtherPairing && !inCurrentPairing) {
+                                  setSwitchConfirm({ studentName:s.name, fromPairingIdx:inPairingIdx, toPairingIdx:inPairingIdx, setter:(pi)=>setNewPt(p=>({...p,pairingIdx:pi})), currentPairingIdx:newPt.pairingIdx });
+                                  return;
+                                }
+                                // Select the pairing that contains this student
+                                const pi = studentPairingMap[s.name];
+                                if (pi!=null) setNewPt(p=>({...p,pairingIdx:inCurrentPairing?null:pi}));
+                              }}
+                              style={{padding:"9px 6px",borderRadius:10,cursor:disabled?"not-allowed":"pointer",textAlign:"center",position:"relative",transition:"all 0.1s",
+                                background:isHO?"rgba(0,0,0,0.03)":inCurrentPairing?`rgba(${rgb},0.1)`:inOtherPairing?"rgba(245,158,11,0.07)":C.surfaceEl,
+                                border:`1px solid ${isHO?C.border:inCurrentPairing?theme:inOtherPairing?"rgba(245,158,11,0.35)":C.border}`,
+                                opacity:isHO?0.4:1}}>
+                              {inCurrentPairing&&<div style={{position:"absolute",top:4,right:4,width:12,height:12,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={7} color="#fff"/></div>}
+                              <div style={{fontSize:"0.78rem",fontWeight:600,color:isHO?C.textMuted:inCurrentPairing?theme:inOtherPairing?"rgb(180,120,0)":C.text,lineHeight:1.2,marginBottom:2}}>{s.name.split(" ")[0]}</div>
+                              {s.group&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",fontWeight:700,color:isHO?C.textMuted:inCurrentPairing?theme:C.textMuted}}>{s.group}</div>}
+                              {isHO&&<div style={{fontSize:"0.5rem",color:C.textMuted,marginTop:2}}>Shadow HO</div>}
+                              {inOtherPairing&&!inCurrentPairing&&<div style={{fontSize:"0.5rem",color:"rgb(180,120,0)",marginTop:2}}>P{inPairingIdx+1}</div>}
+                            </div>
+                          );
+                        })}
+                        <div onClick={()=>setNewPt(p=>({...p,pairingIdx:null}))}
+                          style={{padding:"9px 6px",borderRadius:10,cursor:"pointer",textAlign:"center",background:newPt.pairingIdx===null?"rgba(0,0,0,0.05)":C.bg,border:`1px dashed ${newPt.pairingIdx===null?C.textSub:C.border}`}}>
+                          <div style={{fontSize:"0.7rem",color:C.textMuted}}>None</div>
                         </div>
-                      );
-                    })}
-                    <div onClick={()=>setNewPt(p=>({...p,pairingIdx:null}))}
-                      style={{padding:"10px 8px",borderRadius:11,cursor:"pointer",textAlign:"center",background:newPt.pairingIdx===null?C.surfaceEl:C.bg,border:`1px dashed ${newPt.pairingIdx===null?C.textSub:C.border}`}}>
-                      <div style={{fontSize:"0.7rem",color:C.textMuted}}>None</div>
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()
               }
+              {newPt.pairingIdx!=null&&pairings[newPt.pairingIdx]&&(
+                <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500}}>
+                  {(pairings[newPt.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).join(" × ")}
+                </div>
+              )}
             </div>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowAddPt(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
@@ -3214,22 +3288,53 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {isLeader&&!seniorMode&&pairings.length>0&&(
               <div style={{marginBottom:14}}>
                 <label style={labelStyle}>Pairing</label>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:6,marginTop:6}}>
-                  {pairings.map((pair,pi)=>{
-                    const isSel=ptEdit.pairingIdx===pi;
-                    const members=(pair.members||[]).filter(m=>m&&!shadowHONames.has(m));
-                    return (
-                      <div key={pi} onClick={()=>setPtEdit(p=>({...p,pairingIdx:isSel?null:pi}))}
-                        style={{padding:"8px 6px",borderRadius:9,cursor:"pointer",textAlign:"center",background:isSel?`rgba(${rgb},0.1)`:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`}}>
-                        <div style={{fontSize:"0.68rem",fontWeight:700,color:isSel?theme:C.text}}>P{pi+1}</div>
-                        {members.slice(0,2).map(m=><div key={m} style={{fontSize:"0.55rem",color:isSel?theme:C.textSub}}>{m.split(" ")[0]}</div>)}
+                {(()=>{
+                  const studentPairingMap = {};
+                  pairings.forEach((p,pi)=>(p.members||[]).filter(Boolean).forEach(m=>{ studentPairingMap[m]=pi; }));
+                  const selPairingMembers = ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx] ? (pairings[ptEdit.pairingIdx].members||[]).filter(Boolean) : [];
+                  return (
+                    <>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginTop:6}}>
+                        {students.filter(s=>s.name).map(s=>{
+                          const isHO = shadowHONames.has(s.name);
+                          const inPairingIdx = studentPairingMap[s.name];
+                          const inCurrentPairing = selPairingMembers.includes(s.name);
+                          const inOtherPairing = inPairingIdx!=null && !inCurrentPairing;
+                          return (
+                            <div key={s.name}
+                              onClick={()=>{
+                                if (isHO) return;
+                                if (inOtherPairing) {
+                                  setSwitchConfirm({ studentName:s.name, fromPairingIdx:inPairingIdx, toPairingIdx:inPairingIdx, setter:(pi)=>setPtEdit(p=>({...p,pairingIdx:pi})), currentPairingIdx:ptEdit.pairingIdx });
+                                  return;
+                                }
+                                const pi = studentPairingMap[s.name];
+                                if (pi!=null) setPtEdit(p=>({...p,pairingIdx:inCurrentPairing?null:pi}));
+                              }}
+                              style={{padding:"8px 5px",borderRadius:9,cursor:isHO?"not-allowed":"pointer",textAlign:"center",position:"relative",transition:"all 0.1s",
+                                background:isHO?"rgba(0,0,0,0.03)":inCurrentPairing?`rgba(${rgb},0.1)`:inOtherPairing?"rgba(245,158,11,0.07)":C.surfaceEl,
+                                border:`1px solid ${isHO?C.border:inCurrentPairing?theme:inOtherPairing?"rgba(245,158,11,0.35)":C.border}`,
+                                opacity:isHO?0.4:1}}>
+                              {inCurrentPairing&&<div style={{position:"absolute",top:3,right:3,width:11,height:11,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={6} color="#fff"/></div>}
+                              <div style={{fontSize:"0.72rem",fontWeight:600,color:isHO?C.textMuted:inCurrentPairing?theme:inOtherPairing?"rgb(180,120,0)":C.text,lineHeight:1.2,marginBottom:1}}>{s.name.split(" ")[0]}</div>
+                              {s.group&&<div style={{fontSize:"0.52rem",fontFamily:"monospace",fontWeight:700,color:isHO?C.textMuted:inCurrentPairing?theme:C.textMuted}}>{s.group}</div>}
+                              {isHO&&<div style={{fontSize:"0.48rem",color:C.textMuted,marginTop:1}}>HO</div>}
+                              {inOtherPairing&&!inCurrentPairing&&<div style={{fontSize:"0.48rem",color:"rgb(180,120,0)",marginTop:1}}>P{inPairingIdx+1}</div>}
+                            </div>
+                          );
+                        })}
+                        <div onClick={()=>setPtEdit(p=>({...p,pairingIdx:null}))} style={{padding:"8px 5px",borderRadius:9,cursor:"pointer",textAlign:"center",background:ptEdit.pairingIdx===null?"rgba(0,0,0,0.05)":C.bg,border:`1px dashed ${C.border}`}}>
+                          <div style={{fontSize:"0.65rem",color:C.textMuted}}>None</div>
+                        </div>
                       </div>
-                    );
-                  })}
-                  <div onClick={()=>setPtEdit(p=>({...p,pairingIdx:null}))} style={{padding:"8px 6px",borderRadius:9,cursor:"pointer",textAlign:"center",background:ptEdit.pairingIdx===null?C.surfaceEl:C.bg,border:`1px dashed ${C.border}`}}>
-                    <div style={{fontSize:"0.68rem",color:C.textMuted}}>None</div>
-                  </div>
-                </div>
+                      {ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]&&(
+                        <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500}}>
+                          {(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).join(" × ")}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
             {isLeader&&!seniorMode&&(
@@ -3267,6 +3372,26 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 }
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Pairing switch confirmation */}
+      {switchConfirm&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Switch Pairing?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+              <strong>{switchConfirm.studentName}</strong> is currently in <strong>Pairing {switchConfirm.fromPairingIdx+1}</strong> ({(pairings[switchConfirm.fromPairingIdx]?.members||[]).filter(m=>m&&!shadowHONames.has(m)&&m!==switchConfirm.studentName).join(" × ")||"solo"}).
+              {" "}Move them to the pairing you selected?
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setSwitchConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{
+                switchConfirm.setter(switchConfirm.fromPairingIdx);
+                setSwitchConfirm(null);
+              }} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Switch</button>
+            </div>
           </div>
         </div>
       )}
