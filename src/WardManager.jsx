@@ -2787,18 +2787,22 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   const submitShadowNames = (newForm) => {
     const newNames = newForm.map(h=>h.name).filter(Boolean);
-    const incomingActive = newNames.filter(n=>!shadowHONames.has(n)&&students.some(s=>s.name===n));
+    // Outgoing = leaving shadow duty, returning to active — need a pairing slot
     const outgoingNames = shadowHOs.map(h=>h.name).filter(n=>n&&!newNames.includes(n));
-    if (incomingActive.length>0&&outgoingNames.length>0) {
+    // Incoming = becoming shadow HOs — vacating a pairing slot
+    const incomingNew = newNames.filter(n=>!shadowHONames.has(n)&&students.some(s=>s.name===n));
+    if (outgoingNames.length>0&&incomingNew.length>0) {
       setPendingShadowForm(newForm); setShadowReplaceSelection({}); setShadowReplaceStep(true); setShadowEditing(false);
     } else { applyShadowUpdate(newForm,{}); }
   };
 
   const applyShadowUpdate = async (newForm, replaceMap) => {
+    // replaceMap: { outgoingName -> incomingName }
+    // outgoing person takes the pairing slot of the incoming (who is becoming a shadow HO)
     const newShadowNames = new Set(newForm.map(h=>h.name).filter(Boolean));
     let newPairings = pairings.map(p=>({...p,members:[...(p.members||[])]}));
-    Object.entries(replaceMap).forEach(([incoming,outgoing])=>{
-      newPairings = newPairings.map(p=>({...p,members:(p.members||[]).map(m=>m===outgoing?incoming:m)}));
+    Object.entries(replaceMap).forEach(([outgoing,incoming])=>{
+      newPairings = newPairings.map(p=>({...p,members:(p.members||[]).map(m=>m===incoming?outgoing:m)}));
     });
     const newPatients = patients.map(pt=>{
       if (pt.pairingIdx==null||!newPairings[pt.pairingIdx]) return pt;
@@ -3494,53 +3498,55 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Pairing Replacement</h3>
-            <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted}}>Select who each new Shadow HO replaces in the pairing matrix.</p>
-            {pendingShadowForm.map((ho,i)=>{
-              const newName=ho.name;
-              const wasAlreadyShadow=shadowHOs.some(h=>h.name===newName);
-              if(!newName||wasAlreadyShadow) return null;
-              const outgoingOptions=shadowHOs.map(h=>h.name).filter(n=>n&&!pendingShadowForm.some(h=>h.name===n));
-              if(!outgoingOptions.length) return null;
-              const selected=shadowReplaceSelection[newName];
-              return (
-                <div key={i} style={{marginBottom:20}}>
-                  <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:8}}>
-                    <NameWithGroup name={newName} color={C.text} fontSize="0.72rem" fontWeight={600}/> replaces:
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
-                    {outgoingOptions.map(outName=>{
-                      const isSel=selected===outName;
-                      const alreadyUsed=Object.entries(shadowReplaceSelection).some(([k,v])=>v===outName&&k!==newName);
-                      const g=getGroup(outName);
-                      // Find current pairing mates of outName
-                      const pair=pairings.find(p=>(p.members||[]).includes(outName));
-                      const mates=(pair?.members||[]).filter(m=>m&&m!==outName&&!shadowHONames.has(m));
-                      return (
-                        <div key={outName} onClick={()=>!alreadyUsed&&setShadowReplaceSelection(r=>({...r,[newName]:isSel?undefined:outName}))}
-                          style={{padding:"10px 10px",borderRadius:11,cursor:alreadyUsed?"not-allowed":"pointer",textAlign:"center",background:isSel?`rgba(${rgb},0.1)`:alreadyUsed?"rgba(0,0,0,0.02)":C.surfaceEl,border:`1px solid ${isSel?theme:alreadyUsed?C.border:C.borderMid}`,opacity:alreadyUsed?0.4:1}}>
-                          <div style={{fontSize:"0.88rem",fontWeight:isSel?700:600,color:isSel?theme:C.text,marginBottom:2}}>
-                            {outName.split(" ")[0]}{g&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{g}</sup>}
-                          </div>
-                          {mates.length>0&&(
-                            <div style={{fontSize:"0.58rem",color:isSel?theme:C.textSub,marginTop:3,lineHeight:1.4}}>
-                              {mates.map((m,mi)=>{
-                                const mg=getGroup(m);
-                                return <span key={m}>{mi>0&&<span style={{margin:"0 2px",opacity:0.5}}>×</span>}{m.split(" ")[0]}{mg&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{mg}</sup>}</span>;
-                              })}
+            <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted}}>The students returning from Shadow HO duty need a pairing slot. Select whose slot each one takes.</p>
+            {(()=>{
+              const newNames = new Set(pendingShadowForm.map(h=>h.name).filter(Boolean));
+              // Outgoing = leaving shadow duty, returning to active
+              const outgoing = shadowHOs.map(h=>h.name).filter(n=>n&&!newNames.has(n));
+              // Incoming = active students becoming shadow HOs (vacating a pairing slot)
+              const incoming = [...newNames].filter(n=>!shadowHONames.has(n)&&students.some(s=>s.name===n));
+              return outgoing.map((outName,i)=>{
+                const g = getGroup(outName);
+                const selected = shadowReplaceSelection[outName];
+                return (
+                  <div key={outName} style={{marginBottom:20}}>
+                    <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:8}}>
+                      {outName.split(" ")[0]}{g&&<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:"1px"}}>{g}</sup>} takes the slot of:
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+                      {incoming.map(inName=>{
+                        const isSel = selected===inName;
+                        const alreadyUsed = Object.entries(shadowReplaceSelection).some(([k,v])=>v===inName&&k!==outName);
+                        const ig = getGroup(inName);
+                        // Show inName's current pairing mates
+                        const pair = pairings.find(p=>(p.members||[]).includes(inName));
+                        const mates = (pair?.members||[]).filter(m=>m&&m!==inName&&!shadowHONames.has(m));
+                        return (
+                          <div key={inName} onClick={()=>!alreadyUsed&&setShadowReplaceSelection(r=>({...r,[outName]:isSel?undefined:inName}))}
+                            style={{padding:"10px 10px",borderRadius:11,cursor:alreadyUsed?"not-allowed":"pointer",textAlign:"center",
+                              background:isSel?`rgba(${rgb},0.1)`:alreadyUsed?"rgba(0,0,0,0.02)":C.surfaceEl,
+                              border:`1px solid ${isSel?theme:alreadyUsed?C.border:C.borderMid}`,opacity:alreadyUsed?0.4:1}}>
+                            <div style={{fontSize:"0.88rem",fontWeight:isSel?700:600,color:isSel?theme:C.text,marginBottom:2}}>
+                              {inName.split(" ")[0]}{ig&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{ig}</sup>}
                             </div>
-                          )}
-                          {!mates.length&&<div style={{fontSize:"0.56rem",color:C.textMuted,marginTop:3}}>No pairing</div>}
-                        </div>
-                      );
-                    })}
-                    <div onClick={()=>setShadowReplaceSelection(r=>({...r,[newName]:"__none__"}))}
-                      style={{padding:"10px 8px",borderRadius:11,cursor:"pointer",textAlign:"center",background:selected==="__none__"?C.surfaceEl:C.bg,border:`1px dashed ${selected==="__none__"?C.textSub:C.border}`}}>
-                      <div style={{fontSize:"0.75rem",color:C.textMuted}}>No replacement</div>
+                            {mates.length>0 ? (
+                              <div style={{fontSize:"0.58rem",color:isSel?theme:C.textSub,marginTop:3,lineHeight:1.4}}>
+                                {mates.map((m,mi)=>{const mg=getGroup(m);return<span key={m}>{mi>0&&<span style={{margin:"0 2px",opacity:0.5}}>×</span>}{m.split(" ")[0]}{mg&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{mg}</sup>}</span>;})}
+                              </div>
+                            ) : <div style={{fontSize:"0.56rem",color:C.textMuted,marginTop:3}}>No pairing</div>}
+                          </div>
+                        );
+                      })}
+                      <div onClick={()=>setShadowReplaceSelection(r=>({...r,[outName]:"__none__"}))}
+                        style={{padding:"10px 8px",borderRadius:11,cursor:"pointer",textAlign:"center",
+                          background:selected==="__none__"?C.surfaceEl:C.bg,border:`1px dashed ${selected==="__none__"?C.textSub:C.border}`}}>
+                        <div style={{fontSize:"0.75rem",color:C.textMuted}}>No slot</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            }).filter(Boolean)}
+                );
+              });
+            })()}
             <div style={{display:"flex",gap:10,marginTop:4}}>
               <button onClick={()=>{setShadowReplaceStep(false);setShadowEditing(true);}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Back</button>
               <button onClick={()=>applyShadowUpdate(pendingShadowForm,Object.fromEntries(Object.entries(shadowReplaceSelection).filter(([,v])=>v&&v!=="__none__")))} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Confirm</button>
