@@ -2777,7 +2777,16 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const ageStr=[newPt.ageYears&&`${newPt.ageYears}y`,newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
     const pairingIdx = newPt.pairingIdx!=null ? newPt.pairingIdx : null;
     const members = pairingIdx!=null&&pairings[pairingIdx] ? (pairings[pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)) : [];
-    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo:newPt.bedNo?.trim()||"", section:newPt.section||"", side:newPt.bedNo?newPt.side:"single", pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
+    // Auto-assign floor number if floor patient
+    let bedNo = newPt.bedNo?.trim()||"";
+    let section = newPt.section||"";
+    let isFloor = !!newPt.isFloor;
+    if (isFloor) {
+      const floorCount = patients.filter(p=>p.isFloor).length;
+      bedNo = `F${floorCount+1}`;
+      section = "Floor";
+    }
+    const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:"single", isFloor, pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now() };
     await save({...ward, patients:[...patients,pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
     setShowAddPt(false); showToast("Patient added");
@@ -3015,7 +3024,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
           {sections.length>0&&(
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-              {["all",...sections.map(s=>s.name)].map(sec=>(
+              {["all",...sections.map(s=>s.name),...(patients.some(p=>p.isFloor)?["Floor"]:[])].map(sec=>(
                 <button key={sec} onClick={()=>setSectionFilter(sec)} style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===sec?600:400,cursor:"pointer",fontFamily:SF,background:sectionFilter===sec?theme:C.surface,border:`1px solid ${sectionFilter===sec?theme:C.border}`,color:sectionFilter===sec?"#fff":C.textSub}}>
                   {sec==="all"?"All":sec}
                 </button>
@@ -3024,7 +3033,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           )}
 
           {isLeader&&!seniorMode&&(
-            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
               <Icon name="plus" size={14} color={theme}/> Add Patient
             </button>
           )}
@@ -3237,12 +3246,23 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:8}}>
                 {sections.map(s=>{
                   const isSel=newPt.section===s.name;
-                  return <button key={s.name} onClick={()=>setNewPt(p=>({...p,section:isSel?"":s.name,bedNo:"",side:"single"}))}
+                  return <button key={s.name} onClick={()=>setNewPt(p=>({...p,section:isSel?"":s.name,bedNo:"",side:"single",isFloor:false}))}
                     style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
                       background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>{s.name}</button>;
                 })}
+                {/* Floor pill */}
+                <button onClick={()=>setNewPt(p=>({...p,section:p.isFloor?"":p.section,bedNo:"",side:"single",isFloor:!p.isFloor,...(!p.isFloor?{section:""}:{})}))}
+                  style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:newPt.isFloor?600:400,cursor:"pointer",fontFamily:SF,
+                    background:newPt.isFloor?C.textSub:C.surfaceEl,border:`1px solid ${newPt.isFloor?C.textSub:C.border}`,color:newPt.isFloor?"#fff":C.textSub}}>
+                  Floor
+                </button>
               </div>
-              {newPt.section&&(()=>{
+              {newPt.isFloor&&(
+                <div style={{padding:"8px 12px",background:"rgba(0,0,0,0.04)",border:`1px dashed ${C.borderMid}`,borderRadius:10,fontSize:"0.75rem",color:C.textSub}}>
+                  Will be assigned the next floor number (F1, F2, …) automatically.
+                </div>
+              )}
+              {!newPt.isFloor&&newPt.section&&(()=>{
                 const secSetup=sections.find(s=>s.name===newPt.section);
                 let rangeBeds=[];
                 if(secSetup?.range){const parts=secSetup.range.split("-").map(s=>s.trim());if(parts.length===2&&!isNaN(parts[0])&&!isNaN(parts[1])){for(let n=Number(parts[0]);n<=Number(parts[1]);n++)rangeBeds.push(String(n));}}
