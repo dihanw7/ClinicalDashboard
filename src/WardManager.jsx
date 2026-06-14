@@ -2137,12 +2137,16 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                 {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {shadowHOs.map((ho,i)=>(
-                  <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
-                    <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
-                    <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
-                  </div>
-                ))}
+                {shadowHOs.map((ho,i)=>{
+                  const ptCount=patients.filter(p=>p.shadowHO===ho.name).length;
+                  return (
+                    <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                      <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
+                      <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
+                      {ho.name&&<div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:2}}>{ptCount}pt</div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2693,6 +2697,51 @@ function MedicineAssignModal({ bedNum, side, students, currentAssigned, currentS
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW
 // ══════════════════════════════════════════════════════════════════════════════
+function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt }) {
+  const [expandedHO, setExpandedHO] = useState(null);
+  const activeHOs = shadowHOs.filter(h=>h.name);
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.65rem",color:"#666",letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:8,paddingLeft:2}}>Shadow HOs</div>
+      {activeHOs.map(ho=>{
+        const hoPts = patients.filter(p=>p.shadowHO===ho.name);
+        const isOpen = expandedHO===ho.name;
+        return (
+          <div key={ho.name} style={{background:"#fff",border:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,marginBottom:8,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div onClick={()=>setExpandedHO(isOpen?null:ho.name)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"0.86rem",fontWeight:600,color:"#1a1a1a"}}>{ho.name}</div>
+                <div style={{fontSize:"0.62rem",color:"#888",marginTop:1}}>{ho.post}</div>
+              </div>
+              <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px"}}>{hoPts.length} pt</span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
+                <path d="M3 5l4 4 4-4" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            {isOpen&&(
+              <div style={{borderTop:`1px solid rgba(0,0,0,0.06)`,padding:"6px 14px 10px"}}>
+                {hoPts.length===0
+                  ? <div style={{fontSize:"0.75rem",color:"#999",padding:"6px 0"}}>No patients assigned</div>
+                  : hoPts.map(pt=>(
+                      <div key={pt.id} onClick={()=>onSelectPt(pt)}
+                        style={{display:"flex",alignItems:"baseline",gap:8,padding:"7px 0",borderBottom:`1px solid rgba(0,0,0,0.05)`,cursor:"pointer"}}>
+                        {pt.bedNo&&<span style={{fontSize:"0.68rem",background:`rgba(${rgb},0.08)`,color:theme,borderRadius:5,padding:"1px 6px",fontWeight:600,flexShrink:0}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
+                        <span style={{fontSize:"0.8rem",fontWeight:600,color:"#1a1a1a"}}>{pt.patientName||"Patient"}</span>
+                        {pt.age&&<span style={{fontSize:"0.68rem",color:"#888"}}>{pt.age}</span>}
+                        {pt.diagnosis&&<span style={{fontSize:"0.68rem",color:"#999",fontStyle:"italic",marginLeft:"auto"}}>{pt.diagnosis}</span>}
+                      </div>
+                    ))
+                }
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW — patient-list model, sub-team pairings, bed L/R slots
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3123,6 +3172,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                                 {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
+                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                             {(pt.tags||[]).length>0&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
                                 {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
@@ -3181,6 +3231,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                                 {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
+                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                             {(pt.tags||[]).length>0&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
                                 {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
@@ -3209,6 +3260,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
         {activeTab==="students"&&!seniorMode&&(
           <div>
+            {/* Shadow HO section — expandable */}
+            {shadowHOs.filter(h=>h.name).length>0&&(
+              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} onSelectPt={(pt)=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}/>
+            )}
             {pairings.length===0&&activeStudents.length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</p>
               : <>
