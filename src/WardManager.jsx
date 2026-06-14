@@ -3180,85 +3180,117 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              <div><label style={labelStyle}>BHT</label><input value={newPt.bht} onChange={e=>setNewPt(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/></div>
-              <div><label style={labelStyle}>Bed No.</label><input value={newPt.bedNo} onChange={e=>setNewPt(p=>({...p,bedNo:e.target.value}))} placeholder="e.g. 12" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-            </div>
+
+            {/* BHT + Name */}
+            <div style={{marginBottom:12}}><label style={labelStyle}>BHT</label><input value={newPt.bht} onChange={e=>setNewPt(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/></div>
             <div style={{marginBottom:12}}><label style={labelStyle}>Patient Name</label><input value={newPt.patientName} onChange={e=>setNewPt(p=>({...p,patientName:e.target.value}))} placeholder="Name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
               <div><label style={labelStyle}>Age (years)</label><input type="number" value={newPt.ageYears} onChange={e=>setNewPt(p=>({...p,ageYears:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
               <div><label style={labelStyle}>Age (months)</label><input type="number" value={newPt.ageMonths} onChange={e=>setNewPt(p=>({...p,ageMonths:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              <div><label style={labelStyle}>Section</label>
-                <select value={newPt.section} onChange={e=>setNewPt(p=>({...p,section:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}>
-                  <option value="">— Select —</option>
-                  {sections.map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
-                </select>
+
+            {/* Section & Bed — same as edit sheet */}
+            <div style={{marginBottom:16}}>
+              <label style={labelStyle}>Section & Bed</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:10}}>
+                {sections.map(s=>{
+                  const isSel=newPt.section===s.name;
+                  return <button key={s.name} onClick={()=>setNewPt(p=>({...p,section:s.name,bedNo:"",side:"single"}))}
+                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
+                      background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>{s.name}</button>;
+                })}
               </div>
-              <div><label style={labelStyle}>Bed side</label>
-                <select value={newPt.side} onChange={e=>setNewPt(p=>({...p,side:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}>
-                  <option value="single">Single</option>
-                  <option value="L">Left (L)</option>
-                  <option value="R">Right (R)</option>
-                </select>
-              </div>
+              {newPt.section&&(()=>{
+                const secSetup=sections.find(s=>s.name===newPt.section);
+                let rangeBeds=[];
+                if(secSetup?.range){const parts=secSetup.range.split("-").map(s=>s.trim());if(parts.length===2&&!isNaN(parts[0])&&!isNaN(parts[1])){for(let n=Number(parts[0]);n<=Number(parts[1]);n++)rangeBeds.push(String(n));}}
+                const specBeds=(setup.specialBeds||[]).filter(b=>b.section===newPt.section).map(b=>b.id);
+                const allBeds=[...rangeBeds,...specBeds];
+                const isFullyOccupied=(bed)=>{
+                  const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
+                  return others.some(p=>p.side==="single")||(others.some(p=>p.side==="L")&&others.some(p=>p.side==="R"));
+                };
+                if(allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:8}}>No bed range for this section — edit settings to add one.</div>;
+                return (
+                  <div>
+                    <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Select Bed</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                      {allBeds.map(bed=>{
+                        const isSel=newPt.bedNo===bed;
+                        const full=isFullyOccupied(bed);
+                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:bed,side:"single"}))}
+                          style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
+                            cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                            background:isSel?theme:full?"rgba(0,0,0,0.04)":C.surface,
+                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":C.border}`,
+                            color:isSel?"#fff":full?C.textMuted:C.text,
+                            opacity:full&&!isSel?0.4:1,
+                            boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>{bed}</button>;
+                      })}
+                    </div>
+                    {newPt.bedNo&&(()=>{
+                      const others=patients.filter(p=>p.bedNo===newPt.bedNo&&p.section===newPt.section);
+                      const lTaken=others.some(p=>p.side==="L"||p.side==="single");
+                      const rTaken=others.some(p=>p.side==="R"||p.side==="single");
+                      const hasMate=others.length>0;
+                      return (
+                        <div>
+                          <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Bed Side</div>
+                          <div style={{display:"flex",gap:6}}>
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken},{val:"R",label:"Right",taken:rTaken}].map(({val,label,taken})=>{
+                              const isSel=newPt.side===val;
+                              return <button key={val} onClick={()=>!taken&&setNewPt(p=>({...p,side:val}))}
+                                style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
+                                  cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                                  background:isSel?theme:taken?"rgba(0,0,0,0.03)":C.surfaceEl,
+                                  border:`1px solid ${isSel?theme:taken?"rgba(0,0,0,0.08)":C.border}`,
+                                  color:isSel?"#fff":taken?C.textMuted:C.textSub,
+                                  opacity:taken&&!isSel?0.4:1}}>
+                                {label}{taken&&!isSel?" ✗":""}
+                              </button>;
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
             </div>
+
+            {/* Pairing — same list style as edit sheet */}
             <div style={{marginBottom:16}}>
               <label style={labelStyle}>Assign Pairing</label>
               {pairings.length===0
                 ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:6}}>No pairings configured yet.</div>
-                : (()=>{
-                    // Build student → pairingIdx map
-                    const studentPairingMap = {};
-                    pairings.forEach((p,pi)=>(p.members||[]).filter(Boolean).forEach(m=>{ studentPairingMap[m]=pi; }));
-                    const selPairingMembers = newPt.pairingIdx!=null&&pairings[newPt.pairingIdx] ? (pairings[newPt.pairingIdx].members||[]).filter(Boolean) : [];
-                    return (
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginTop:8}}>
-                        {students.filter(s=>s.name).map(s=>{
-                          const isHO = shadowHONames.has(s.name);
-                          const inPairingIdx = studentPairingMap[s.name];
-                          const inCurrentPairing = selPairingMembers.includes(s.name);
-                          const inOtherPairing = inPairingIdx!=null && !inCurrentPairing;
-                          const disabled = isHO;
-                          return (
-                            <div key={s.name}
-                              onClick={()=>{
-                                if (disabled) return;
-                                if (inOtherPairing && !inCurrentPairing) {
-                                  setSwitchConfirm({ studentName:s.name, fromPairingIdx:inPairingIdx, toPairingIdx:inPairingIdx, setter:(pi)=>setNewPt(p=>({...p,pairingIdx:pi})), currentPairingIdx:newPt.pairingIdx });
-                                  return;
-                                }
-                                // Select the pairing that contains this student
-                                const pi = studentPairingMap[s.name];
-                                if (pi!=null) setNewPt(p=>({...p,pairingIdx:inCurrentPairing?null:pi}));
-                              }}
-                              style={{padding:"9px 6px",borderRadius:10,cursor:disabled?"not-allowed":"pointer",textAlign:"center",position:"relative",transition:"all 0.1s",
-                                background:isHO?"rgba(0,0,0,0.03)":inCurrentPairing?`rgba(${rgb},0.1)`:inOtherPairing?"rgba(245,158,11,0.07)":C.surfaceEl,
-                                border:`1px solid ${isHO?C.border:inCurrentPairing?theme:inOtherPairing?"rgba(245,158,11,0.35)":C.border}`,
-                                opacity:isHO?0.4:1}}>
-                              {inCurrentPairing&&<div style={{position:"absolute",top:4,right:4,width:12,height:12,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={7} color="#fff"/></div>}
-                              <div style={{fontSize:"0.78rem",fontWeight:600,color:isHO?C.textMuted:inCurrentPairing?theme:inOtherPairing?"rgb(180,120,0)":C.text,lineHeight:1.2,marginBottom:2}}>{s.name.split(" ")[0]}</div>
-                              {s.group&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",fontWeight:700,color:isHO?C.textMuted:inCurrentPairing?theme:C.textMuted}}>{s.group}</div>}
-                              {isHO&&<div style={{fontSize:"0.5rem",color:C.textMuted,marginTop:2}}>Shadow HO</div>}
-                              {inOtherPairing&&!inCurrentPairing&&<div style={{fontSize:"0.5rem",color:"rgb(180,120,0)",marginTop:2}}>P{inPairingIdx+1}</div>}
-                            </div>
-                          );
-                        })}
-                        <div onClick={()=>setNewPt(p=>({...p,pairingIdx:null}))}
-                          style={{padding:"9px 6px",borderRadius:10,cursor:"pointer",textAlign:"center",background:newPt.pairingIdx===null?"rgba(0,0,0,0.05)":C.bg,border:`1px dashed ${newPt.pairingIdx===null?C.textSub:C.border}`}}>
-                          <div style={{fontSize:"0.7rem",color:C.textMuted}}>None</div>
+                : <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                    {pairings.map((pair,pi)=>{
+                      const isSel=newPt.pairingIdx===pi;
+                      const members=(pair.members||[]).filter(m=>m&&!shadowHONames.has(m));
+                      const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
+                      return (
+                        <div key={pi} onClick={()=>setNewPt(p=>({...p,pairingIdx:isSel?null:pi}))}
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:11,cursor:"pointer",position:"relative",
+                            background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
+                            border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
+                          <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.12)`:C.surface,border:`1px solid ${isSel?`rgba(${rgb},0.25)`:C.border}`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                          <span style={{flex:1,display:"flex",flexWrap:"wrap",gap:2,alignItems:"baseline"}}>
+                            {members.length>0?members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",color:isSel?theme:C.textMuted,opacity:0.6}}>×</span>}<NameWithGroup name={m} color={isSel?theme:C.text} fontSize="0.88rem" fontWeight={500}/></span>):<span style={{color:C.textMuted,fontSize:"0.88rem"}}>—</span>}
+                          </span>
+                          <span style={{fontSize:"0.65rem",color:isSel?theme:C.textMuted,flexShrink:0,marginRight:isSel?22:0}}>{ptCount} pt</span>
+                          {isSel&&<div style={{position:"absolute",top:"50%",right:10,transform:"translateY(-50%)",width:18,height:18,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={9} color="#fff"/></div>}
                         </div>
-                      </div>
-                    );
-                  })()
+                      );
+                    })}
+                    <div onClick={()=>setNewPt(p=>({...p,pairingIdx:null}))}
+                      style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"9px",borderRadius:11,cursor:"pointer",
+                        background:newPt.pairingIdx===null?"rgba(0,0,0,0.04)":C.bg,border:`1px dashed ${newPt.pairingIdx===null?C.textSub:C.border}`}}>
+                      <span style={{fontSize:"0.75rem",color:C.textMuted}}>None</span>
+                    </div>
+                  </div>
               }
-              {newPt.pairingIdx!=null&&pairings[newPt.pairingIdx]&&(
-                <div style={{marginTop:8,padding:"7px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme,fontWeight:500,display:"flex",flexWrap:"wrap",gap:2,alignItems:"baseline"}}>
-                  {(pairings[newPt.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)).map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.6}}>×</span>}<NameWithGroup name={m} color={theme} fontSize="0.72rem" fontWeight={600}/></span>)}
-                </div>
-              )}
             </div>
+
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowAddPt(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
