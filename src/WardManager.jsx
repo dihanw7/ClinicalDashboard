@@ -3305,6 +3305,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
                   return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
+                const hasSingleOccupant=(bed)=>{
+                  const others=patients.filter(p=>p.bedNo===bed&&p.section===newPt.section);
+                  return others.some(p=>p.side==="single"||!p.side);
+                };
                 if(allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:8}}>No bed range for this section — edit settings to add one.</div>;
                 return (
                   <div>
@@ -3313,19 +3317,21 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel=newPt.bedNo===bed;
                         const full=isFullyOccupied(bed);
-                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:"single"}))}
+                        const hasSingle=hasSingleOccupant(bed);
+                        const hasAny=patients.some(p=>p.bedNo===bed&&p.section===newPt.section);
+                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:"single",_conflictId:null,_conflictSide:null}))}
                           style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                             cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
-                            background:isSel?theme:full?"rgba(0,0,0,0.04)":C.surface,
-                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":C.border}`,
-                            color:isSel?"#fff":full?C.textMuted:C.text,
+                            background:isSel?theme:full?"rgba(0,0,0,0.04)":hasSingle?"rgba(245,158,11,0.08)":C.surface,
+                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasSingle?"rgba(245,158,11,0.4)":C.border}`,
+                            color:isSel?"#fff":full?C.textMuted:hasSingle?"rgb(161,104,0)":C.text,
                             opacity:full&&!isSel?0.4:1,
                             boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>{bed}</button>;
                       })}
                     </div>
                     {newPt.bedNo&&(()=>{
                       const others=patients.filter(p=>p.bedNo===newPt.bedNo&&p.section===newPt.section);
-                      const singleOccupant=others.find(p=>p.side==="single");
+                      const singleOccupant=others.find(p=>p.side==="single"||!p.side);
                       const lTaken=others.some(p=>p.side==="L");
                       const rTaken=others.some(p=>p.side==="R");
                       const hasMate=others.length>0;
