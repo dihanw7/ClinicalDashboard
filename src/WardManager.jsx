@@ -4988,7 +4988,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               </div>
               <div>
                 <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign students</div>
-                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Fair rotation · excludes active Shadow HOs</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Fair rotation · excludes Shadow HOs & absent students</div>
               </div>
             </div>
 
