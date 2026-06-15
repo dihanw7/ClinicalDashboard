@@ -957,18 +957,24 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const handleSetupSubmit = async () => {
     if (!setupForm.wardName||!setupForm.appointmentType||!setupForm.bedCount) { showToast("Fill all fields","error"); return; }
     const count = parseInt(setupForm.bedCount);
-    if (isNaN(count)||count<1||count>80) { showToast("Beds 1–80","error"); return; }
+    if (isNaN(count)||count<1||count>200) { showToast("Beds 1–200","error"); return; }
     const students    = setupForm.students.filter(s=>s.name.trim()).map(s=>({name:s.name.trim(),group:s.group.trim()}));
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
     const shadowHOsSave = (setupForm.shadowHOs||[]);
     const rotationDays = setupForm.rotationDays||7;
     const wardSections = (setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
     const specialBeds  = (setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
+    // Use the max of bedCount and the highest range end across all sections
+    const sectionMax = wardSections.reduce((max,s)=>{
+      if (s.range?.includes("-")) { const end=parseInt(s.range.split("-")[1])||0; return Math.max(max,end); }
+      return max;
+    }, 0);
+    const effectiveCount = Math.max(count, sectionMax);
     const bedObj = {};
-    for (let i=1;i<=count;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+    for (let i=1;i<=effectiveCount;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
     // Add special beds
     specialBeds.forEach(sb=>{ bedObj[sb.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:sb.section }; });
-    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds }, beds:bedObj });
+    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:effectiveCount, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds }, beds:bedObj });
     showToast("Ward configured!");
   };
 
@@ -979,7 +985,17 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const rotationDays = setupForm.rotationDays||7;
     const wardSections = (setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
     const specialBeds  = (setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
-    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds } });
+    // Add any beds implied by section ranges that don't exist yet
+    const sectionMax = wardSections.reduce((max,s)=>{
+      if (s.range?.includes("-")) { const end=parseInt(s.range.split("-")[1])||0; return Math.max(max,end); }
+      return max;
+    }, 0);
+    const existingBeds = { ...beds };
+    for (let i=1;i<=sectionMax;i++) {
+      if (!existingBeds[i]) existingBeds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+    }
+    specialBeds.forEach(sb=>{ if (!existingBeds[sb.id]) existingBeds[sb.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:sb.section }; });
+    await save({ ...ward, beds:existingBeds, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds } });
     setEditMode(false); showToast("Settings saved!");
   };
 
@@ -1274,10 +1290,10 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             </button>
           )}
 
-          {/* Section filter pills */}
+          {/* Section filter pills — deduplicated by name */}
           {sections.length>0 && (
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-              {["all",...sections.map(s=>s.name),...(stats.floor>0?["floor"]:[])].map(sec=>(
+              {["all",...[...new Set(sections.map(s=>s.name))],...(stats.floor>0?["floor"]:[])].map(sec=>(
                 <button key={sec} onClick={()=>setSectionFilter(sec)}
                   style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===sec?600:400,cursor:"pointer",fontFamily:SF,
                     background:sectionFilter===sec?theme:C.surface,
