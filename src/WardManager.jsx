@@ -4418,9 +4418,11 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [shadowEditing, setShadowEditing] = useState(false);
   const [shadowForm, setShadowForm] = useState(null);
+  const [absentExpanded, setAbsentExpanded] = useState(false);
 
   const setup    = ward.setup || {};
   const patients = ward.patients || [];
+  const absentStudents = ward.absentStudents || [];
   const theme    = setup.themeColor || "#007aff";
   const rgb      = hexToRgb(theme);
   const groups   = setup.paedGroups || [];
@@ -4435,15 +4437,23 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
+  // ── Absent student helpers ─────────────────────────────────────────────────
+  const toggleAbsent = async (name) => {
+    const current = ward.absentStudents || [];
+    const updated = current.includes(name) ? current.filter(n=>n!==name) : [...current, name];
+    await save({...ward, absentStudents: updated});
+  };
+
   // ── Auto-assign logic ──────────────────────────────────────────────────────
   const computeAutoAssign = (existingPatients) => {
     const activeShadowHONames = (shadowHOs||[]).map(h=>h.name).filter(Boolean);
     const activeShadowHOSet   = new Set(activeShadowHONames);
+    const absentSet           = new Set(ward.absentStudents || []);
 
     const g0 = groups[0] || {students:[]};
     const g1 = groups[1] || {students:[]};
-    const g0students = (g0.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name));
-    const g1students = (g1.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name));
+    const g0students = (g0.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name) && !absentSet.has(s.name));
+    const g1students = (g1.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name) && !absentSet.has(s.name));
 
     const countPrimary = (name) => existingPatients.filter(p=>p.primary1===name||p.primary2===name).length;
     const countShadow  = (name) => existingPatients.filter(p=>p.shadow===name).length;
@@ -4624,6 +4634,86 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               ))}
             </div>
           </div>
+
+          {/* Absent Students Panel */}
+          {(() => {
+            const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
+            const absentCount = absentStudents.length;
+            return (
+              <div style={{background:C.surface,border:`1px solid ${absentCount>0?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setAbsentExpanded(e=>!e)}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"0.65rem",fontWeight:600,color:absentCount>0?C.red:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Absent Students</span>
+                    {absentCount>0
+                      ? <span style={{fontSize:"0.62rem",fontWeight:700,background:`rgba(${hexToRgb(C.red)},0.1)`,color:C.red,borderRadius:20,padding:"2px 8px"}}>{absentCount} absent</span>
+                      : <span style={{fontSize:"0.62rem",color:C.textMuted}}>None</span>
+                    }
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {isLeader&&!seniorMode&&<span style={{fontSize:"0.68rem",color:theme,fontWeight:500}}>{absentExpanded?"Done":"Select"}</span>}
+                    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" style={{transform:absentExpanded?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}>
+                      <path d="M4 6l4 4 4-4" stroke={C.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Collapsed: show absent name chips */}
+                {!absentExpanded && absentCount>0 && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
+                    {absentStudents.map(name=>(
+                      <span key={name} style={{fontSize:"0.72rem",background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:6,padding:"3px 8px",color:C.red,fontWeight:500}}>
+                        {name.split(" ")[0]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Expanded: leader selector */}
+                {absentExpanded && isLeader && !seniorMode && (
+                  <div style={{marginTop:12}}>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:10}}>Tap a student to mark absent. Absent students are excluded from all patient assignments.</div>
+                    {groups.map((g,gi)=>{
+                      const gStudents=(g.students||[]).filter(s=>s.name&&!shadowHONames.has(s.name));
+                      if(gStudents.length===0) return null;
+                      const gColor=gi===0?"#6366f1":"#f97316";
+                      return (
+                        <div key={gi} style={{marginBottom:10}}>
+                          <div style={{fontSize:"0.6rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>{g.name}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                            {gStudents.map(s=>{
+                              const isAbsent=absentStudents.includes(s.name);
+                              return (
+                                <button key={s.name} onClick={()=>toggleAbsent(s.name)}
+                                  style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,cursor:"pointer",fontFamily:SF,fontSize:"0.75rem",fontWeight:isAbsent?600:400,
+                                    background:isAbsent?`rgba(${hexToRgb(C.red)},0.1)`:C.surfaceEl,
+                                    border:`1px solid ${isAbsent?C.red:C.border}`,
+                                    color:isAbsent?C.red:C.textSub,transition:"all 0.12s"}}>
+                                  {isAbsent&&<Icon name="close" size={10} color={C.red}/>}
+                                  {s.no&&<span style={{fontSize:"0.6rem",fontFamily:"monospace",opacity:0.7}}>{s.no}</span>}
+                                  {s.name.split(" ")[0]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Expanded: read-only view */}
+                {absentExpanded && (!isLeader||seniorMode) && (
+                  absentCount>0
+                    ? <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:10}}>
+                        {absentStudents.map(name=>(
+                          <span key={name} style={{fontSize:"0.75rem",background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:6,padding:"4px 10px",color:C.red,fontWeight:500}}>{name}</span>
+                        ))}
+                      </div>
+                    : <div style={{marginTop:8,fontSize:"0.75rem",color:C.textMuted}}>No students marked absent.</div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Stats */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
@@ -4925,6 +5015,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
                 allStudents={allStudents}
                 patients={patients}
                 shadowHOs={shadowHOs}
+                absentStudents={absentStudents}
                 value={{p1:newPt.manualP1||null, p2:newPt.manualP2||null, shadow:newPt.manualShadow||null}}
                 onChange={(p1,p2,shadow)=>setNewPt(p=>({...p,manualP1:p1,manualP2:p2,manualShadow:shadow}))}
                 theme={theme} rgb={rgb}
@@ -4942,7 +5033,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Paed Assign modal */}
       {assignTarget&&(
-        <PaedAssignModal patient={patients.find(p=>p.id===assignTarget)} groups={groups} allStudents={allStudents} theme={theme} rgb={rgb} patients={patients} shadowHOs={shadowHOs}
+        <PaedAssignModal patient={patients.find(p=>p.id===assignTarget)} groups={groups} allStudents={allStudents} theme={theme} rgb={rgb} patients={patients} shadowHOs={shadowHOs} absentStudents={absentStudents}
           onConfirm={async(p1,p2,sh)=>{ await updatePatient(assignTarget,{primary1:p1,primary2:p2,shadow:sh}); setAssignTarget(null); showToast("Assigned"); }}
           onClose={()=>setAssignTarget(null)}/>
       )}
@@ -5324,7 +5415,8 @@ function PaedStudentTab({ patients, groups, theme, rgb, onSelectPatient }) {
 }
 
 // ── Inline assign picker (used inside add patient modal) ───────────────────────
-function InlineAssignPicker({ groups, allStudents, patients, shadowHOs=[], value, onChange, theme, rgb }) {
+function InlineAssignPicker({ groups, allStudents, patients, shadowHOs=[], absentStudents=[], value, onChange, theme, rgb }) {
+  const absentSet = new Set(absentStudents);
   const g0 = groups[0]||{name:"Group A",students:[]};
   const g1 = groups[1]||{name:"Group B",students:[]};
   const g0s = (g0.students||[]).filter(s=>s.name);
@@ -5338,20 +5430,25 @@ function InlineAssignPicker({ groups, allStudents, patients, shadowHOs=[], value
   const PrimaryChip = ({s, selected, onSelect, color}) => {
     const isSel = selected===s.name;
     const count = countPrimary(s.name);
+    const isAbsent = absentSet.has(s.name);
     return (
-      <div onClick={()=>onSelect(isSel?null:s.name)}
+      <div onClick={isAbsent?undefined:()=>onSelect(isSel?null:s.name)}
         style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
-          padding:"8px 4px",borderRadius:10,cursor:"pointer",textAlign:"center",position:"relative",
-          background:isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
-          border:`1px solid ${isSel?color:C.border}`}}>
-        {isSel&&<div style={{position:"absolute",top:3,right:3,width:13,height:13,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          padding:"8px 4px",borderRadius:10,cursor:isAbsent?"default":"pointer",textAlign:"center",position:"relative",
+          background:isAbsent?"rgba(0,0,0,0.03)":isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
+          border:`1px solid ${isAbsent?"rgba(0,0,0,0.08)":isSel?color:C.border}`,
+          opacity:isAbsent?0.55:1}}>
+        {isSel&&!isAbsent&&<div style={{position:"absolute",top:3,right:3,width:13,height:13,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <Icon name="check" size={7} color="#fff"/>
         </div>}
-        {s.no&&<span style={{fontSize:"0.52rem",color:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
-        <span style={{fontSize:"0.7rem",fontWeight:isSel?700:500,color:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
-        <span style={{fontSize:"0.52rem",color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.05)":"transparent",borderRadius:4,padding:count>0?"1px 3px":"0"}}>
-          {count>0?`${count}pt`:"—"}
-        </span>
+        {s.no&&<span style={{fontSize:"0.52rem",color:isAbsent?C.textMuted:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
+        <span style={{fontSize:"0.7rem",fontWeight:isSel&&!isAbsent?700:500,color:isAbsent?C.textMuted:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
+        {isAbsent
+          ? <span style={{fontSize:"0.5rem",fontWeight:700,color:"#fff",background:C.textMuted,borderRadius:3,padding:"1px 4px",letterSpacing:"0.04em"}}>ABSENT</span>
+          : <span style={{fontSize:"0.52rem",color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.05)":"transparent",borderRadius:4,padding:count>0?"1px 3px":"0"}}>
+              {count>0?`${count}pt`:"—"}
+            </span>
+        }
       </div>
     );
   };
@@ -5409,11 +5506,12 @@ function InlineAssignPicker({ groups, allStudents, patients, shadowHOs=[], value
 }
 
 // ── Paed Assign Modal ──────────────────────────────────────────────────────────
-function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, onClose, patients=[], shadowHOs=[] }) {
+function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, onClose, patients=[], shadowHOs=[], absentStudents=[] }) {
   const [p1, setP1] = useState(patient?.primary1||null);
   const [p2, setP2] = useState(patient?.primary2||null);
   const [sh, setSh] = useState(patient?.shadow||null);
 
+  const absentSet = new Set(absentStudents);
   const g0 = groups[0]||{name:"Group A",students:[]};
   const g1 = groups[1]||{name:"Group B",students:[]};
   const g0s = (g0.students||[]).filter(s=>s.name);
@@ -5426,21 +5524,26 @@ function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, 
   const StudentChip = ({ s, selected, onSelect, color }) => {
     const count = countPrimary(s.name);
     const isSel = selected===s.name;
+    const isAbsent = absentSet.has(s.name);
     return (
-      <div onClick={()=>onSelect(isSel?null:s.name)}
+      <div onClick={isAbsent?undefined:()=>onSelect(isSel?null:s.name)}
         style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
-          padding:"8px 4px",borderRadius:10,cursor:"pointer",textAlign:"center",
-          background:isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
-          border:`1px solid ${isSel?color:C.border}`,
+          padding:"8px 4px",borderRadius:10,cursor:isAbsent?"default":"pointer",textAlign:"center",
+          background:isAbsent?"rgba(0,0,0,0.03)":isSel?`rgba(${hexToRgb(color)},0.12)`:C.surfaceEl,
+          border:`1px solid ${isAbsent?"rgba(0,0,0,0.08)":isSel?color:C.border}`,
+          opacity:isAbsent?0.55:1,
           transition:"all 0.1s",position:"relative"}}>
-        {isSel && <div style={{position:"absolute",top:4,right:4,width:14,height:14,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {isSel && !isAbsent && <div style={{position:"absolute",top:4,right:4,width:14,height:14,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <Icon name="check" size={8} color="#fff"/>
         </div>}
-        {s.no && <span style={{fontSize:"0.55rem",color:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
-        <span style={{fontSize:"0.72rem",fontWeight:isSel?700:500,color:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
-        <span style={{fontSize:"0.55rem",fontWeight:600,color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.06)":"transparent",borderRadius:4,padding:count>0?"1px 4px":"0"}}>
-          {count>0?`${count}pt`:"—"}
-        </span>
+        {s.no && <span style={{fontSize:"0.55rem",color:isAbsent?C.textMuted:isSel?color:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{s.no}</span>}
+        <span style={{fontSize:"0.72rem",fontWeight:isSel&&!isAbsent?700:500,color:isAbsent?C.textMuted:isSel?color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
+        {isAbsent
+          ? <span style={{fontSize:"0.5rem",fontWeight:700,color:"#fff",background:C.textMuted,borderRadius:3,padding:"1px 4px",letterSpacing:"0.04em"}}>ABSENT</span>
+          : <span style={{fontSize:"0.55rem",fontWeight:600,color:count>0?(isSel?color:C.textSub):C.textMuted,background:count>0?"rgba(0,0,0,0.06)":"transparent",borderRadius:4,padding:count>0?"1px 4px":"0"}}>
+              {count>0?`${count}pt`:"—"}
+            </span>
+        }
       </div>
     );
   };
