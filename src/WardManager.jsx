@@ -2086,12 +2086,17 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
           lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 4px"}}>
           {name.split(" ")[0]}
         </span>
-        {/* Minimal counts — e.g. "3p · 1s" or just "—" */}
-        <span style={{fontSize:"0.58rem",color:active?accentColor:C.textMuted,fontWeight:active?600:400}}>
-          {active ? (isPrimary?"primary":"shadow")
-            : (pCount||sCount) ? `${pCount||""}${pCount&&sCount?"·":""}${sCount?""+sCount+"s":""}`.replace(/^·|·$/g,"").trim() || "—"
-            : "—"}
-        </span>
+        {/* Count pills — primary solid, shadow dashed */}
+        <div style={{display:"flex",gap:3,justifyContent:"center",flexWrap:"wrap",marginTop:1}}>
+          {active
+            ? <span style={{fontSize:"0.52rem",fontWeight:700,color:accentColor,letterSpacing:"0.02em"}}>{isPrimary?"primary":"shadow"}</span>
+            : <>
+                {pCount>0 && <span style={{fontSize:"0.58rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.3)`,borderRadius:20,padding:"0px 5px",lineHeight:"16px"}}>{pCount}</span>}
+                {sCount>0 && <span style={{fontSize:"0.58rem",fontWeight:500,color:C.textMuted,background:"rgba(0,0,0,0.03)",border:`1px dashed ${C.borderMid}`,borderRadius:20,padding:"0px 5px",lineHeight:"16px"}}>{sCount}s</span>}
+                {!pCount&&!sCount && <span style={{fontSize:"0.6rem",color:C.border}}>—</span>}
+              </>
+          }
+        </div>
       </div>
     );
   };
