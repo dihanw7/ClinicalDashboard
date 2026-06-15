@@ -1075,7 +1075,11 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setShowChangeBed(false); setView("home"); setSelectedBed(null); showToast(`Moved to Bed ${toBed}`);
   };
   const assignStudents = async (bedNum, assigned, shadows) => {
-    await updateBed(bedNum, { assigned, shadows });
+    const wasEmpty = !(beds[bedNum]?.assigned?.length>0 || beds[bedNum]?.shadows?.length>0);
+    const hasStudents = assigned.length>0 || shadows.length>0;
+    const updates = { assigned, shadows };
+    if (wasEmpty && hasStudents) updates.isNew = true;
+    await updateBed(bedNum, updates);
     setAssignModal(null); setView("home"); setSelectedBed(null); showToast("Students assigned");
   };
   const addFloorPatient = async () => {
