@@ -1370,7 +1370,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             })}
           </div>
         </>}
-        {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb} onBedClick={(bedNum,bed)=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||""}); setView("bed"); }}/>}
+        {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb} getBedSection={getBedSection} onBedClick={(bedNum,bed)=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||""}); setView("bed"); }}/>}
 
         {activeTab==="archive" && (
           <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed} onDelete={deleteArchivedBed}/>
@@ -1909,7 +1909,7 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
   );
 }
 
-function StudentsTab({ beds, bedKeys, students, theme, rgb, onBedClick }) {
+function StudentsTab({ beds, bedKeys, students, theme, rgb, getBedSection, onBedClick }) {
   const [selected, setSelected] = useState(null);
 
   // Build per-student bed lists
@@ -1967,13 +1967,13 @@ function StudentsTab({ beds, bedKeys, students, theme, rgb, onBedClick }) {
                       {sb.primary.length>0 && <>
                         <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Primary</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8,marginBottom:sb.shadow.length>0?12:0}}>
-                          {sb.primary.map(({bedNum,bed})=><DefaultBedTileSmall key={bedNum} bedNum={bedNum} bed={bed} theme={theme} rgb={rgb} onClick={onBedClick}/>)}
+                          {sb.primary.map(({bedNum,bed})=><DefaultBedTileSmall key={bedNum} bedNum={bedNum} bed={bed} theme={theme} rgb={rgb} section={getBedSection?getBedSection(bedNum):null} onClick={onBedClick}/>)}
                         </div>
                       </>}
                       {sb.shadow.length>0 && <>
                         <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Shadow</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-                          {sb.shadow.map(({bedNum,bed})=><DefaultBedTileSmall key={bedNum} bedNum={bedNum} bed={bed} theme={theme} rgb={rgb} muted onClick={onBedClick}/>)}
+                          {sb.shadow.map(({bedNum,bed})=><DefaultBedTileSmall key={bedNum} bedNum={bedNum} bed={bed} theme={theme} rgb={rgb} section={getBedSection?getBedSection(bedNum):null} muted onClick={onBedClick}/>)}
                         </div>
                       </>}
                     </>
@@ -1988,8 +1988,9 @@ function StudentsTab({ beds, bedKeys, students, theme, rgb, onBedClick }) {
 }
 
 // Small bed tile used in Students tab expanded view (Paed-style) — clickable
-function DefaultBedTileSmall({ bedNum, bed, theme, rgb, muted, onClick }) {
+function DefaultBedTileSmall({ bedNum, bed, theme, rgb, muted, section, onClick }) {
   const filled = bed.diagnosis||bed.consultant||bed.notes;
+  const label = bed.isFloor ? "Floor" : section || "Bed";
   return (
     <div
       onClick={onClick ? ()=>onClick(bedNum,bed) : undefined}
@@ -2009,7 +2010,7 @@ function DefaultBedTileSmall({ bedNum, bed, theme, rgb, muted, onClick }) {
         {bed.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
         {bed.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
       </div>
-      <div style={{fontSize:"0.52rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{bed.isFloor?"Floor":"Bed"}</div>
+      <div style={{fontSize:"0.52rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{label}</div>
       <div style={{fontSize:"1.1rem",fontWeight:700,color:muted?C.textMuted:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:3}}>{bedNum}</div>
       {bed.consultant&&<div style={{fontSize:"0.56rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{bed.consultant}</div>}
       {bed.diagnosis&&<div style={{fontSize:"0.58rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bed.diagnosis}</div>}
