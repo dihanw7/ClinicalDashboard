@@ -3125,6 +3125,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowReplaceStep, setShadowReplaceStep] = useState(false);
   const [pendingShadowForm, setPendingShadowForm] = useState(null);
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
+  const [searchQuery,       setSearchQuery]       = useState("");
 
   const setup       = ward.setup    || {};
   const patients    = ward.patients || [];
@@ -3263,7 +3264,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setPairingEdit(false); showToast("Pairings saved");
   };
 
-  const filteredPatients = sectionFilter==="all" ? patients : patients.filter(p=>p.section===sectionFilter);
+  const searchActive = searchQuery.trim().length > 0;
+  const searchLower  = searchQuery.trim().toLowerCase();
+  const sectionFiltered = sectionFilter==="all" ? patients : patients.filter(p=>p.section===sectionFilter);
+  const filteredPatients = searchActive
+    ? patients.filter(p=>(p.patientName||"").toLowerCase().includes(searchLower)||(p.bht||"").toLowerCase().includes(searchLower))
+    : sectionFiltered;
   const sectionNames = sections.map(s=>s.name);
 
   const bedMap = {};
@@ -3477,6 +3483,32 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   {sec==="all"?"All":sec}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div style={{position:"relative",marginBottom:14}}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
+              <circle cx="8.5" cy="8.5" r="5.5" stroke={C.textMuted} strokeWidth="1.6"/>
+              <path d="M14 14l3 3" stroke={C.textMuted} strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e=>setSearchQuery(e.target.value)}
+              placeholder="Search patients by name or BHT…"
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 34px 9px 32px",fontSize:"0.82rem",fontFamily:SF,background:C.surface,border:`1px solid ${searchActive?theme:C.border}`,borderRadius:12,color:C.text,outline:"none",boxShadow:searchActive?`0 0 0 3px rgba(${rgb},0.12)`:C.shadow,transition:"border-color 0.15s,box-shadow 0.15s"}}
+            />
+            {searchActive&&(
+              <button onClick={()=>setSearchQuery("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill={C.border}/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round"/></svg>
+              </button>
+            )}
+          </div>
+
+          {searchActive&&(
+            <div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,paddingLeft:2}}>
+              {filteredPatients.length===0?"No patients found":`${filteredPatients.length} result${filteredPatients.length!==1?"s":""} across all sections`}
             </div>
           )}
 
