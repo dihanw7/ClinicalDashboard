@@ -2036,6 +2036,9 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
   const isShadow   = s => shadows.some(x=>getName(x)===getName(s));
   const isShadowHO = s => shadowHONames.has(getName(s));
 
+  // Count how many beds each student has (for the pt count under name)
+  // We don't have bed context here so we just show selected state
+
   const handlePrimary = (s) => {
     if (isShadowHO(s)) { setBlockedMsg("Shadow HOs cannot be assigned as primary"); setTimeout(()=>setBlockedMsg(null),2000); return; }
     if(isAssigned(s)){setAssigned([]);return;} setShadows(sh=>sh.filter(x=>getName(x)!==getName(s))); setAssigned([s]);
@@ -2045,54 +2048,58 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
     if(isShadow(s)){setShadows([]);return;} setAssigned(a=>a.filter(x=>getName(x)!==getName(s))); setShadows([s]);
   };
 
-  // Split students: non-HO eligible, HO-only
-  const eligible = sorted.filter(s=>!isShadowHO(s));
+  const eligible   = sorted.filter(s=>!isShadowHO(s));
   const hoStudents = sorted.filter(s=>isShadowHO(s));
 
-  const StudentCard = ({ s, zone }) => {
-    const ip=isAssigned(s), is=isShadow(s), isHO=isShadowHO(s);
+  // Chip matching the screenshot exactly
+  const Chip = ({ s, zone }) => {
+    const ip=isAssigned(s), is=isShadow(s);
     const active = zone==="primary" ? ip : is;
-    const accentBg = zone==="primary" ? `rgba(${rgb},0.1)` : "rgba(0,0,0,0.04)";
-    const accentBorder = zone==="primary" ? `rgba(${rgb},0.35)` : C.borderMid;
-    const accentColor = zone==="primary" ? theme : C.textSub;
-    const handler = zone==="primary" ? ()=>handlePrimary(s) : ()=>handleShadow(s);
+    const isPrimary = zone==="primary";
+    const accentColor = isPrimary ? theme : C.textSub;
+    const accentRgb   = isPrimary ? rgb : hexToRgb("#3a3a44");
+    const handler = isPrimary ? ()=>handlePrimary(s) : ()=>handleShadow(s);
+    const grp = getGroup(s);
+
     return (
-      <button
-        onClick={isHO?undefined:handler}
-        disabled={isHO}
+      <div onClick={handler}
         style={{
-          display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-          padding:"10px 6px", borderRadius:12, cursor:isHO?"not-allowed":"pointer",
-          fontFamily:SF, textAlign:"center", transition:"all 0.12s", gap:3,
-          background: active ? (zone==="primary"?`rgba(${rgb},0.12)`:C.surfaceEl) : C.surface,
-          border: `${active?"2px":"1px"} ${zone==="shadow"&&active?"dashed":"solid"} ${active?accentBorder:C.border}`,
-          color: active ? accentColor : C.textSub,
-          opacity: isHO ? 0.35 : 1,
-          boxShadow: active ? (zone==="primary"?`0 4px 14px rgba(${rgb},0.18)`:"none") : "0 2px 8px rgba(0,0,0,0.05)",
-        }}
-      >
-        <div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-          background:active?(zone==="primary"?theme:"rgba(0,0,0,0.08)"):C.surfaceEl,
-          border:`1px solid ${active?(zone==="primary"?theme:C.borderMid):C.border}`,
-          marginBottom:2, flexShrink:0}}>
-          <Icon name={zone==="primary"?"user":"shadow"} size={13} color={active?(zone==="primary"?"#fff":C.textSub):C.textMuted}/>
-        </div>
-        <div style={{fontSize:"0.72rem",fontWeight:active?700:500,lineHeight:1.2,letterSpacing:"-0.01em",color:active?accentColor:C.text,
-          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 2px"}}>
+          position:"relative", display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center", gap:3,
+          padding:"12px 6px 10px", borderRadius:14, cursor:"pointer",
+          textAlign:"center", transition:"all 0.12s", userSelect:"none",
+          background: active ? `rgba(${accentRgb},0.08)` : C.surfaceEl,
+          border: `1px solid ${active ? accentColor : C.border}`,
+          boxShadow: active ? `0 0 0 1px ${accentColor}` : "none",
+        }}>
+        {/* Checkmark badge top-right when active */}
+        {active && (
+          <div style={{position:"absolute",top:5,right:5,width:16,height:16,borderRadius:"50%",
+            background:accentColor,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Icon name="check" size={9} color="#fff"/>
+          </div>
+        )}
+        {/* Group number */}
+        {grp && <span style={{fontSize:"0.58rem",color:active?accentColor:C.textMuted,fontFamily:"monospace",fontWeight:600,lineHeight:1}}>{grp}</span>}
+        {/* Name */}
+        <span style={{fontSize:"0.78rem",fontWeight:active?700:500,color:active?accentColor:C.text,
+          lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 4px"}}>
           {getName(s).split(" ")[0]}
-        </div>
-        {getGroup(s) && <div style={{fontSize:"0.55rem",color:active?accentColor:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{getGroup(s)}</div>}
-        {active && <div style={{fontSize:"0.52rem",letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:700,color:active?accentColor:C.textMuted,marginTop:1}}>{zone==="primary"?"●":"◌"}</div>}
-      </button>
+        </span>
+        {/* Selected indicator */}
+        <span style={{fontSize:"0.6rem",color:active?accentColor:C.textMuted,fontWeight:500}}>
+          {active ? (isPrimary?"primary":"shadow") : "—"}
+        </span>
+      </div>
     );
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
+      <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"82vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
         <h3 style={{margin:"0 0 4px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}</h3>
-        <p style={{margin:"0 0 14px",fontSize:"0.74rem",color:C.textMuted}}>Tap a card to assign. One primary and one shadow per bed.</p>
+        <p style={{margin:"0 0 16px",fontSize:"0.74rem",color:C.textMuted}}>Tap to select one primary and one shadow.</p>
 
         {blockedMsg && (
           <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:"0.78rem",color:C.red,textAlign:"center"}}>
@@ -2102,32 +2109,29 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
 
         {sorted.length===0
           ? <p style={{color:C.textMuted,fontSize:"0.82rem",textAlign:"center",padding:"20px 0"}}>No students in setup.</p>
-          : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-
-              {/* Primary zone */}
-              <div>
+          : <>
+              {/* Primary grid */}
+              <div style={{marginBottom:20}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                  <div style={{width:10,height:10,borderRadius:3,background:`rgba(${rgb},0.25)`,border:`1px solid rgba(${rgb},0.5)`}}/>
                   <span style={{fontSize:"0.65rem",color:theme,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Primary</span>
-                  {assigned.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:"auto"}}>✓ {getName(assigned[0]).split(" ")[0]}</span>}
+                  {assigned.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:4}}>· {getName(assigned[0])}</span>}
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
-                  {eligible.map(s=><StudentCard key={getName(s)} s={s} zone="primary"/>)}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                  {eligible.map(s=><Chip key={getName(s)} s={s} zone="primary"/>)}
                 </div>
               </div>
 
-              {/* Shadow zone */}
-              <div>
+              {/* Shadow grid */}
+              <div style={{marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                  <div style={{width:10,height:10,borderRadius:3,border:`1px dashed ${C.borderMid}`}}/>
                   <span style={{fontSize:"0.65rem",color:C.textSub,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Shadow</span>
-                  {shadows.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:"auto"}}>✓ {getName(shadows[0]).split(" ")[0]}</span>}
+                  {shadows.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:4}}>· {getName(shadows[0])}</span>}
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
-                  {eligible.map(s=><StudentCard key={getName(s)} s={s} zone="shadow"/>)}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                  {eligible.map(s=><Chip key={getName(s)} s={s} zone="shadow"/>)}
                 </div>
               </div>
-            </div>
+            </>
         }
 
         {/* Shadow HOs note */}
@@ -2138,7 +2142,7 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
           </div>
         )}
 
-        <div style={{display:"flex",gap:10,marginTop:18}}>
+        <div style={{display:"flex",gap:10,marginTop:20}}>
           <button onClick={onClose} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontSize:"0.88rem",fontFamily:SF}}>Cancel</button>
           <button onClick={()=>onConfirm(assigned,shadows)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontSize:"0.88rem",fontFamily:SF}}>Confirm</button>
         </div>
