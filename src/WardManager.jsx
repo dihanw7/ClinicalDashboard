@@ -1503,7 +1503,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       )}
 
       {/* Assign modal */}
-      {assignModal && <AssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} shadowHOs={shadowHOs} theme={theme} rgb={rgb} onConfirm={(a,s)=>assignStudents(assignModal,a,s)} onClose={()=>setAssignModal(null)}/>}
+      {assignModal && <AssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} shadowHOs={shadowHOs} theme={theme} rgb={rgb} beds={beds} onConfirm={(a,s)=>assignStudents(assignModal,a,s)} onClose={()=>setAssignModal(null)}/>}
 
       {/* Shadow HO edit modal */}
       {shadowEditing && shadowForm && (
@@ -2023,7 +2023,7 @@ function BedPill({ bedNum, bed, type, rgb, theme }) {
   );
 }
 
-function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadowHOs=[], theme, rgb, onConfirm, onClose }) {
+function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadowHOs=[], theme, rgb, beds={}, onConfirm, onClose }) {
   const [assigned, setAssigned] = useState(currentAssigned);
   const [shadows,  setShadows]  = useState(currentShadows);
   const [blockedMsg, setBlockedMsg] = useState(null);
@@ -2036,8 +2036,9 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
   const isShadow   = s => shadows.some(x=>getName(x)===getName(s));
   const isShadowHO = s => shadowHONames.has(getName(s));
 
-  // Count how many beds each student has (for the pt count under name)
-  // We don't have bed context here so we just show selected state
+  // Count across all beds (excluding the current bed being assigned)
+  const countPrimary = (name) => Object.entries(beds).filter(([k])=>k!==String(bedNum)).filter(([,b])=>(b.assigned||[]).some(x=>(typeof x==="object"?x.name:x)===name)).length;
+  const countShadow  = (name) => Object.entries(beds).filter(([k])=>k!==String(bedNum)).filter(([,b])=>(b.shadows||[]).some(x=>(typeof x==="object"?x.name:x)===name)).length;
 
   const handlePrimary = (s) => {
     if (isShadowHO(s)) { setBlockedMsg("Shadow HOs cannot be assigned as primary"); setTimeout(()=>setBlockedMsg(null),2000); return; }
@@ -2051,7 +2052,6 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
   const eligible   = sorted.filter(s=>!isShadowHO(s));
   const hoStudents = sorted.filter(s=>isShadowHO(s));
 
-  // Chip matching the screenshot exactly
   const Chip = ({ s, zone }) => {
     const ip=isAssigned(s), is=isShadow(s);
     const active = zone==="primary" ? ip : is;
@@ -2060,6 +2060,9 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
     const accentRgb   = isPrimary ? rgb : hexToRgb("#3a3a44");
     const handler = isPrimary ? ()=>handlePrimary(s) : ()=>handleShadow(s);
     const grp = getGroup(s);
+    const name = getName(s);
+    const pCount = countPrimary(name);
+    const sCount = countShadow(name);
 
     return (
       <div onClick={handler}
@@ -2072,23 +2075,22 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
           border: `1px solid ${active ? accentColor : C.border}`,
           boxShadow: active ? `0 0 0 1px ${accentColor}` : "none",
         }}>
-        {/* Checkmark badge top-right when active */}
         {active && (
           <div style={{position:"absolute",top:5,right:5,width:16,height:16,borderRadius:"50%",
             background:accentColor,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <Icon name="check" size={9} color="#fff"/>
           </div>
         )}
-        {/* Group number */}
         {grp && <span style={{fontSize:"0.58rem",color:active?accentColor:C.textMuted,fontFamily:"monospace",fontWeight:600,lineHeight:1}}>{grp}</span>}
-        {/* Name */}
         <span style={{fontSize:"0.78rem",fontWeight:active?700:500,color:active?accentColor:C.text,
           lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 4px"}}>
-          {getName(s).split(" ")[0]}
+          {name.split(" ")[0]}
         </span>
-        {/* Selected indicator */}
-        <span style={{fontSize:"0.6rem",color:active?accentColor:C.textMuted,fontWeight:500}}>
-          {active ? (isPrimary?"primary":"shadow") : "—"}
+        {/* Minimal counts — e.g. "3p · 1s" or just "—" */}
+        <span style={{fontSize:"0.58rem",color:active?accentColor:C.textMuted,fontWeight:active?600:400}}>
+          {active ? (isPrimary?"primary":"shadow")
+            : (pCount||sCount) ? `${pCount||""}${pCount&&sCount?"·":""}${sCount?""+sCount+"s":""}`.replace(/^·|·$/g,"").trim() || "—"
+            : "—"}
         </span>
       </div>
     );
@@ -2110,7 +2112,6 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
         {sorted.length===0
           ? <p style={{color:C.textMuted,fontSize:"0.82rem",textAlign:"center",padding:"20px 0"}}>No students in setup.</p>
           : <>
-              {/* Primary grid */}
               <div style={{marginBottom:20}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
                   <span style={{fontSize:"0.65rem",color:theme,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Primary</span>
@@ -2120,8 +2121,6 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
                   {eligible.map(s=><Chip key={getName(s)} s={s} zone="primary"/>)}
                 </div>
               </div>
-
-              {/* Shadow grid */}
               <div style={{marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
                   <span style={{fontSize:"0.65rem",color:C.textSub,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Shadow</span>
@@ -2134,7 +2133,6 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
             </>
         }
 
-        {/* Shadow HOs note */}
         {hoStudents.length>0 && (
           <div style={{marginTop:14,padding:"8px 12px",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:9,fontSize:"0.72rem",color:C.textMuted}}>
             <span style={{fontWeight:600}}>Shadow HOs (not assignable here):</span>{" "}
