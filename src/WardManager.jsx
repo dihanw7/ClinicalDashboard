@@ -937,15 +937,17 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showReset,  setShowReset]  = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
+  const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}], wardSections:[], specialBeds:[] });
   const [shadowEditing, setShadowEditing] = useState(false);
   const [shadowForm, setShadowForm] = useState(null);
+  const [sectionFilter, setSectionFilter] = useState("all");
 
   const setup  = ward.setup || {};
   const beds   = ward.beds  || {};
   const theme  = setup.themeColor || "#007aff";
   const rgb    = hexToRgb(theme);
-  const shadowHOs = setup.shadowHOs || [];
+  const shadowHOs  = setup.shadowHOs   || [];
+  const sections   = setup.wardSections || [];
 
   const save = useCallback(async (newWard) => {
     await saveWard(newWard);
@@ -960,9 +962,13 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
     const shadowHOsSave = (setupForm.shadowHOs||[]);
     const rotationDays = setupForm.rotationDays||7;
+    const wardSections = (setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
+    const specialBeds  = (setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
     const bedObj = {};
     for (let i=1;i<=count;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays }, beds:bedObj });
+    // Add special beds
+    specialBeds.forEach(sb=>{ bedObj[sb.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:sb.section }; });
+    await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:count, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds }, beds:bedObj });
     showToast("Ward configured!");
   };
 
@@ -971,7 +977,9 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const consultants = setupForm.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
     const shadowHOsSave = (setupForm.shadowHOs||[]);
     const rotationDays = setupForm.rotationDays||7;
-    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays } });
+    const wardSections = (setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
+    const specialBeds  = (setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
+    await save({ ...ward, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds } });
     setEditMode(false); showToast("Settings saved!");
   };
 
@@ -1077,6 +1085,27 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     if(af&&!bf)return 1; if(!af&&bf)return -1;
     if(!af&&!bf)return Number(a)-Number(b);
     return a.localeCompare(b);
+  });
+
+  // Section helpers (like Medicine)
+  const getBedSection = (bedNum) => {
+    if (beds[bedNum]?.specialBedSection) return beds[bedNum].specialBedSection;
+    const n = Number(bedNum);
+    if (isNaN(n)) return null;
+    for (const sec of sections) {
+      const rangeStr = sec.range||"";
+      if (rangeStr.includes("-")) {
+        const [start,end] = rangeStr.split("-").map(Number);
+        if (n>=start && n<=end) return sec.name;
+      }
+    }
+    return null;
+  };
+
+  const filteredBedKeys = sectionFilter==="all" ? bedKeys : bedKeys.filter(k=>{
+    if (beds[k]?.isFloor) return sectionFilter==="floor";
+    const sec = getBedSection(k);
+    return sec===sectionFilter || (!sec && sectionFilter==="other");
   });
   const stats = {
     newPt:        bedKeys.filter(k=>beds[k]?.isNew).length,
@@ -1184,6 +1213,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 consultants: setup.consultants?.length ? setup.consultants.map(c=>typeof c==="string"?{name:c,color:"#6366f1"}:c) : [{name:"",color:"#6366f1"}],
                 shadowHOs: (setup.shadowHOs||[]).map(h=>({...h})),
                 rotationDays: setup.rotationDays||7,
+                wardSections: (setup.wardSections||[]).map(s=>({...s})),
+                specialBeds: (setup.specialBeds||[]).map(b=>({...b})),
               });
             }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
@@ -1243,9 +1274,24 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             </button>
           )}
 
+          {/* Section filter pills */}
+          {sections.length>0 && (
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+              {["all",...sections.map(s=>s.name),...(stats.floor>0?["floor"]:[])].map(sec=>(
+                <button key={sec} onClick={()=>setSectionFilter(sec)}
+                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===sec?600:400,cursor:"pointer",fontFamily:SF,
+                    background:sectionFilter===sec?theme:C.surface,
+                    border:`1px solid ${sectionFilter===sec?theme:C.border}`,
+                    color:sectionFilter===sec?"#fff":C.textSub}}>
+                  {sec==="all"?"All Beds":sec==="floor"?"Floor":sec}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Bed grid */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
-            {bedKeys.map(bedNum=>{
+            {filteredBedKeys.map(bedNum=>{
               const bed = beds[bedNum];
               const hasAssigned=bed.assigned?.length>0||bed.assignedL?.length>0||bed.assignedR?.length>0;
               const hasShadow  =bed.shadows?.length>0||bed.shadowsL?.length>0||bed.shadowsR?.length>0;
@@ -1263,7 +1309,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     {bed.historyTaken && <Icon name="history" size={11} color={C.green}/>}
                     {bed.isNew && <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
                   </div>
-                  <div style={{fontSize:"0.58rem",color:C.textMuted,marginBottom:3,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":"Bed"}</div>
+                  <div style={{fontSize:"0.58rem",color:C.textMuted,marginBottom:3,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":getBedSection(bedNum)||"Bed"}</div>
                   <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em"}}>{bedNum}</div>
                   {bed.consultant && <div style={{fontSize:"0.62rem",color:C.textSub,marginTop:5,fontWeight:500}}>{bed.consultant}</div>}
                   {bed.diagnosis && <div style={{fontSize:"0.65rem",color:C.text,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{bed.diagnosis}</div>}
@@ -1516,6 +1562,8 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
   const students    = form.students    || [{name:"",group:""}];
   const consultants = form.consultants || [{name:"",color:"#6366f1"}];
   const shadowHOs   = form.shadowHOs   || [];
+  const wardSections = form.wardSections || [];
+  const specialBeds  = form.specialBeds  || [];
   const rotationDays = form.rotationDays || 7;
   const addField      = (f)     => setForm(p => ({ ...p, [f]: f==="students" ? [...(p[f]||[]),{name:"",group:""}] : [...(p[f]||[]),{name:"",color:"#6366f1"}] }));
   const removeField   = (f,i)   => setForm(p => ({ ...p, [f]:(p[f]||[]).filter((_,idx)=>idx!==i) }));
@@ -1532,7 +1580,15 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
     }
   };
 
+  const addSection    = () => setForm(f=>({...f, wardSections:[...(f.wardSections||[]),{name:"",range:""}]}));
+  const removeSection = (i) => setForm(f=>({...f, wardSections:(f.wardSections||[]).filter((_,idx)=>idx!==i)}));
+  const updateSection = (i,k,v) => setForm(f=>{ const a=[...(f.wardSections||[])]; a[i]={...a[i],[k]:v}; return {...f,wardSections:a}; });
+  const addSpecialBed    = () => setForm(f=>({...f, specialBeds:[...(f.specialBeds||[]),{id:"",section:""}]}));
+  const removeSpecialBed = (i) => setForm(f=>({...f, specialBeds:(f.specialBeds||[]).filter((_,idx)=>idx!==i)}));
+  const updateSpecialBed = (i,k,v) => setForm(f=>{ const a=[...(f.specialBeds||[])]; a[i]={...a[i],[k]:v}; return {...f,specialBeds:a}; });
+
   const studentNames = students.map(s=>s.name).filter(Boolean);
+  const sectionNames = wardSections.map(s=>s.name).filter(Boolean);
 
   return (
     <div>
@@ -1595,6 +1651,42 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
           </div>
         )}
       </div>
+
+      {/* Ward Sections */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Ward Sections <span style={{color:C.textMuted,fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Group beds into sections e.g. Elective (1–10), Emergency (11–20). Used as filter pills on the ward tab.</p>
+        {wardSections.map((sec,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input value={sec.name} onChange={e=>updateSection(i,"name",e.target.value)} placeholder="Section name" style={{...iS,flex:2,padding:"10px 12px"}}/>
+            <input value={sec.range} onChange={e=>updateSection(i,"range",e.target.value)} placeholder="e.g. 1-10" style={{...iS,width:80,padding:"10px 10px",textAlign:"center",flexShrink:0}}/>
+            <button onClick={()=>removeSection(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>
+          </div>
+        ))}
+        <div style={{marginTop:4,fontSize:"0.62rem",color:C.textMuted,paddingLeft:2}}>Format: start–end e.g. <code>1-10</code> or <code>11-20</code></div>
+        <button onClick={addSection} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Section</button>
+      </div>
+
+      {/* Special Beds */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Special Beds <span style={{color:C.textMuted,fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Named beds outside normal numbering e.g. HDU1, Side Room A. Assign to a section for the filter to work.</p>
+        {specialBeds.map((bed,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input value={bed.id} onChange={e=>updateSpecialBed(i,"id",e.target.value)} placeholder="Bed ID e.g. HDU1" style={{...iS,flex:1,padding:"10px 12px"}}/>
+            {sectionNames.length>0
+              ? <select value={bed.section} onChange={e=>updateSpecialBed(i,"section",e.target.value)} style={{...iS,flex:1,padding:"10px 10px"}}>
+                  <option value="">No section</option>
+                  {sectionNames.map(n=><option key={n} value={n}>{n}</option>)}
+                </select>
+              : <input value={bed.section} onChange={e=>updateSpecialBed(i,"section",e.target.value)} placeholder="Section (optional)" style={{...iS,flex:1,padding:"10px 12px"}}/>
+            }
+            <button onClick={()=>removeSpecialBed(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>
+          </div>
+        ))}
+        <button onClick={addSpecialBed} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Special Bed</button>
+      </div>
+
       {/* Students */}
       <div style={{marginBottom:22}}>
         <label style={labelStyle}>Students</label>
@@ -1774,6 +1866,8 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
 function StudentsTab({ beds, bedKeys, students, theme, rgb }) {
   const [selected, setSelected] = useState(null);
   const sorted = [...students].sort((a,b)=>{const ag=parseInt(a.group)||999,bg=parseInt(b.group)||999;return ag!==bg?ag-bg:a.name.localeCompare(b.name);});
+
+  // Build per-student bed lists
   const studentBeds = {};
   sorted.forEach(s=>{ studentBeds[s.name]={primary:[],shadow:[]}; });
   bedKeys.forEach(bedNum=>{
@@ -1784,36 +1878,109 @@ function StudentsTab({ beds, bedKeys, students, theme, rgb }) {
 
   if (students.length===0) return <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students added in setup.</div>;
 
+  // Summary grid — 4-column cards matching ward tab aesthetic
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {sorted.map(s=>{
-        const sb=studentBeds[s.name]; const total=sb.primary.length+sb.shadow.length; const isOpen=selected===s.name;
-        return (
-          <div key={s.name}>
-            <div onClick={()=>setSelected(isOpen?null:s.name)} style={{display:"flex",alignItems:"center",gap:10,padding:"13px 14px",background:C.surface,border:`1px solid ${isOpen?`rgba(${rgb},0.25)`:"rgba(0,0,0,0.08)"}`,borderRadius:isOpen?"14px 14px 0 0":14,cursor:"pointer",userSelect:"none",transition:"all 0.15s",boxShadow:isOpen?"none":"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)"}}>
-              {s.group&&<span style={{fontSize:"0.58rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:5,padding:"2px 6px",fontFamily:"monospace",flexShrink:0,fontWeight:500}}>{s.group}</span>}
-              <span style={{flex:1,fontSize:"0.9rem",color:C.text,fontWeight:isOpen?600:400}}>{s.name}</span>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4,justifyContent:"flex-end",maxWidth:180}}>
-                {sb.primary.map(({bedNum,bed})=><span key={bedNum} style={{fontSize:"0.68rem",fontWeight:600,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,color:theme,borderRadius:6,padding:"2px 7px",position:"relative",letterSpacing:"-0.01em"}}>{bedNum}{bed.isNew&&<span style={{position:"absolute",top:-3,right:-3,animation:"blink 1.2s ease-in-out infinite",display:"inline-flex"}}><Icon name="newdot" size={7} color={C.red}/></span>}</span>)}
-                {sb.shadow.map(({bedNum})=><span key={"s"+bedNum} style={{fontSize:"0.68rem",fontWeight:500,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textMuted,borderRadius:6,padding:"2px 7px",letterSpacing:"-0.01em"}}>{bedNum}</span>)}
-                {total===0&&<span style={{fontSize:"0.68rem",color:C.textMuted}}>—</span>}
+    <div>
+      {/* Grid header */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 44px 1fr 1fr",gap:8,padding:"0 4px",marginBottom:8}}>
+        <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600}}>Student</span>
+        <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,textAlign:"center"}}>Grp</span>
+        <span style={{fontSize:"0.6rem",color:theme,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,textAlign:"center"}}>Primary</span>
+        <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,textAlign:"center"}}>Shadow</span>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {sorted.map(s=>{
+          const sb=studentBeds[s.name];
+          const total=sb.primary.length+sb.shadow.length;
+          const isOpen=selected===s.name;
+          const hasNew=sb.primary.some(({bed})=>bed.isNew)||sb.shadow.some(({bed})=>bed.isNew);
+          return (
+            <div key={s.name}>
+              {/* Card row */}
+              <div
+                onClick={()=>setSelected(isOpen?null:s.name)}
+                style={{
+                  display:"grid", gridTemplateColumns:"1fr 44px 1fr 1fr", gap:8, alignItems:"center",
+                  padding:"12px 14px",
+                  background:isOpen?`rgba(${rgb},0.05)`:C.surface,
+                  border:`1px solid ${isOpen?`rgba(${rgb},0.28)`:"rgba(0,0,0,0.08)"}`,
+                  borderRadius:isOpen?"14px 14px 0 0":14,
+                  cursor:"pointer", userSelect:"none", transition:"all 0.15s",
+                  boxShadow:isOpen?"none":"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04)",
+                }}
+                onMouseEnter={e=>{ if(!isOpen){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 22px rgba(0,0,0,0.1), 0 2px 5px rgba(0,0,0,0.06)"; }}}
+                onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow=isOpen?"none":"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04)"; }}
+              >
+                {/* Name */}
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                  {hasNew&&<span style={{animation:"blink 1.2s ease-in-out infinite",display:"inline-flex",flexShrink:0}}><Icon name="newdot" size={8} color={C.red}/></span>}
+                  <span style={{fontSize:"0.88rem",color:C.text,fontWeight:isOpen?600:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
+                </div>
+                {/* Group */}
+                <div style={{textAlign:"center"}}>
+                  {s.group
+                    ? <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:5,padding:"2px 6px",fontFamily:"monospace",fontWeight:600}}>{s.group}</span>
+                    : <span style={{fontSize:"0.7rem",color:C.border}}>—</span>
+                  }
+                </div>
+                {/* Primary beds */}
+                <div style={{display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>
+                  {sb.primary.length===0
+                    ? <span style={{fontSize:"0.72rem",color:C.border}}>—</span>
+                    : sb.primary.map(({bedNum,bed})=>(
+                        <span key={bedNum} style={{fontSize:"0.68rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.28)`,color:theme,borderRadius:6,padding:"2px 7px",letterSpacing:"-0.01em",position:"relative"}}>
+                          {bedNum}
+                          {bed.isNew&&<span style={{position:"absolute",top:-3,right:-3,animation:"blink 1.2s ease-in-out infinite",display:"inline-flex"}}><Icon name="newdot" size={7} color={C.red}/></span>}
+                        </span>
+                      ))
+                  }
+                </div>
+                {/* Shadow beds */}
+                <div style={{display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>
+                  {sb.shadow.length===0
+                    ? <span style={{fontSize:"0.72rem",color:C.border}}>—</span>
+                    : sb.shadow.map(({bedNum})=>(
+                        <span key={"s"+bedNum} style={{fontSize:"0.68rem",fontWeight:500,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textMuted,borderRadius:6,padding:"2px 7px",letterSpacing:"-0.01em"}}>{bedNum}</span>
+                      ))
+                  }
+                </div>
               </div>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0,marginLeft:4}}><path d="M2 4l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+
+              {/* Expanded detail */}
+              {isOpen && (
+                <div style={{background:C.surfaceEl,border:`1px solid rgba(${rgb},0.2)`,borderTop:"none",borderRadius:"0 0 14px 14px",padding:"12px 14px 14px"}}>
+                  {total===0
+                    ? <div style={{color:C.textMuted,fontSize:"0.8rem",textAlign:"center",padding:"10px 0"}}>No beds assigned yet</div>
+                    : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                        {/* Primary column */}
+                        <div>
+                          <div style={{fontSize:"0.6rem",color:theme,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                            <Icon name="user" size={10} color={theme}/>Primary · {sb.primary.length}pt
+                          </div>
+                          {sb.primary.length===0
+                            ? <div style={{fontSize:"0.75rem",color:C.textMuted,fontStyle:"italic"}}>None</div>
+                            : sb.primary.map(({bedNum,bed})=><BedPill key={bedNum} bedNum={bedNum} bed={bed} type="primary" rgb={rgb} theme={theme}/>)
+                          }
+                        </div>
+                        {/* Shadow column */}
+                        <div>
+                          <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                            <Icon name="shadow" size={10} color={C.textMuted}/>Shadow · {sb.shadow.length}pt
+                          </div>
+                          {sb.shadow.length===0
+                            ? <div style={{fontSize:"0.75rem",color:C.textMuted,fontStyle:"italic"}}>None</div>
+                            : sb.shadow.map(({bedNum,bed})=><BedPill key={bedNum} bedNum={bedNum} bed={bed} type="shadow" rgb={rgb} theme={theme}/>)
+                          }
+                        </div>
+                      </div>
+                  }
+                </div>
+              )}
             </div>
-            {isOpen && (
-              <div style={{background:C.surfaceEl,border:`1px solid rgba(${rgb},0.2)`,borderTop:"none",borderRadius:"0 0 14px 14px",padding:"12px 14px 14px"}}>
-                {total===0
-                  ? <div style={{color:C.textMuted,fontSize:"0.8rem",textAlign:"center",padding:"12px 0"}}>No beds assigned yet</div>
-                  : <>
-                      {sb.primary.length>0&&<><div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Primary</div>{sb.primary.map(({bedNum,bed})=><BedPill key={bedNum} bedNum={bedNum} bed={bed} type="primary" rgb={rgb} theme={theme}/>)}</>}
-                      {sb.shadow.length>0&&<><div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8,marginTop:sb.primary.length>0?12:0,fontWeight:500}}>Shadow</div>{sb.shadow.map(({bedNum,bed})=><BedPill key={bedNum} bedNum={bedNum} bed={bed} type="shadow" rgb={rgb} theme={theme}/>)}</>}
-                    </>
-                }
-              </div>
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1847,54 +2014,113 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
   const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
   const sorted = [...students].sort((a,b)=>{const ag=parseInt(a.group)||999,bg=parseInt(b.group)||999;return ag!==bg?ag-bg:a.name.localeCompare(b.name);});
   const getName = s => typeof s==="object"?s.name:s;
+  const getGroup = s => typeof s==="object"?s.group:"";
   const isAssigned = s => assigned.some(x=>getName(x)===getName(s));
   const isShadow   = s => shadows.some(x=>getName(x)===getName(s));
   const isShadowHO = s => shadowHONames.has(getName(s));
 
   const handlePrimary = (s) => {
-    if (isShadowHO(s)) { setBlockedMsg("Cannot assign Shadow HOs as primary"); setTimeout(()=>setBlockedMsg(null),2000); return; }
+    if (isShadowHO(s)) { setBlockedMsg("Shadow HOs cannot be assigned as primary"); setTimeout(()=>setBlockedMsg(null),2000); return; }
     if(isAssigned(s)){setAssigned([]);return;} setShadows(sh=>sh.filter(x=>getName(x)!==getName(s))); setAssigned([s]);
   };
   const handleShadow = (s) => {
-    if (isShadowHO(s)) { setBlockedMsg("Cannot assign Shadow HOs as shadow"); setTimeout(()=>setBlockedMsg(null),2000); return; }
+    if (isShadowHO(s)) { setBlockedMsg("Shadow HOs cannot be shadow-assigned here"); setTimeout(()=>setBlockedMsg(null),2000); return; }
     if(isShadow(s)){setShadows([]);return;} setAssigned(a=>a.filter(x=>getName(x)!==getName(s))); setShadows([s]);
+  };
+
+  // Split students: non-HO eligible, HO-only
+  const eligible = sorted.filter(s=>!isShadowHO(s));
+  const hoStudents = sorted.filter(s=>isShadowHO(s));
+
+  const StudentCard = ({ s, zone }) => {
+    const ip=isAssigned(s), is=isShadow(s), isHO=isShadowHO(s);
+    const active = zone==="primary" ? ip : is;
+    const accentBg = zone==="primary" ? `rgba(${rgb},0.1)` : "rgba(0,0,0,0.04)";
+    const accentBorder = zone==="primary" ? `rgba(${rgb},0.35)` : C.borderMid;
+    const accentColor = zone==="primary" ? theme : C.textSub;
+    const handler = zone==="primary" ? ()=>handlePrimary(s) : ()=>handleShadow(s);
+    return (
+      <button
+        onClick={isHO?undefined:handler}
+        disabled={isHO}
+        style={{
+          display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+          padding:"10px 6px", borderRadius:12, cursor:isHO?"not-allowed":"pointer",
+          fontFamily:SF, textAlign:"center", transition:"all 0.12s", gap:3,
+          background: active ? (zone==="primary"?`rgba(${rgb},0.12)`:C.surfaceEl) : C.surface,
+          border: `${active?"2px":"1px"} ${zone==="shadow"&&active?"dashed":"solid"} ${active?accentBorder:C.border}`,
+          color: active ? accentColor : C.textSub,
+          opacity: isHO ? 0.35 : 1,
+          boxShadow: active ? (zone==="primary"?`0 4px 14px rgba(${rgb},0.18)`:"none") : "0 2px 8px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+          background:active?(zone==="primary"?theme:"rgba(0,0,0,0.08)"):C.surfaceEl,
+          border:`1px solid ${active?(zone==="primary"?theme:C.borderMid):C.border}`,
+          marginBottom:2, flexShrink:0}}>
+          <Icon name={zone==="primary"?"user":"shadow"} size={13} color={active?(zone==="primary"?"#fff":C.textSub):C.textMuted}/>
+        </div>
+        <div style={{fontSize:"0.72rem",fontWeight:active?700:500,lineHeight:1.2,letterSpacing:"-0.01em",color:active?accentColor:C.text,
+          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 2px"}}>
+          {getName(s).split(" ")[0]}
+        </div>
+        {getGroup(s) && <div style={{fontSize:"0.55rem",color:active?accentColor:C.textMuted,fontFamily:"monospace",fontWeight:600}}>{getGroup(s)}</div>}
+        {active && <div style={{fontSize:"0.52rem",letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:700,color:active?accentColor:C.textMuted,marginTop:1}}>{zone==="primary"?"●":"◌"}</div>}
+      </button>
+    );
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"75vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
-        <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
-        <h3 style={{margin:"0 0 6px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}</h3>
-        <div style={{display:"flex",gap:16,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.72rem",color:C.textSub}}><div style={{width:12,height:12,borderRadius:3,background:`rgba(${rgb},0.2)`,border:`1px solid rgba(${rgb},0.4)`}}/>Primary</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.72rem",color:C.textSub}}><div style={{width:12,height:12,borderRadius:3,border:`1px dashed ${C.borderMid}`}}/>Shadow</div>
-        </div>
+      <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
+        <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+        <h3 style={{margin:"0 0 4px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}</h3>
+        <p style={{margin:"0 0 14px",fontSize:"0.74rem",color:C.textMuted}}>Tap a card to assign. One primary and one shadow per bed.</p>
+
         {blockedMsg && (
-          <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:"0.78rem",color:C.red,textAlign:"center"}}>
+          <div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:"0.78rem",color:C.red,textAlign:"center"}}>
             {blockedMsg}
           </div>
         )}
+
         {sorted.length===0
-          ? <p style={{color:C.textMuted,fontSize:"0.82rem"}}>No students in setup.</p>
-          : <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {sorted.map(s=>{
-                const ip=isAssigned(s),is=isShadow(s),isHO=isShadowHO(s);
-                return (
-                  <div key={getName(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:isHO?"rgba(0,0,0,0.02)":ip?`rgba(${rgb},0.07)`:is?C.surfaceEl:C.surface,border:`1px solid ${isHO?"rgba(0,0,0,0.06)":ip?`rgba(${rgb},0.3)`:is?C.borderMid:C.border}`,borderRadius:12,opacity:isHO?0.55:1}}>
-                    {s.group&&<span style={{fontSize:"0.58rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 5px",fontFamily:"monospace",flexShrink:0}}>{s.group}</span>}
-                    <span style={{flex:1,color:isHO?C.textMuted:C.text,fontSize:"0.88rem",fontWeight:ip?500:400}}>{s.name}</span>
-                    {isHO && <span style={{fontSize:"0.62rem",color:C.textMuted,fontStyle:"italic",flexShrink:0}}>Shadow HO</span>}
-                    <button onClick={()=>handlePrimary(s)} style={{display:"flex",alignItems:"center",gap:5,background:ip?theme:isHO?"rgba(0,0,0,0.04)":C.surfaceEl,border:`1px solid ${ip?theme:isHO?"rgba(0,0,0,0.08)":C.border}`,color:ip?"#fff":C.textMuted,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:isHO?"not-allowed":"pointer",fontFamily:SF,fontWeight:ip?600:400}}>
-                      <Icon name="user" size={11} color={ip?"#fff":C.textMuted}/>Primary
-                    </button>
-                    <button onClick={()=>handleShadow(s)} style={{display:"flex",alignItems:"center",gap:5,background:is?C.surfaceEl:isHO?"rgba(0,0,0,0.04)":C.surface,border:`1px dashed ${is?C.borderMid:isHO?"rgba(0,0,0,0.08)":C.border}`,color:is?C.textSub:C.textMuted,borderRadius:8,padding:"5px 10px",fontSize:"0.72rem",cursor:isHO?"not-allowed":"pointer",fontFamily:SF}}>
-                      <Icon name="shadow" size={11} color={is?C.textSub:C.textMuted}/>Shadow
-                    </button>
-                  </div>
-                );
-              })}
+          ? <p style={{color:C.textMuted,fontSize:"0.82rem",textAlign:"center",padding:"20px 0"}}>No students in setup.</p>
+          : <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+
+              {/* Primary zone */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                  <div style={{width:10,height:10,borderRadius:3,background:`rgba(${rgb},0.25)`,border:`1px solid rgba(${rgb},0.5)`}}/>
+                  <span style={{fontSize:"0.65rem",color:theme,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Primary</span>
+                  {assigned.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:"auto"}}>✓ {getName(assigned[0]).split(" ")[0]}</span>}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
+                  {eligible.map(s=><StudentCard key={getName(s)} s={s} zone="primary"/>)}
+                </div>
+              </div>
+
+              {/* Shadow zone */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                  <div style={{width:10,height:10,borderRadius:3,border:`1px dashed ${C.borderMid}`}}/>
+                  <span style={{fontSize:"0.65rem",color:C.textSub,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Shadow</span>
+                  {shadows.length>0 && <span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:"auto"}}>✓ {getName(shadows[0]).split(" ")[0]}</span>}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
+                  {eligible.map(s=><StudentCard key={getName(s)} s={s} zone="shadow"/>)}
+                </div>
+              </div>
             </div>
         }
+
+        {/* Shadow HOs note */}
+        {hoStudents.length>0 && (
+          <div style={{marginTop:14,padding:"8px 12px",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:9,fontSize:"0.72rem",color:C.textMuted}}>
+            <span style={{fontWeight:600}}>Shadow HOs (not assignable here):</span>{" "}
+            {hoStudents.map(s=>getName(s)).join(", ")}
+          </div>
+        )}
+
         <div style={{display:"flex",gap:10,marginTop:18}}>
           <button onClick={onClose} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontSize:"0.88rem",fontFamily:SF}}>Cancel</button>
           <button onClick={()=>onConfirm(assigned,shadows)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontSize:"0.88rem",fontFamily:SF}}>Confirm</button>
