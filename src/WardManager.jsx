@@ -3974,22 +3974,26 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </button>
                   );
                 })}
-                {/* Floor pill — shown whenever the patient isn't already a floor patient */}
-                {!selPt?.isFloor&&selPt?.section!=="Floor"&&(
-                  <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
-                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:ptEdit.isFloor?600:400,cursor:"pointer",fontFamily:SF,
-                      background:ptEdit.isFloor?C.textSub:C.surfaceEl,border:`1px dashed ${ptEdit.isFloor?C.textSub:C.border}`,color:ptEdit.isFloor?"#fff":C.textSub}}>
-                    Floor
-                  </button>
-                )}
-                {/* Deselect floor pill */}
-                {ptEdit.isFloor&&(
-                  <button onClick={()=>setPtEdit(p=>({...p,isFloor:false,section:selPt?.section||"",bedNo:selPt?.bedNo||"",side:selPt?.side||"single"}))}
-                    style={{padding:"5px 10px",borderRadius:20,fontSize:"0.72rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
-                      background:"none",border:"none",color:C.textMuted}}>
-                    ✕
-                  </button>
-                )}
+                {/* Floor pill — always shown; toggles ptEdit.isFloor */}
+                {!ptEdit.isFloor
+                  ? <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
+                      style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
+                        background:C.surfaceEl,border:`1px dashed ${C.border}`,color:C.textSub}}>
+                      Floor
+                    </button>
+                  : <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
+                        style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:600,cursor:"pointer",fontFamily:SF,
+                          background:C.textSub,border:`1px solid ${C.textSub}`,color:"#fff"}}>
+                        Floor
+                      </button>
+                      <button onClick={()=>setPtEdit(p=>({...p,isFloor:false,section:selPt?.section||"",bedNo:selPt?.bedNo||"",side:selPt?.side||"single"}))}
+                        style={{padding:"3px 8px",borderRadius:20,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,
+                          background:"none",border:"none",color:C.textMuted}}>
+                        ✕
+                      </button>
+                    </div>
+                }
               </div>
               {/* Floor pending hint */}
               {ptEdit.isFloor&&(
