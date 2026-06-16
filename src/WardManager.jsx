@@ -410,6 +410,7 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
         shadowHOs: form.shadowHOs,
         consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
         customTags: (form.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"})),
+        pairings: [],
       };
     } else if (form.template==="surgery") {
       const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim());
@@ -5812,14 +5813,15 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const [showDelete,   setShowDelete]   = useState(false);
   const [selectedPt,   setSelectedPt]   = useState(null);
   const [showAddPt,    setShowAddPt]    = useState(false);
-  const [newPt,        setNewPt]        = useState({name:"",autoAssign:true});
+  const [newPt,        setNewPt]        = useState({name:"",autoAssign:true,manualPairingIdx:null});
   const [ptEdit,       setPtEdit]       = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:"",tags:[]});
   const [assignTarget, setAssignTarget] = useState(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [shadowEditing, setShadowEditing] = useState(false);
-  const [shadowForm,   setShadowForm]   = useState(null);
   const [absentExpanded, setAbsentExpanded] = useState(false);
   const [sectionFilter, setSectionFilter] = useState("all");
+  const [pairingOpen,  setPairingOpen]  = useState(false);
+  const [pairingEdit,  setPairingEdit]  = useState(false);
+  const [pairingForm,  setPairingForm]  = useState([]);
 
   const setup    = ward.setup || {};
   const patients = ward.patients || [];
@@ -5828,9 +5830,21 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const rgb      = hexToRgb(theme);
   const groups   = setup.paedGroups || [];
   const sections = setup.wardSections || [];
-  const shadowHOs= setup.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
-  const consultants  = setup.consultants || [];
-  const customTags   = setup.customTags  || [];
+  const pairings = setup.pairings    || [];
+  const consultants = setup.consultants || [];
+  const customTags  = setup.customTags  || [];
+
+  // Flat list of all students across both groups
+  const allGroupStudents = groups.flatMap(g=>(g.students||[]).filter(s=>s.name).map(s=>({...s, groupIdx:groups.indexOf(g), groupName:g.name})));
+  const absentSet = new Set(absentStudents);
+
+  // Which group (0 or 1) does a student belong to?
+  const getStudentGroup = (name) => {
+    for (let gi=0; gi<groups.length; gi++) {
+      if ((groups[gi].students||[]).some(s=>s.name===name)) return gi;
+    }
+    return -1;
+  };
 
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
@@ -5845,38 +5859,56 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
     await save({...ward, absentStudents: updated});
   };
 
+  // ── Pairing-based auto-assign ────────────────────────────────────────────
+  // Pick the pairing with the fewest patients, weighted by absent members.
+  // If a member is absent, that pair's "effective capacity" is reduced so they
+  // receive fewer patients proportionally.
   const computeAutoAssign = (existingPatients) => {
-    const activeShadowHONames = (shadowHOs||[]).map(h=>h.name).filter(Boolean);
-    const activeShadowHOSet   = new Set(activeShadowHONames);
-    const absentSet           = new Set(ward.absentStudents || []);
-    const g0 = groups[0] || {students:[]};
-    const g1 = groups[1] || {students:[]};
-    const g0students = (g0.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name) && !absentSet.has(s.name));
-    const g1students = (g1.students||[]).filter(s=>s.name && !activeShadowHOSet.has(s.name) && !absentSet.has(s.name));
-    const countPrimary = (name) => existingPatients.filter(p=>p.primary1===name||p.primary2===name).length;
-    const countShadow  = (name) => existingPatients.filter(p=>p.shadow===name).length;
-    const pickFrom = (students, reversed) => {
-      const ordered = reversed ? [...students].reverse() : students;
-      const zero = ordered.find(s => countPrimary(s.name)===0);
-      if (zero) return zero.name;
-      return [...ordered].sort((a,b)=>countPrimary(a.name)-countPrimary(b.name))[0]?.name || null;
-    };
-    const p1 = pickFrom(g0students, false);
-    const p2 = pickFrom(g1students, true);
-    const shadow = activeShadowHONames.length>0
-      ? [...activeShadowHONames].sort((a,b)=>countShadow(a)-countShadow(b))[0]
-      : null;
-    return {primary1: p1||null, primary2: p2||null, shadow: shadow||null};
+    if (pairings.length === 0) return { pairingIdx: null, members: [] };
+
+    // Count active (non-absent) members per pairing
+    const pairingStats = pairings.map((pair, idx) => {
+      const members = (pair.members || []).filter(Boolean);
+      const activeCount = members.filter(m => !absentSet.has(m)).length;
+      const totalCount = members.length;
+      const ptCount = existingPatients.filter(p => p.pairingIdx === idx).length;
+      // Weight: if some members absent, treat this pairing as if it has more patients already
+      // (absentRatio: 0=all present, 1=all absent)
+      const absentRatio = totalCount > 0 ? (totalCount - activeCount) / totalCount : 0;
+      const weightedPtCount = ptCount + absentRatio * 999; // absent pairs pushed way down
+      return { idx, members, activeCount, ptCount, weightedPtCount };
+    });
+
+    // Pick the pairing with lowest weighted pt count (ties: random)
+    const minWeighted = Math.min(...pairingStats.map(p => p.weightedPtCount));
+    const eligible = pairingStats.filter(p => p.weightedPtCount === minWeighted);
+    const picked = eligible[Math.floor(Math.random() * eligible.length)];
+
+    return { pairingIdx: picked.idx, members: picked.members };
+  };
+
+  const savePairings = async (newPairings) => {
+    // Sync pairingIdx on existing patients when pairings are reordered/removed
+    // (we just keep pairingIdx as-is; if a pairing is removed the patient becomes unassigned)
+    await save({...ward, setup:{...setup, pairings:newPairings}});
+    setPairingEdit(false); showToast("Pairings saved");
   };
 
   const addPatient = async () => {
     if (!newPt.name.trim()) { showToast("Enter patient name","error"); return; }
-    const assignment = newPt.autoAssign
-      ? computeAutoAssign(patients)
-      : {primary1: newPt.manualP1||null, primary2: newPt.manualP2||null, shadow: newPt.manualShadow||null};
-    const pt = { id:Date.now().toString(), name:newPt.name.trim(), primary1:assignment.primary1, primary2:assignment.primary2, shadow:assignment.shadow, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", tags:[], addedAt:Date.now() };
+    let pairingIdx = null;
+    let members = [];
+    if (newPt.autoAssign) {
+      const assigned = computeAutoAssign(patients);
+      pairingIdx = assigned.pairingIdx;
+      members = assigned.members;
+    } else {
+      pairingIdx = newPt.manualPairingIdx != null ? newPt.manualPairingIdx : null;
+      members = pairingIdx != null && pairings[pairingIdx] ? (pairings[pairingIdx].members || []).filter(Boolean) : [];
+    }
+    const pt = { id:Date.now().toString(), name:newPt.name.trim(), pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", tags:[], addedAt:Date.now() };
     await save({ ...ward, patients:[...patients, pt] });
-    setNewPt({name:"",autoAssign:true,manualP1:null,manualP2:null,manualShadow:null}); setShowAddPt(false); showToast("Patient added");
+    setNewPt({name:"",autoAssign:true,manualPairingIdx:null}); setShowAddPt(false); showToast("Patient added");
   };
 
   const updatePatient = async (id, updates) => {
@@ -5925,14 +5957,6 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
     showToast("Patient restored");
   };
 
-  const saveShadowHOs = async (newHOs) => {
-    await save({...ward, setup:{...setup, shadowHOs:newHOs}});
-    setShadowEditing(false); showToast("Shadow HO posts updated");
-  };
-
-  const allStudents = groups.flatMap(g=>(g.students||[]).filter(s=>s.name));
-  const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
-
   const unassignedPatients = patients.filter(p=>!p.section||!p.bedNo);
   const filteredPatients = sectionFilter==="all" ? patients
     : sectionFilter==="unassigned" ? unassignedPatients
@@ -5943,6 +5967,16 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
     setSelectedPt(pt.id);
     setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",tags:pt.tags||[]});
   };
+
+  // Group-color lookup for a student name
+  const groupColors = ["#6366f1","#f97316"];
+  const getGroupColor = (name) => {
+    const gi = getStudentGroup(name);
+    return gi >= 0 ? groupColors[gi] : C.textSub;
+  };
+
+  // Pairing label e.g. "P1"
+  const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
@@ -5994,26 +6028,142 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 80px"}}>
         {activeTab==="ward" && <>
-          {/* Shadow HO Banner */}
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <Icon name="shadow" size={13} color={C.textMuted}/>
-                <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HOs</span>
+
+          {/* Pairings panel */}
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:16,boxShadow:C.shadow,overflow:"hidden"}}>
+            <div onClick={()=>setPairingOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none"}}>
+              <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Pairings</span>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                {isLeader&&!seniorMode&&<button onClick={e=>{e.stopPropagation();setPairingForm(pairings.map(p=>({members:[...(p.members||[])]})));setPairingOpen(true);setPairingEdit(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:pairingOpen?"rotate(180deg)":"rotate(0deg)"}}>
+                  <path d="M3 5l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-              {isLeader&&!seniorMode&&(
-                <button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}}
-                  style={{background:"none",border:"none",cursor:"pointer",color:theme,fontSize:"0.72rem",fontWeight:500,fontFamily:SF}}>Edit</button>
-              )}
             </div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {shadowHOs.map((ho,i)=>(
-                <div key={i} style={{flex:1,minWidth:90,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
-                  <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
-                  <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
-                </div>
-              ))}
-            </div>
+            {pairingOpen&&(
+              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px 14px"}}>
+                {pairingEdit ? (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <p style={{fontSize:"0.72rem",color:C.textMuted,margin:0}}>Up to 4 per pairing · max 2 from each group.</p>
+                      <button onClick={()=>{
+                        // Auto-pair: one from each group in order
+                        const g0 = (groups[0]?.students||[]).filter(s=>s.name).map(s=>s.name);
+                        const g1 = (groups[1]?.students||[]).filter(s=>s.name).map(s=>s.name);
+                        const len = Math.max(g0.length, g1.length);
+                        const newForm = [];
+                        for (let i=0; i<len; i++) {
+                          const members = [];
+                          if (g0[i]) members.push(g0[i]);
+                          if (g1[i]) members.push(g1[i]);
+                          if (members.length>0) newForm.push({members});
+                        }
+                        setPairingForm(newForm);
+                      }} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:600,flexShrink:0}}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h8M2 8h5M2 12h3M12 3l2 2-2 2M12 9l2 2-2 2M14 5h-3a2 2 0 00-2 2v2a2 2 0 002 2h3" stroke={theme} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Auto-pair
+                      </button>
+                    </div>
+
+                    {pairingForm.map((pair,pi)=>{
+                      const members=(pair.members||[]).filter(Boolean);
+                      const otherPairingMap = {};
+                      pairingForm.forEach((p,idx)=>{ if(idx!==pi)(p.members||[]).filter(Boolean).forEach(m=>{ otherPairingMap[m]=idx; }); });
+
+                      return (
+                        <div key={pi} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {pi+1}</span>
+                              {members.length>0&&<span style={{fontSize:"0.7rem",color:C.textSub}}>{members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.4}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>)}</span>}
+                            </div>
+                            <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==pi))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+                          </div>
+
+                          {/* Students grid — grouped */}
+                          {groups.map((g,gi)=>{
+                            const gColor=groupColors[gi]||C.textSub;
+                            const gStudents=(g.students||[]).filter(s=>s.name);
+                            const gSelected=members.filter(m=>getStudentGroup(m)===gi);
+                            const atGroupMax=gSelected.length>=2;
+                            return (
+                              <div key={gi} style={{marginBottom:gi<groups.length-1?10:0}}>
+                                <div style={{fontSize:"0.58rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:5}}>{g.name}</div>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                                  {gStudents.map(s=>{
+                                    const isSelected=members.includes(s.name);
+                                    const inOtherIdx=otherPairingMap[s.name];
+                                    const inOther=inOtherIdx!=null;
+                                    const disabled=!isSelected&&atGroupMax;
+                                    return (
+                                      <button key={s.name} onClick={()=>{
+                                        if (disabled) return;
+                                        const f=[...pairingForm];
+                                        const m=[...(f[pi].members||[])].filter(Boolean);
+                                        if (isSelected) {
+                                          f[pi]={...f[pi],members:m.filter(x=>x!==s.name)};
+                                        } else {
+                                          if (members.length>=4) return;
+                                          if (inOther!=null) { const g2=[...(f[inOtherIdx].members||[])].filter(Boolean); f[inOtherIdx]={...f[inOtherIdx],members:g2.filter(x=>x!==s.name)}; }
+                                          f[pi]={...f[pi],members:[...m,s.name]};
+                                        }
+                                        setPairingForm(f);
+                                      }}
+                                        style={{padding:"5px 10px",borderRadius:8,fontSize:"0.75rem",cursor:disabled?"not-allowed":"pointer",fontFamily:SF,fontWeight:isSelected?600:400,
+                                          background:isSelected?`rgba(${hexToRgb(gColor)},0.12)`:C.surface,
+                                          border:`1px solid ${isSelected?gColor:inOther?"rgba(0,0,0,0.1)":C.border}`,
+                                          color:isSelected?gColor:disabled?C.textMuted:C.textSub,
+                                          opacity:disabled?0.45:1,transition:"all 0.1s"}}>
+                                        {s.name.split(" ")[0]}
+                                        {inOther!=null&&!isSelected&&<span style={{fontSize:"0.55rem",marginLeft:3,opacity:0.5}}>P{inOther+1}</span>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+
+                    <button onClick={()=>setPairingForm(f=>[...f,{members:[]}])} style={{...aMB,marginTop:6}}><Icon name="plus" size={12} color={C.textSub}/> Add Pairing</button>
+
+                    <div style={{display:"flex",gap:10,marginTop:12}}>
+                      <button onClick={()=>setPairingEdit(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                      <button onClick={()=>savePairings(pairingForm.map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0))} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
+                    </div>
+                  </div>
+                ) : pairings.length===0 ? (
+                  <div style={{textAlign:"center",color:C.textMuted,fontSize:"0.8rem",padding:"10px 0"}}>{isLeader?"No pairings yet — tap Edit to configure.":"No pairings configured."}</div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {pairings.map((pair,pi)=>{
+                      const members=(pair.members||[]).filter(Boolean);
+                      const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
+                      const hasAbsent=members.some(m=>absentSet.has(m));
+                      return (
+                        <div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:C.bg,border:`1px solid rgba(${rgb},0.15)`}}>
+                          <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:"0.88rem",fontWeight:600,color:C.text,lineHeight:1.3}}>
+                              {members.map((m,mi)=>(
+                                <span key={m}>
+                                  {mi>0&&<span style={{color:C.textMuted,fontWeight:400,margin:"0 4px"}}>×</span>}
+                                  <span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                                </span>
+                              ))}
+                            </div>
+                            {hasAbsent&&<div style={{fontSize:"0.6rem",color:C.red,marginTop:2}}>Member absent — fewer patients assigned</div>}
+                          </div>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,borderRadius:5,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{ptCount} pt</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Absent Students Panel */}
@@ -6047,11 +6197,11 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                 )}
                 {absentExpanded && isLeader && !seniorMode && (
                   <div style={{marginTop:12}}>
-                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:10}}>Tap a student to mark absent. Absent students are excluded from auto-assignment.</div>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:10}}>Tap to mark absent. Absent students reduce how many patients that pair receives.</div>
                     {groups.map((g,gi)=>{
-                      const gStudents=(g.students||[]).filter(s=>s.name&&!shadowHONames.has(s.name));
+                      const gStudents=(g.students||[]).filter(s=>s.name);
                       if(gStudents.length===0) return null;
-                      const gColor=gi===0?"#6366f1":"#f97316";
+                      const gColor=groupColors[gi]||C.textSub;
                       return (
                         <div key={gi} style={{marginBottom:10}}>
                           <div style={{fontSize:"0.6rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>{g.name}</div>
@@ -6136,7 +6286,8 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                 {filteredPatients.map(pt=>{
                   const hasBed = pt.section&&pt.bedNo;
                   const isUnassigned = !hasBed;
-                  const filled = pt.diagnosis||pt.consultant||pt.primary1||pt.primary2;
+                  const filled = pt.diagnosis||pt.consultant||(pt.members||[]).length>0;
+                  const pLabel = getPairingLabel(pt.pairingIdx);
                   return (
                     <div key={pt.id}
                       onClick={seniorMode?undefined:()=>openPt(pt)}
@@ -6162,11 +6313,10 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                       {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.consultant}</div>}
                       {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
                       {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
-                      {(pt.primary1||pt.primary2||pt.shadow)&&(
-                        <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>
-                          {pt.primary1&&(()=>{const s=allStudents.find(x=>x.name===pt.primary1);return<span style={{fontSize:"0.52rem",background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.22)",borderRadius:4,padding:"1px 5px",color:"#6366f1",fontWeight:600}}>{pt.primary1.split(" ")[0]}{s?.no&&<sup style={{fontSize:"0.42rem"}}>{s.no}</sup>}</span>;})()}
-                          {pt.primary2&&(()=>{const s=allStudents.find(x=>x.name===pt.primary2);return<span style={{fontSize:"0.52rem",background:"rgba(249,115,22,0.1)",border:"1px solid rgba(249,115,22,0.22)",borderRadius:4,padding:"1px 5px",color:"#f97316",fontWeight:600}}>{pt.primary2.split(" ")[0]}{s?.no&&<sup style={{fontSize:"0.42rem"}}>{s.no}</sup>}</span>;})()}
-                          {pt.shadow&&<span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.14)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{pt.shadow.split(" ")[0]}</span>}
+                      {pLabel&&(
+                        <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                          <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
+                          {(pt.members||[]).map(m=><span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:getGroupColor(m),fontWeight:600}}>{m.split(" ")[0]}</span>)}
                         </div>
                       )}
                       {(pt.tags||[]).length>0&&(
@@ -6202,9 +6352,21 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
             </div>
 
             {isLeader&&<div style={{display:"flex",gap:8,marginBottom:14}}>
-              <button onClick={()=>setAssignTarget(selPt.id)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
-                <Icon name="user" size={12} color="#fff"/> Assign Students
-              </button>
+              <div style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:4}}>Pairing</div>
+                {selPt.pairingIdx!=null && pairings[selPt.pairingIdx] ? (
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:"0.7rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"1px 6px"}}>P{selPt.pairingIdx+1}</span>
+                    <span style={{fontSize:"0.82rem",color:C.text}}>
+                      {(pairings[selPt.pairingIdx].members||[]).filter(Boolean).map((m,mi)=>(
+                        <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>
+                      ))}
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{fontSize:"0.78rem",color:C.textMuted}}>Unassigned</span>
+                )}
+              </div>
             </div>}
 
             {/* New patient toggle */}
@@ -6334,94 +6496,93 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
 
-            {/* Name */}
             <div style={{marginBottom:14}}>
               <label style={labelStyle}>Patient Name</label>
               <input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} placeholder="Full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
             </div>
 
             {/* Auto-assign toggle */}
-            <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign}))}
+            <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign,manualPairingIdx:null}))}
               style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:newPt.autoAssign?`rgba(${rgb},0.06)`:C.surfaceEl,border:`1px solid ${newPt.autoAssign?`rgba(${rgb},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
               <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${newPt.autoAssign?theme:C.borderMid}`,background:newPt.autoAssign?theme:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
                 {newPt.autoAssign&&<Icon name="check" size={12} color="#fff"/>}
               </div>
               <div>
-                <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign students</div>
-                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Fair rotation · excludes Shadow HOs & absent students</div>
+                <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign to pairing</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Equitable rotation · absent members reduce that pair's allocation</div>
               </div>
             </div>
 
-            {/* Assignment preview */}
-            {newPt.autoAssign && preview && (
+            {/* Auto-assign preview */}
+            {newPt.autoAssign && preview && pairings.length>0 && (
               <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
                 <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Assignment Preview</div>
-                <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                  {[[preview.primary1,"#6366f1",(groups[0]||{}).name||"Group A","Primary"],[preview.primary2,"#f97316",(groups[1]||{}).name||"Group B","Primary"],[preview.shadow,C.textSub,"Shadow","Shadow"]].map(([name,col,grp,role])=>(
-                    <div key={role} style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:"0.65rem",color:col,fontWeight:600,width:52}}>{role}</span>
-                      <span style={{fontSize:"0.78rem",color:name?C.text:C.textMuted,flex:1}}>{name||"—"}</span>
-                      {name&&<span style={{fontSize:"0.6rem",color:C.textMuted}}>{grp}</span>}
+                {preview.pairingIdx!=null ? (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:"0.65rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px"}}>P{preview.pairingIdx+1}</span>
+                      <span style={{fontSize:"0.78rem",color:C.text,fontWeight:500}}>
+                        {(preview.members||[]).map((m,mi)=>(
+                          <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 4px"}}>×</span>}<span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span></span>
+                        ))}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <div style={{fontSize:"0.65rem",color:C.textMuted}}>
+                      {patients.filter(p=>p.pairingIdx===preview.pairingIdx).length} patients currently · fewest in rotation
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{fontSize:"0.75rem",color:C.textMuted}}>No pairings configured — patient will be unassigned.</div>
+                )}
               </div>
             )}
 
-            {/* Manual assign inline */}
+            {newPt.autoAssign && pairings.length===0 && (
+              <div style={{background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:"0.75rem",color:C.red}}>
+                No pairings set up yet. Configure pairings first to enable auto-assign.
+              </div>
+            )}
+
+            {/* Manual pairing picker */}
             {!newPt.autoAssign && (
-              <InlineAssignPicker
-                groups={groups}
-                allStudents={allStudents}
-                patients={patients}
-                shadowHOs={shadowHOs}
-                absentStudents={absentStudents}
-                value={{p1:newPt.manualP1||null, p2:newPt.manualP2||null, shadow:newPt.manualShadow||null}}
-                onChange={(p1,p2,shadow)=>setNewPt(p=>({...p,manualP1:p1,manualP2:p2,manualShadow:shadow}))}
-                theme={theme} rgb={rgb}
-              />
+              <div style={{marginBottom:14}}>
+                <label style={labelStyle}>Select Pairing</label>
+                {pairings.length===0
+                  ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:8}}>No pairings configured yet.</div>
+                  : <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                      {pairings.map((pair,pi)=>{
+                        const members=(pair.members||[]).filter(Boolean);
+                        const isSel=newPt.manualPairingIdx===pi;
+                        const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
+                        return (
+                          <div key={pi} onClick={()=>setNewPt(p=>({...p,manualPairingIdx:isSel?null:pi}))}
+                            style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",
+                              background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
+                              border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
+                            <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.1)`:"rgba(0,0,0,0.05)",borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                            <div style={{flex:1,fontSize:"0.82rem",fontWeight:isSel?600:400}}>
+                              {members.map((m,mi)=>(
+                                <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m)}}>{m.split(" ")[0]}</span></span>
+                              ))}
+                            </div>
+                            <span style={{fontSize:"0.65rem",color:C.textMuted}}>{ptCount} pt</span>
+                            {isSel&&<div style={{width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="check" size={8} color="#fff"/></div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                }
+              </div>
             )}
 
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",autoAssign:true,manualP1:null,manualP2:null,manualShadow:null});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",autoAssign:true,manualPairingIdx:null});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
             </div>
           </div>
         </div>
         );
       })()}
-
-      {/* Assign Students modal */}
-      {assignTarget&&(
-        <PaedAssignModal
-          patient={patients.find(p=>p.id===assignTarget)}
-          groups={groups} shadowHOs={shadowHOs}
-          patients={patients} absentStudents={absentStudents}
-          theme={theme}
-          onClose={()=>setAssignTarget(null)}
-          onConfirm={async(p1,p2,sh)=>{ await updatePatient(assignTarget,{primary1:p1,primary2:p2,shadow:sh}); setAssignTarget(null); showToast("Students assigned"); }}
-        />
-      )}
-
-      {/* Shadow edit modal */}
-      {shadowEditing&&shadowForm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
-          <div style={{background:C.surface,borderRadius:20,padding:"24px 20px",width:"100%",maxWidth:360,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
-            <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Edit Shadow HOs</h3>
-            <p style={{margin:"0 0 16px",fontSize:"0.78rem",color:C.textMuted}}>Enter the name of the student currently in each Shadow HO post.</p>
-            {shadowForm.map((ho,i)=>(
-              <div key={i} style={{marginBottom:10}}>
-                <label style={labelStyle}>{ho.post}</label>
-                <input value={ho.name||""} onChange={e=>{const f=[...shadowForm];f[i]={...f[i],name:e.target.value};setShadowForm(f);}} placeholder="Student name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/>
-              </div>
-            ))}
-            <div style={{display:"flex",gap:10,marginTop:16}}>
-              <button onClick={()=>setShadowEditing(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-              <button onClick={()=>saveShadowHOs(shadowForm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* PIN modal */}
       {showPin&&(
