@@ -409,6 +409,7 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
         wardSections: psychSections,
         shadowHOs: form.shadowHOs,
         consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
+        customTags: (form.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"})),
       };
     } else if (form.template==="surgery") {
       const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim());
@@ -5770,7 +5771,7 @@ function PsychSetupFields({ form, setForm }) {
       </div>
 
       {/* Consultants */}
-      <div style={{marginBottom:32}}>
+      <div style={{marginBottom:22}}>
         <label style={labelStyle}>Consultants</label>
         {(form.consultants||consultants).map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
@@ -5780,6 +5781,20 @@ function PsychSetupFields({ form, setForm }) {
           </div>
         ))}
         <button onClick={addConsultant} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+      </div>
+
+      {/* Custom Tags */}
+      <div style={{marginBottom:32}}>
+        <label style={labelStyle}>Custom Tags</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>e.g. High Risk, Voluntary, Involuntary, On Leave</p>
+        {(form.customTags||[]).map((tag,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input type="color" value={tag.color||"#6366f1"} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],color:e.target.value};return{...f,customTags:a};})} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+            <input value={tag.label} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],label:e.target.value};return{...f,customTags:a};})} placeholder="Tag name" style={{...iS,flex:1}}/>
+            <button onClick={()=>setForm(f=>({...f,customTags:(f.customTags||[]).filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+          </div>
+        ))}
+        <button onClick={()=>setForm(f=>({...f,customTags:[...(f.customTags||[]),{label:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Tag</button>
       </div>
     </div>
   );
@@ -5798,7 +5813,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const [selectedPt,   setSelectedPt]   = useState(null);
   const [showAddPt,    setShowAddPt]    = useState(false);
   const [newPt,        setNewPt]        = useState({name:"",autoAssign:true});
-  const [ptEdit,       setPtEdit]       = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:""});
+  const [ptEdit,       setPtEdit]       = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:"",tags:[]});
   const [assignTarget, setAssignTarget] = useState(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [shadowEditing, setShadowEditing] = useState(false);
@@ -5814,7 +5829,8 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const groups   = setup.paedGroups || [];
   const sections = setup.wardSections || [];
   const shadowHOs= setup.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
-  const consultants = setup.consultants || [];
+  const consultants  = setup.consultants || [];
+  const customTags   = setup.customTags  || [];
 
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
@@ -5925,7 +5941,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const selPt = patients.find(p=>p.id===selectedPt);
   const openPt = (pt) => {
     setSelectedPt(pt.id);
-    setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||""});
+    setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",tags:pt.tags||[]});
   };
 
   return (
@@ -5954,6 +5970,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                   psychSections:(setup.wardSections||[]).map(s=>({...s})),
                   shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),
                   consultants:(setup.consultants||[]).map(c=>({...c})),
+                  customTags:(setup.customTags||[]).map(t=>({...t})),
                 });
                 setEditMode(true);
               }} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:"0.72rem",fontFamily:SF}}>
@@ -6152,6 +6169,11 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                           {pt.shadow&&<span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.14)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{pt.shadow.split(" ")[0]}</span>}
                         </div>
                       )}
+                      {(pt.tags||[]).length>0&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>
+                          {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -6159,7 +6181,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
           }
         </>}
 
-        {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb} onSelectPatient={pt=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||""}); }}/>}
+        {activeTab==="students" && <PaedStudentTab patients={patients} groups={groups} theme={theme} rgb={rgb} onSelectPatient={pt=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",tags:pt.tags||[]}); }}/>}
 
         {activeTab==="archive" && <PaedArchiveTab archive={ward.archive||{}} theme={theme} rgb={rgb} onRestore={restorePatient} onDelete={deleteArchivedPatient}/>}
       </div>
@@ -6257,7 +6279,31 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
               <textarea value={ptEdit.notes} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,notes:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
             </div>
 
-            <button onClick={async()=>{ await updatePatient(selPt.id,{...ptEdit,name:ptEdit.name||selPt.name}); setSelectedPt(null); }}
+            {/* Custom Tags */}
+            {customTags.length>0&&(
+              <div style={{marginBottom:16}}>
+                <label style={labelStyle}>Tags</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:8}}>
+                  {customTags.map(tag=>{
+                    const isOn=(ptEdit.tags||[]).includes(tag.label);
+                    const tRgb=hexToRgb(tag.color);
+                    return (
+                      <button key={tag.label} onClick={()=>{ const cur=ptEdit.tags||[]; const next=isOn?cur.filter(t=>t!==tag.label):[...cur,tag.label]; setPtEdit(b=>({...b,tags:next})); updatePatient(selPt.id,{tags:next}); }}
+                        style={{display:"flex",alignItems:"center",gap:6,padding:"7px 13px",borderRadius:20,cursor:"pointer",fontFamily:SF,fontSize:"0.8rem",fontWeight:isOn?700:400,
+                          background:isOn?`rgba(${tRgb},0.14)`:C.surface,
+                          border:`1px solid ${isOn?tag.color:`rgba(${tRgb},0.3)`}`,
+                          color:isOn?tag.color:C.textMuted,transition:"all 0.12s"}}>
+                        <span style={{width:8,height:8,borderRadius:"50%",background:tag.color,flexShrink:0,display:"inline-block"}}/>
+                        {tag.label}
+                        {isOn&&<Icon name="check" size={10} color={tag.color}/>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <button onClick={async()=>{ await updatePatient(selPt.id,{...ptEdit,name:ptEdit.name||selPt.name,tags:ptEdit.tags||[]}); setSelectedPt(null); }}
               style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>
               Save
             </button>
@@ -6446,6 +6492,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                 wardSections:(editForm.psychSections||editForm.wardSections)||setup.wardSections,
                 shadowHOs:editForm.shadowHOs||setup.shadowHOs,
                 consultants:editForm.consultants||setup.consultants,
+                customTags:(editForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"})),
               }});
               setEditMode(false); showToast("Settings saved!");
             }} style={{background:editForm.themeColor||theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>
