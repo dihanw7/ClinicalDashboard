@@ -3147,6 +3147,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowReplaceStep, setShadowReplaceStep] = useState(false);
   const [pendingShadowForm, setPendingShadowForm] = useState(null);
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
+  const [searchQuery,       setSearchQuery]       = useState("");
 
   const setup       = ward.setup    || {};
   const patients    = ward.patients || [];
@@ -3222,6 +3223,21 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setSelectedPt(null); showToast("Patient archived");
   };
 
+  const moveToFloor = async (id) => {
+    const pt = patients.find(p=>p.id===id); if (!pt) return;
+    let updatedPatients = patients.filter(p=>p.id!==id);
+    if (pt.side==="L"||pt.side==="R") {
+      const mate = updatedPatients.find(p=>p.bedNo===pt.bedNo&&p.section===pt.section);
+      if (mate) updatedPatients = updatedPatients.map(p=>p.id===mate.id?{...p,side:"single"}:p);
+    }
+    const floorCount = updatedPatients.filter(p=>p.isFloor).length;
+    const floorBedNo = `F${floorCount+1}`;
+    const floorPt = { ...pt, id:Date.now().toString(), bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true, movedFromBed:`${pt.section} ${pt.bedNo}${pt.side&&pt.side!=="single"?` ${pt.side}`:""}`, addedAt:Date.now() };
+    await save({...ward, patients:[...updatedPatients, floorPt]});
+    setSelectedPt(null); setShowClearConfirm(false); setSideConflict(null);
+    showToast(`Moved to floor as ${floorBedNo}`);
+  };
+
   const addPatient = async () => {
     if (!newPt.patientName.trim()&&!newPt.bht.trim()) { showToast("Enter a name or BHT","error"); return; }
     if (newPt.bedNo&&!newPt.isFloor&&!newPt.side) { showToast("Please select a bed side (L or R)","error"); return; }
@@ -3285,7 +3301,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setPairingEdit(false); showToast("Pairings saved");
   };
 
-  const filteredPatients = sectionFilter==="all" ? patients : patients.filter(p=>p.section===sectionFilter);
+  const searchActive = searchQuery.trim().length > 0;
+  const searchLower  = searchQuery.trim().toLowerCase();
+  const sectionFiltered = sectionFilter==="all" ? patients : patients.filter(p=>p.section===sectionFilter);
+  const filteredPatients = searchActive
+    ? patients.filter(p=>(p.patientName||"").toLowerCase().includes(searchLower)||(p.bht||"").toLowerCase().includes(searchLower))
+    : sectionFiltered;
   const sectionNames = sections.map(s=>s.name);
 
   const bedMap = {};
@@ -3501,6 +3522,17 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               ))}
             </div>
           )}
+
+          {/* Search bar */}
+          <div style={{position:"relative",marginBottom:14}}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
+              <circle cx="8.5" cy="8.5" r="5.5" stroke={C.textMuted} strokeWidth="1.6"/>
+              <path d="M14 14l3 3" stroke={C.textMuted} strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search patients by name or BHT…" style={{width:"100%",boxSizing:"border-box",padding:"9px 34px 9px 32px",fontSize:"0.82rem",fontFamily:SF,background:C.surface,border:`1px solid ${searchActive?theme:C.border}`,borderRadius:12,color:C.text,outline:"none",boxShadow:searchActive?`0 0 0 3px rgba(${rgb},0.12)`:C.shadow,transition:"border-color 0.15s,box-shadow 0.15s"}}/>
+            {searchActive&&(<button onClick={()=>setSearchQuery("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill={C.border}/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round"/></svg></button>)}
+          </div>
+          {searchActive&&(<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,paddingLeft:2}}>{filteredPatients.length===0?"No patients found":`${filteredPatients.length} result${filteredPatients.length!==1?"s":""} across all sections`}</div>)}
 
           {isLeader&&!seniorMode&&(
             <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
@@ -4208,6 +4240,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   await save({...ward,patients:newPatients});
                   setSideConflict(null); showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
                 }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem",marginBottom:10}}>Save</button>
+                {selPt.bedNo&&!selPt.isFloor&&selPt.section&&selPt.section!=="Floor"&&(
+                  <button onClick={()=>moveToFloor(selectedPt)} style={{width:"100%",padding:"11px",marginBottom:10,borderRadius:10,fontSize:"0.85rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:`rgba(${rgb},0.07)`,border:`1px solid rgba(${rgb},0.25)`,color:theme}}>
+                    ↓ Move to Floor
+                  </button>
+                )}
                 {!showClearConfirm
                   ?<button onClick={()=>setShowClearConfirm(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF,fontSize:"0.85rem"}}>Remove Patient</button>
                   :<div style={{display:"flex",gap:8}}>
