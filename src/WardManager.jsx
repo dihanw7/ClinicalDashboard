@@ -5874,9 +5874,9 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
     const assignment = newPt.autoAssign
       ? computeAutoAssign(patients)
       : {primary1: newPt.manualP1||null, primary2: newPt.manualP2||null, shadow: newPt.manualShadow||null};
-    const pt = { id:Date.now().toString(), name:newPt.name.trim(), primary1:assignment.primary1, primary2:assignment.primary2, shadow:assignment.shadow, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", addedAt:Date.now() };
+    const pt = { id:Date.now().toString(), name:newPt.name.trim(), primary1:assignment.primary1, primary2:assignment.primary2, shadow:assignment.shadow, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", tags:[], addedAt:Date.now() };
     await save({ ...ward, patients:[...patients, pt] });
-    setNewPt({name:"",autoAssign:true}); setShowAddPt(false); showToast("Patient added");
+    setNewPt({name:"",autoAssign:true,manualP1:null,manualP2:null,manualShadow:null}); setShowAddPt(false); showToast("Patient added");
   };
 
   const updatePatient = async (id, updates) => {
@@ -6326,77 +6326,70 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
       )}
 
       {/* Add patient modal */}
-      {showAddPt&&isLeader&&!seniorMode&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShowAddPt(false)}>
-          <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
-            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+      {showAddPt&&isLeader&&!seniorMode&&(()=>{
+        const preview = newPt.autoAssign ? computeAutoAssign(patients) : null;
+        return (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:"20px 20px 0 0",padding:"10px 22px 44px",width:"100%",boxShadow:C.shadowMd,maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
 
-            <div style={{marginBottom:16}}>
+            {/* Name */}
+            <div style={{marginBottom:14}}>
               <label style={labelStyle}>Patient Name</label>
-              <input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} placeholder="e.g. John Smith" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
+              <input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} placeholder="Full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
             </div>
 
             {/* Auto-assign toggle */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,padding:"10px 14px",background:C.surfaceEl,borderRadius:12,border:`1px solid ${C.border}`}}>
-              <span style={{fontSize:"0.82rem",color:C.text,fontWeight:500}}>Auto-assign students</span>
-              <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign}))} style={{cursor:"pointer",userSelect:"none"}}>
-                <div style={{width:38,height:22,borderRadius:11,background:newPt.autoAssign?theme:"rgba(0,0,0,0.15)",transition:"background 0.2s",position:"relative"}}>
-                  <div style={{position:"absolute",top:3,left:newPt.autoAssign?18:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}/>
-                </div>
+            <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign}))}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:newPt.autoAssign?`rgba(${rgb},0.06)`:C.surfaceEl,border:`1px solid ${newPt.autoAssign?`rgba(${rgb},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
+              <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${newPt.autoAssign?theme:C.borderMid}`,background:newPt.autoAssign?theme:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                {newPt.autoAssign&&<Icon name="check" size={12} color="#fff"/>}
+              </div>
+              <div>
+                <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign students</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Fair rotation · excludes Shadow HOs & absent students</div>
               </div>
             </div>
 
-            {!newPt.autoAssign && (
-              <div style={{marginBottom:14,background:C.surfaceEl,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.border}`}}>
-                <div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10}}>Manual assignment</div>
-                {groups.map((g,gi)=>{
-                  const gColor=gi===0?"#6366f1":"#f97316";
-                  const manKey=gi===0?"manualP1":"manualP2";
-                  const activeShadowHOSet=new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
-                  const absentSet=new Set(ward.absentStudents||[]);
-                  const gStudents=(g.students||[]).filter(s=>s.name&&!activeShadowHOSet.has(s.name)&&!absentSet.has(s.name));
-                  return (
-                    <div key={gi} style={{marginBottom:10}}>
-                      <div style={{fontSize:"0.6rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>{g.name} (Primary)</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                        {gStudents.map(s=>{
-                          const isSel=newPt[manKey]===s.name;
-                          return <button key={s.name} onClick={()=>setNewPt(p=>({...p,[manKey]:isSel?null:s.name}))}
-                            style={{padding:"5px 10px",borderRadius:8,fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,fontWeight:isSel?600:400,
-                              background:isSel?`rgba(${hexToRgb(gColor)},0.12)`:C.surface,border:`1px solid ${isSel?gColor:C.border}`,color:isSel?gColor:C.textSub}}>
-                            {s.name.split(" ")[0]}
-                          </button>;
-                        })}
-                      </div>
+            {/* Assignment preview */}
+            {newPt.autoAssign && preview && (
+              <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Assignment Preview</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {[[preview.primary1,"#6366f1",(groups[0]||{}).name||"Group A","Primary"],[preview.primary2,"#f97316",(groups[1]||{}).name||"Group B","Primary"],[preview.shadow,C.textSub,"Shadow","Shadow"]].map(([name,col,grp,role])=>(
+                    <div key={role} style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"0.65rem",color:col,fontWeight:600,width:52}}>{role}</span>
+                      <span style={{fontSize:"0.78rem",color:name?C.text:C.textMuted,flex:1}}>{name||"—"}</span>
+                      {name&&<span style={{fontSize:"0.6rem",color:C.textMuted}}>{grp}</span>}
                     </div>
-                  );
-                })}
-                {shadowHOs.filter(h=>h.name).length>0&&(
-                  <div>
-                    <div style={{fontSize:"0.6rem",fontWeight:700,color:C.textSub,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>Shadow HO</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                      {shadowHOs.filter(h=>h.name).map(ho=>{
-                        const isSel=newPt.manualShadow===ho.name;
-                        return <button key={ho.name} onClick={()=>setNewPt(p=>({...p,manualShadow:isSel?null:ho.name}))}
-                          style={{padding:"5px 10px",borderRadius:8,fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,fontWeight:isSel?600:400,
-                            background:isSel?"rgba(0,0,0,0.07)":C.surface,border:`1px dashed ${isSel?C.textSub:C.border}`,color:isSel?C.textSub:C.textSub}}>
-                          {ho.name.split(" ")[0]}
-                        </button>;
-                      })}
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             )}
 
-            <div style={{display:"flex",gap:10,marginTop:4}}>
-              <button onClick={()=>setShowAddPt(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-              <button onClick={addPatient} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
+            {/* Manual assign inline */}
+            {!newPt.autoAssign && (
+              <InlineAssignPicker
+                groups={groups}
+                allStudents={allStudents}
+                patients={patients}
+                shadowHOs={shadowHOs}
+                absentStudents={absentStudents}
+                value={{p1:newPt.manualP1||null, p2:newPt.manualP2||null, shadow:newPt.manualShadow||null}}
+                onChange={(p1,p2,shadow)=>setNewPt(p=>({...p,manualP1:p1,manualP2:p2,manualShadow:shadow}))}
+                theme={theme} rgb={rgb}
+              />
+            )}
+
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",autoAssign:true,manualP1:null,manualP2:null,manualShadow:null});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Assign Students modal */}
       {assignTarget&&(
