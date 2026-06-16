@@ -18,10 +18,11 @@ const isAdminPin  = (p) => ALL_LEADER_PINS.includes(p) || p === SUPER_PIN;
 const isLeaderPin = (p, wardId) => p === GROUP_PINS[wardId] || p === SUPER_PIN;
 
 const WARD_TEMPLATES = {
-  default:  { label:"Default (Bed-based)",  desc:"Assign students to numbered beds. Used for Gynaecology, Medicine, Obstetrics, Psychiatry." },
+  default:  { label:"Default (Bed-based)",  desc:"Assign students to numbered beds. Used for Gynaecology, Medicine, Obstetrics." },
   medicine: { label:"Medicine",              desc:"Bed-based with named ward sections (e.g. Elective, Emergency, HDU), Shadow HO banner, and shadow assigned from active Shadow HOs." },
   surgery:  { label:"Surgery",              desc:"Bed-based with named ward sections (e.g. Elective, Emergency, HDU), Shadow HO banner, and shadow assigned from active Shadow HOs." },
   paed:     { label:"Paediatrics",          desc:"Assign by admission order with patient name/age. Two student groups, ward sections, Shadow HO banner." },
+  psych:    { label:"Psychiatry",           desc:"Assign by admission order with patient name. Two student groups, ward sections, Shadow HO banner. Adapted for psychiatric ward workflow." },
 };
 
 const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABKCAYAAAA/i5OkAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAABgklEQVR4nO3aXW+DMAyFYTP1//9lejdFUSj5cBLbeZ+bVWhd6cmpoQwRAAAAAAAAAAjjfthW2n6cv8Hn39lPZEYDLiHsxNX5vJYQe18jhJ4Gtzb06EbPGBFIjH5803ZeP7YdS6vBxwf5ZCTgu/D46Hlb0tO81hBLo0Nb+j5GXkf9k9jaYKsN1dov9ff3afz91qYcP5s1D3J5mMeHK8J5cG77DC65Co+9tnf7DE49hbgjXLMLGmFEaIarvlBWV772o9qy/zP+5iuLDd4SxCzWAg4VrsjYQU5byC8uVhocMlwRGwGHDVdk/4ionbluL+LvDriHq7AtjIgRVi+f/vMesIjxkCMELGI45CgBixgNefdBruYgZTK4Wh4aXPpviRseAnaNgCdbHfBxN2avDDi/E+iIoHePiNqg3S7GqtO0t4DcBvhmd4M1mTyVWxFw2HbWiNJgk+0VWRPw7G9iZsMVWdtg7SBmLJz6Yq2+2GP2RulZrO1oKXRr+wgAAAAAAAAAHn0BpuAyXZaUVW4AAAAASUVORK5CYII=";
@@ -258,6 +259,7 @@ function WardCard({ ward, onOpen }) {
   const rgb      = hexToRgb(theme);
   const isPaed    = setup.template === "paed";
   const isSurgery = setup.template === "surgery";
+  const isPsych   = setup.template === "psych";
   const bedKeys  = Object.keys(beds);
 
   // Default template stats
@@ -266,11 +268,11 @@ function WardCard({ ward, onOpen }) {
   const assigned  = bedKeys.filter(k=>beds[k]?.assigned?.length>0||beds[k]?.shadows?.length>0).length;
 
   // Patient count
-  const patientCount = (isPaed||isSurgery)
+  const patientCount = (isPaed||isSurgery||isPsych)
     ? patients.length
     : bedKeys.filter(k=>{ const b=beds[k]; return b&&(b.diagnosis||b.consultant||b.notes||b.assigned?.length>0||b.shadows?.length>0||b.isNew||b.historyTaken||b.opStatus); }).length;
 
-  // Paed/Surgery stats
+  // Paed/Surgery/Psych stats
   const ptNew  = patients.filter(p=>p.isNew).length;
   const ptHist = patients.filter(p=>p.historyTaken).length;
   const paedNew  = ptNew;
@@ -294,7 +296,7 @@ function WardCard({ ward, onOpen }) {
 
       {/* Stats row */}
       <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-        {((isPaed||isSurgery) ? [
+        {((isPaed||isSurgery||isPsych) ? [
           { icon:"newdot",  color:C.red,   label:"New",      val:ptNew },
           { icon:"history", color:C.green, label:"Hx taken", val:`${ptHist}/${patientCount}` },
         ] : [
@@ -371,10 +373,12 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
     groupId: groupOptions[0]||"cg1", wardName:"", appointmentType:"", bedCount:"",
     themeColor:"#007aff", template:"default",
     students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}],
-    // Paed-specific
+    // Paed-specific (also shared by psych)
     paedGroups:[{name:"Group A",students:[{name:"",no:""}]},{name:"Group B",students:[{name:"",no:""}]}],
     wardSections:[{name:"General",count:""},{name:"HDU",count:""},{name:"NICU",count:""},{name:"NBU",count:""}],
     shadowHOs:[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}],
+    // Psych-specific ward section defaults
+    psychSections:[{name:"Male Ward",count:""},{name:"Female Ward",count:""}],
   });
   const [error, setError] = useState("");
 
@@ -394,6 +398,18 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
         wardSections: form.wardSections.filter(s=>s.name?.trim()&&s.count).map(s=>({name:s.name.trim(),count:parseInt(s.count)||0})),
         shadowHOs: form.shadowHOs,
         consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
+      };
+    } else if (form.template==="psych") {
+      const psychSections = (form.psychSections||[{name:"Male Ward",count:""},{name:"Female Ward",count:""}])
+        .filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),count:parseInt(s.count)||0}));
+      setup = {
+        wardName: form.wardName, appointmentType: form.appointmentType,
+        themeColor: form.themeColor, template: "psych",
+        paedGroups: form.paedGroups.map(g=>({name:g.name, students:g.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),no:s.no?.trim()||""}))})),
+        wardSections: psychSections,
+        consultants: form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"})),
+        customTags: (form.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"})),
+        pairings: [],
       };
     } else if (form.template==="surgery") {
       const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim());
@@ -496,6 +512,8 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
 
         {form.template==="paed" ? (
           <PaedSetupFields form={form} setForm={setForm} theme={form.themeColor}/>
+        ) : form.template==="psych" ? (
+          <PsychSetupFields form={form} setForm={setForm} theme={form.themeColor}/>
         ) : form.template==="medicine" ? (
           <MedicineSetupFields form={form} setForm={setForm}/>
         ) : form.template==="surgery" ? (
@@ -906,6 +924,10 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
 
   if (template === "paed") {
     return <PaedWardView wardId={wardId} ward={ward} onBack={onBack} saveWard={saveWard} onDelete={onDelete} showToast={showToast} seniorMode={seniorMode}/>;
+  }
+
+  if (template === "psych") {
+    return <PsychWardView wardId={wardId} ward={ward} onBack={onBack} saveWard={saveWard} onDelete={onDelete} showToast={showToast} seniorMode={seniorMode}/>;
   }
 
   if (template === "medicine") {
@@ -5641,3 +5663,1190 @@ function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, 
   );
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PSYCHIATRY TEMPLATE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── PsychStudentTab ──────────────────────────────────────────────────────────
+function PsychStudentTab({ patients, groups, pairings, theme, rgb, absentStudents=[], onSelectPatient }) {
+  const [selected, setSelected] = useState(null); // "pair-N" or "student-Name"
+  const [view,     setView]     = useState("pairings"); // "pairings" | "students"
+
+  const groupColors = ["#6366f1","#f97316"];
+  const absentSet   = new Set(absentStudents);
+
+  const getStudentGroup = (name) => {
+    for (let gi=0; gi<groups.length; gi++) {
+      if ((groups[gi].students||[]).some(s=>s.name===name)) return gi;
+    }
+    return -1;
+  };
+
+  const getGroupColor = (name) => {
+    const gi = getStudentGroup(name);
+    return gi >= 0 ? groupColors[gi] : C.textSub;
+  };
+
+  const getPairingPatients = (idx) => patients.filter(p=>p.pairingIdx===idx);
+  const getStudentPatients = (name) => patients.filter(p=>(p.members||[]).includes(name));
+
+  const allStudents = groups.flatMap((g,gi)=>
+    (g.students||[]).filter(s=>s.name).map(s=>({...s, groupIdx:gi, groupName:g.name}))
+  );
+
+  // Patient card (compact) shared between both views
+  const PatientCard = ({pt, accentColor}) => {
+    const hasBed = pt.section&&pt.bedNo;
+    const filled = pt.diagnosis||pt.consultant;
+    const gc = accentColor||theme;
+    return (
+      <div onClick={()=>onSelectPatient&&onSelectPatient(pt)}
+        style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(${hexToRgb(gc)},0.2)`,borderRadius:12,padding:"10px",cursor:onSelectPatient?"pointer":"default",position:"relative",boxShadow:filled?"0 4px 14px rgba(0,0,0,0.07)":"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
+        onMouseEnter={e=>{if(onSelectPatient){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.1)";}}}
+        onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 4px 14px rgba(0,0,0,0.07)":"0 2px 8px rgba(0,0,0,0.05)";}}>
+        <div style={{position:"absolute",top:7,right:7,display:"flex",gap:3}}>
+          {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
+          {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
+        </div>
+        {hasBed?(
+          <>
+            <div style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section}</div>
+            <div style={{fontSize:"1.05rem",fontWeight:700,color:gc,lineHeight:1,letterSpacing:"-0.03em",marginBottom:3}}>{String(pt.bedNo).padStart(2,"0")}</div>
+          </>
+        ):(
+          <div style={{fontSize:"0.5rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>Unassigned</div>
+        )}
+        <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,lineHeight:1.2,wordBreak:"break-word",marginBottom:2}}>{pt.name}</div>
+        {pt.consultant&&<div style={{fontSize:"0.56rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{pt.consultant}</div>}
+        {pt.diagnosis&&<div style={{fontSize:"0.58rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>}
+      </div>
+    );
+  };
+
+  if (allStudents.length===0 && pairings.length===0) return (
+    <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</div>
+  );
+
+  return (
+    <div>
+      {/* View toggle */}
+      <div style={{display:"flex",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:3,marginBottom:16,gap:3}}>
+        {[{id:"pairings",label:"By Pairing"},{id:"students",label:"By Student"}].map(v=>(
+          <button key={v.id} onClick={()=>{setView(v.id);setSelected(null);}}
+            style={{flex:1,padding:"8px",fontSize:"0.78rem",fontWeight:view===v.id?600:400,fontFamily:SF,
+              background:view===v.id?C.surface:"none",border:"none",borderRadius:9,cursor:"pointer",
+              color:view===v.id?C.text:C.textMuted,
+              boxShadow:view===v.id?"0 1px 4px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── BY PAIRING ── */}
+      {view==="pairings" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {pairings.length===0 && <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No pairings configured yet.</div>}
+          {pairings.map((pair,pi)=>{
+            const members = (pair.members||[]).filter(Boolean);
+            const pPts    = getPairingPatients(pi);
+            const isOpen  = selected===`pair-${pi}`;
+            const hasAbsent = members.some(m=>absentSet.has(m));
+            const pColor  = `rgba(${rgb},1)`;
+
+            return (
+              <div key={pi}>
+                <div onClick={()=>setSelected(isOpen?null:`pair-${pi}`)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"13px 14px",background:C.surface,
+                    border:`1px solid ${isOpen?`rgba(${rgb},0.35)`:"rgba(0,0,0,0.08)"}`,
+                    borderRadius:isOpen?"14px 14px 0 0":14,cursor:"pointer",userSelect:"none",
+                    boxShadow:isOpen?"none":"0 4px 14px rgba(0,0,0,0.07)",transition:"all 0.15s"}}>
+                  {/* P-badge */}
+                  <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                  {/* Members */}
+                  <div style={{flex:1,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                    {members.length===0
+                      ? <span style={{fontSize:"0.82rem",color:C.textMuted}}>Empty</span>
+                      : members.map((m,mi)=>(
+                          <span key={m} style={{display:"flex",alignItems:"center",gap:3}}>
+                            {mi>0&&<span style={{color:C.textMuted,fontSize:"0.72rem"}}>×</span>}
+                            <span style={{fontSize:"0.88rem",fontWeight:600,color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                          </span>
+                        ))
+                    }
+                    {hasAbsent&&<span style={{fontSize:"0.58rem",color:C.red,background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:4,padding:"1px 5px"}}>absent</span>}
+                  </div>
+                  {/* Patient count */}
+                  <span style={{fontSize:"0.68rem",color:C.textMuted,marginRight:4}}>{pPts.length} pt</span>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
+                    <path d="M2 4l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+
+                {isOpen&&(
+                  <div style={{background:C.surfaceEl,border:`1px solid rgba(${rgb},0.2)`,borderTop:"none",borderRadius:"0 0 14px 14px",padding:"12px 14px 14px"}}>
+                    {/* Member chips with group colour + absent state */}
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:pPts.length>0?12:0}}>
+                      {members.map(m=>{
+                        const gc=getGroupColor(m);
+                        const gi=getStudentGroup(m);
+                        const mPts=patients.filter(p=>(p.members||[]).includes(m));
+                        const isAbsent=absentSet.has(m);
+                        return (
+                          <div key={m} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:8,
+                            background:isAbsent?`rgba(${hexToRgb(C.red)},0.06)`:`rgba(${hexToRgb(gc)},0.08)`,
+                            border:`1px solid ${isAbsent?`rgba(${hexToRgb(C.red)},0.25)`:`rgba(${hexToRgb(gc)},0.25)`}`}}>
+                            <div style={{width:7,height:7,borderRadius:"50%",background:isAbsent?C.red:gc,flexShrink:0}}/>
+                            <span style={{fontSize:"0.78rem",fontWeight:600,color:isAbsent?C.red:gc,textDecoration:isAbsent?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                            <span style={{fontSize:"0.6rem",color:isAbsent?C.red:C.textMuted,opacity:0.8}}>{groups[gi]?.name||""}</span>
+                            <span style={{fontSize:"0.6rem",fontWeight:600,color:isAbsent?C.red:gc,background:isAbsent?`rgba(${hexToRgb(C.red)},0.1)`:`rgba(${hexToRgb(gc)},0.1)`,borderRadius:4,padding:"0 4px"}}>{mPts.length}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {pPts.length===0
+                      ? <div style={{color:C.textMuted,fontSize:"0.8rem",textAlign:"center",padding:"10px 0"}}>No patients assigned to this pairing yet</div>
+                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+                          {pPts.map(pt=><PatientCard key={pt.id} pt={pt} accentColor={theme}/>)}
+                        </div>
+                    }
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── BY STUDENT ── */}
+      {view==="students" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {allStudents.length===0 && <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students configured.</div>}
+          {allStudents.map(s=>{
+            const gc    = groupColors[s.groupIdx]||theme;
+            const sPts  = getStudentPatients(s.name);
+            const isOpen = selected===`student-${s.name}`;
+            const isAbsent = absentSet.has(s.name);
+
+            // Find their pairing
+            const pairingIdx = pairings.findIndex(p=>(p.members||[]).includes(s.name));
+            const pLabel = pairingIdx>=0 ? `P${pairingIdx+1}` : null;
+
+            return (
+              <div key={s.name}>
+                <div onClick={()=>setSelected(isOpen?null:`student-${s.name}`)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"13px 14px",background:C.surface,
+                    border:`1px solid ${isOpen?`rgba(${hexToRgb(gc)},0.35)`:"rgba(0,0,0,0.08)"}`,
+                    borderRadius:isOpen?"14px 14px 0 0":14,cursor:"pointer",userSelect:"none",
+                    boxShadow:isOpen?"none":"0 4px 14px rgba(0,0,0,0.07)",transition:"all 0.15s",
+                    opacity:isAbsent?0.65:1}}>
+                  {s.no&&<span style={{fontSize:"0.58rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:5,padding:"2px 6px",fontFamily:"monospace",flexShrink:0}}>{s.no}</span>}
+                  <div style={{width:8,height:8,borderRadius:"50%",background:isAbsent?C.red:gc,flexShrink:0}}/>
+                  <span style={{flex:1,fontSize:"0.9rem",color:isAbsent?C.textMuted:C.text,fontWeight:isOpen?600:400,textDecoration:isAbsent?"line-through":"none"}}>{s.name}</span>
+                  <span style={{fontSize:"0.65rem",color:C.textMuted,marginRight:4}}>{s.groupName}</span>
+                  {pLabel&&<span style={{fontSize:"0.6rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:4,padding:"1px 6px",marginRight:4}}>{pLabel}</span>}
+                  {isAbsent&&<span style={{fontSize:"0.58rem",color:C.red,background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:4,padding:"1px 5px",marginRight:4}}>absent</span>}
+                  <span style={{fontSize:"0.68rem",color:C.textMuted,marginRight:4}}>{sPts.length} pt</span>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
+                    <path d="M2 4l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+
+                {isOpen&&(
+                  <div style={{background:C.surfaceEl,border:`1px solid rgba(${hexToRgb(gc)},0.2)`,borderTop:"none",borderRadius:"0 0 14px 14px",padding:"12px 14px 14px"}}>
+                    {pLabel&&(
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:sPts.length>0?12:0}}>
+                        <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px"}}>{pLabel}</span>
+                        <span style={{fontSize:"0.72rem",color:C.textSub}}>
+                          {(pairings[pairingIdx].members||[]).filter(m=>m!==s.name).map((m,mi)=>(
+                            <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>
+                          ))}
+                        </span>
+                        {sPts.length>0&&<span style={{marginLeft:"auto",fontSize:"0.65rem",color:C.textMuted}}>{sPts.length} patient{sPts.length!==1?"s":""}</span>}
+                      </div>
+                    )}
+                    {sPts.length===0
+                      ? <div style={{color:C.textMuted,fontSize:"0.8rem",textAlign:"center",padding:"10px 0"}}>No patients assigned yet</div>
+                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+                          {sPts.map(pt=><PatientCard key={pt.id} pt={pt} accentColor={gc}/>)}
+                        </div>
+                    }
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PsychSetupFields ────────────────────────────────────────────────────────
+function PsychSetupFields({ form, setForm }) {
+  const paedGroups   = form.paedGroups   || [{name:"Group A",students:[{name:"",no:""}]},{name:"Group B",students:[{name:"",no:""}]}];
+  const psychSections= form.psychSections|| [{name:"Male Ward",count:""},{name:"Female Ward",count:""}];
+  const shadowHOs    = form.shadowHOs    || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
+  const consultants  = form.consultants  || [{name:"",color:"#6366f1"}];
+
+  const updGroup    = (gi,k,v) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],[k]:v}; return {...f,paedGroups:g}; });
+  const addStudent  = (gi) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],students:[...(g[gi].students||[]),{name:"",no:""}]}; return {...f,paedGroups:g}; });
+  const updStudent  = (gi,si,k,v) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; const s=[...(g[gi].students||[])]; s[si]={...s[si],[k]:v}; g[gi]={...g[gi],students:s}; return {...f,paedGroups:g}; });
+  const remStudent  = (gi,si) => setForm(f=>{ const g=[...(f.paedGroups||paedGroups)]; g[gi]={...g[gi],students:(g[gi].students||[]).filter((_,i)=>i!==si)}; return {...f,paedGroups:g}; });
+
+  const addSection  = () => setForm(f=>({...f,psychSections:[...(f.psychSections||psychSections),{name:"",count:""}]}));
+  const updSection  = (i,k,v) => setForm(f=>{ const s=[...(f.psychSections||psychSections)]; s[i]={...s[i],[k]:v}; return {...f,psychSections:s}; });
+  const remSection  = (i) => setForm(f=>({...f,psychSections:(f.psychSections||psychSections).filter((_,idx)=>idx!==i)}));
+
+  const updShadowHO   = (i,v) => setForm(f=>{ const s=[...(f.shadowHOs||shadowHOs)]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
+  const addShadowHO   = () => { const n=(form.shadowHOs||shadowHOs).length+1; setForm(f=>({...f,shadowHOs:[...(f.shadowHOs||shadowHOs),{post:`Shadow HO ${n}`,name:""}]})); };
+  const remShadowHO   = (i) => setForm(f=>({...f,shadowHOs:(f.shadowHOs||shadowHOs).filter((_,idx)=>idx!==i)}));
+  const updConsultant = (i,k,v) => setForm(f=>{ const a=[...(f.consultants||consultants)]; a[i]={...a[i],[k]:v}; return {...f,consultants:a}; });
+  const addConsultant = () => setForm(f=>({...f,consultants:[...(f.consultants||consultants),{name:"",color:"#6366f1"}]}));
+  const remConsultant = (i) => setForm(f=>({...f,consultants:(f.consultants||consultants).filter((_,idx)=>idx!==i)}));
+
+  return (
+    <div>
+      {/* Groups */}
+      {paedGroups.map((grp,gi)=>(
+        <div key={gi} style={{marginBottom:22,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:gi===0?"#6366f1":"#f97316"}}/>
+            <input value={grp.name} onChange={e=>updGroup(gi,"name",e.target.value)} placeholder={`Group ${gi===0?"A":"B"} name`}
+              style={{...iS,fontWeight:600,fontSize:"0.88rem",flex:1,padding:"7px 10px"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 60px",gap:4,marginBottom:6,paddingLeft:2}}>
+            <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>STUDENT NAME</span>
+            <span style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",textAlign:"center"}}>NO.</span>
+          </div>
+          {(grp.students||[]).map((s,si)=>(
+            <div key={si} style={{display:"flex",gap:6,marginBottom:6}}>
+              <input value={s.name} onChange={e=>updStudent(gi,si,"name",e.target.value)} placeholder={`Student ${si+1}`} style={{...iS,flex:1,padding:"8px 10px",fontSize:"0.85rem"}}/>
+              <input value={s.no||""} onChange={e=>updStudent(gi,si,"no",e.target.value)} placeholder="—" style={{...iS,width:52,padding:"8px 6px",textAlign:"center",fontSize:"0.82rem",flexShrink:0}}/>
+              {(grp.students||[]).length>1&&<button onClick={()=>remStudent(gi,si)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+            </div>
+          ))}
+          <button onClick={()=>addStudent(gi)} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
+        </div>
+      ))}
+
+      {/* Ward Sections */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Ward Sections</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>e.g. Male Ward, Female Ward, Open Ward — enter bed count for each</p>
+        {(form.psychSections||psychSections).map((s,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input value={s.name} onChange={e=>updSection(i,"name",e.target.value)} placeholder="Section name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+            <input type="number" value={s.count||""} onChange={e=>updSection(i,"count",e.target.value)} placeholder="Beds" style={{...iS,width:70,padding:"9px 8px",textAlign:"center"}}/>
+            {(form.psychSections||psychSections).length>1&&<button onClick={()=>remSection(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+          </div>
+        ))}
+        <button onClick={addSection} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Section</button>
+      </div>
+
+      {/* Shadow HOs */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Shadow HO Posts</label>
+        {(form.shadowHOs||shadowHOs).map((ho,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <div style={{fontSize:"0.72rem",color:C.textMuted,minWidth:90,flexShrink:0}}>{ho.post}</div>
+            <input value={ho.name||""} onChange={e=>updShadowHO(i,e.target.value)} placeholder="Student name (optional)" style={{...iS,flex:1,padding:"8px 12px"}}/>
+            {(form.shadowHOs||shadowHOs).length>1&&<button onClick={()=>remShadowHO(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+          </div>
+        ))}
+        <button onClick={addShadowHO} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Shadow HO Post</button>
+      </div>
+
+      {/* Consultants */}
+      <div style={{marginBottom:22}}>
+        <label style={labelStyle}>Consultants</label>
+        {(form.consultants||consultants).map((c,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+            <input value={c.name} onChange={e=>updConsultant(i,"name",e.target.value)} placeholder="Consultant name" style={{...iS,flex:1}}/>
+            {(form.consultants||consultants).length>1&&<button onClick={()=>remConsultant(i)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>}
+          </div>
+        ))}
+        <button onClick={addConsultant} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Consultant</button>
+      </div>
+
+      {/* Custom Tags */}
+      <div style={{marginBottom:32}}>
+        <label style={labelStyle}>Custom Tags</label>
+        <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>e.g. High Risk, Voluntary, Involuntary, On Leave</p>
+        {(form.customTags||[]).map((tag,i)=>(
+          <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+            <input type="color" value={tag.color||"#6366f1"} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],color:e.target.value};return{...f,customTags:a};})} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
+            <input value={tag.label} onChange={e=>setForm(f=>{const a=[...(f.customTags||[])];a[i]={...a[i],label:e.target.value};return{...f,customTags:a};})} placeholder="Tag name" style={{...iS,flex:1}}/>
+            <button onClick={()=>setForm(f=>({...f,customTags:(f.customTags||[]).filter((_,idx)=>idx!==i)}))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+          </div>
+        ))}
+        <button onClick={()=>setForm(f=>({...f,customTags:[...(f.customTags||[]),{label:"",color:"#6366f1"}]}))} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Tag</button>
+      </div>
+    </div>
+  );
+}
+
+// ── PsychWardView ────────────────────────────────────────────────────────────
+function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
+  const [activeTab,    setActiveTab]    = useState("ward");
+  const [isLeader,     setIsLeader]     = useState(false);
+  const [pinInput,     setPinInput]     = useState("");
+  const [pinError,     setPinError]     = useState(false);
+  const [showPin,      setShowPin]      = useState(false);
+  const [editMode,     setEditMode]     = useState(false);
+  const [editForm,     setEditForm]     = useState({});
+  const [showDelete,   setShowDelete]   = useState(false);
+  const [selectedPt,   setSelectedPt]   = useState(null);
+  const [showAddPt,    setShowAddPt]    = useState(false);
+  const [newPt,        setNewPt]        = useState({name:"",autoAssign:true,manualPairingIdx:null});
+  const [ptEdit,       setPtEdit]       = useState({consultant:"",diagnosis:"",notes:"",historyTaken:false,isNew:false,section:"",bedNo:"",tags:[]});
+  const [assignTarget, setAssignTarget] = useState(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [absentExpanded, setAbsentExpanded] = useState(false);
+  const [sectionFilter, setSectionFilter] = useState("all");
+  const [pairingOpen,  setPairingOpen]  = useState(false);
+  const [pairingEdit,  setPairingEdit]  = useState(false);
+  const [pairingForm,  setPairingForm]  = useState([]);
+
+  const setup    = ward.setup || {};
+  const patients = ward.patients || [];
+  const absentStudents = ward.absentStudents || [];
+  const theme    = setup.themeColor || "#7c3aed";
+  const rgb      = hexToRgb(theme);
+  const groups   = setup.paedGroups || [];
+  const sections = setup.wardSections || [];
+  const pairings = setup.pairings    || [];
+  const consultants = setup.consultants || [];
+  const customTags  = setup.customTags  || [];
+
+  // Flat list of all students across both groups
+  const allGroupStudents = groups.flatMap(g=>(g.students||[]).filter(s=>s.name).map(s=>({...s, groupIdx:groups.indexOf(g), groupName:g.name})));
+  const absentSet = new Set(absentStudents);
+
+  // Which group (0 or 1) does a student belong to?
+  const getStudentGroup = (name) => {
+    for (let gi=0; gi<groups.length; gi++) {
+      if ((groups[gi].students||[]).some(s=>s.name===name)) return gi;
+    }
+    return -1;
+  };
+
+  const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
+
+  const tryPin = () => {
+    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
+  };
+
+  const toggleAbsent = async (name) => {
+    const current = ward.absentStudents || [];
+    const updated = current.includes(name) ? current.filter(n=>n!==name) : [...current, name];
+    await save({...ward, absentStudents: updated});
+  };
+
+  // ── Pairing-based auto-assign ────────────────────────────────────────────
+  // Pick the pairing with the fewest patients, weighted by absent members.
+  // If a member is absent, that pair's "effective capacity" is reduced so they
+  // receive fewer patients proportionally.
+  const computeAutoAssign = (existingPatients) => {
+    if (pairings.length === 0) return { pairingIdx: null, members: [] };
+
+    // Count active (non-absent) members per pairing
+    const pairingStats = pairings.map((pair, idx) => {
+      const members = (pair.members || []).filter(Boolean);
+      const activeCount = members.filter(m => !absentSet.has(m)).length;
+      const totalCount = members.length;
+      const ptCount = existingPatients.filter(p => p.pairingIdx === idx).length;
+      // Weight: if some members absent, treat this pairing as if it has more patients already
+      // (absentRatio: 0=all present, 1=all absent)
+      const absentRatio = totalCount > 0 ? (totalCount - activeCount) / totalCount : 0;
+      const weightedPtCount = ptCount + absentRatio * 999; // absent pairs pushed way down
+      return { idx, members, activeCount, ptCount, weightedPtCount };
+    });
+
+    // Pick the pairing with lowest weighted pt count (ties: random)
+    const minWeighted = Math.min(...pairingStats.map(p => p.weightedPtCount));
+    const eligible = pairingStats.filter(p => p.weightedPtCount === minWeighted);
+    const picked = eligible[Math.floor(Math.random() * eligible.length)];
+
+    return { pairingIdx: picked.idx, members: picked.members };
+  };
+
+  const savePairings = async (newPairings) => {
+    // Sync pairingIdx on existing patients when pairings are reordered/removed
+    // (we just keep pairingIdx as-is; if a pairing is removed the patient becomes unassigned)
+    await save({...ward, setup:{...setup, pairings:newPairings}});
+    setPairingEdit(false); showToast("Pairings saved");
+  };
+
+  const addPatient = async () => {
+    if (!newPt.name.trim()) { showToast("Enter patient name","error"); return; }
+    let pairingIdx = null;
+    let members = [];
+    if (newPt.autoAssign) {
+      const assigned = computeAutoAssign(patients);
+      pairingIdx = assigned.pairingIdx;
+      members = assigned.members;
+    } else {
+      pairingIdx = newPt.manualPairingIdx != null ? newPt.manualPairingIdx : null;
+      members = pairingIdx != null && pairings[pairingIdx] ? (pairings[pairingIdx].members || []).filter(Boolean) : [];
+    }
+    const pt = { id:Date.now().toString(), name:newPt.name.trim(), pairingIdx, members, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, section:"", bedNo:"", tags:[], addedAt:Date.now() };
+    await save({ ...ward, patients:[...patients, pt] });
+    setNewPt({name:"",autoAssign:true,manualPairingIdx:null}); setShowAddPt(false); showToast("Patient added");
+  };
+
+  const updatePatient = async (id, updates) => {
+    await save({...ward, patients:patients.map(p => p.id===id ? {...p,...updates} : p)});
+  };
+
+  const removePatient = async (id) => {
+    await save({...ward, patients:patients.filter(p=>p.id!==id)});
+    setSelectedPt(null); setShowClearConfirm(false);
+  };
+
+  const getWeekKey = (date=new Date()) => {
+    const y=date.getFullYear(), start=new Date(y,0,1);
+    return `${y}-W${String(Math.ceil(((date-start)/86400000+start.getDay()+1)/7)).padStart(2,"0")}`;
+  };
+
+  const archivePatient = async (id) => {
+    const pt = patients.find(p=>p.id===id); if (!pt) return;
+    const weekKey = getWeekKey();
+    const archive = ward.archive||{};
+    const weekArchive = archive[weekKey]||{};
+    weekArchive[id] = { ...pt, archivedAt: new Date().toISOString() };
+    await save({ ...ward, patients:patients.filter(p=>p.id!==id), archive:{ ...archive, [weekKey]:weekArchive } });
+    setSelectedPt(null); setShowClearConfirm(false); showToast("Patient archived");
+  };
+
+  const deleteArchivedPatient = async (weekKey, id) => {
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...(archive[weekKey]||{}) };
+    delete weekArchive[id];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, archive });
+    showToast("Archived record deleted");
+  };
+
+  const restorePatient = async (weekKey, id) => {
+    const archivedPt = (ward.archive||{})[weekKey]?.[id]; if (!archivedPt) return;
+    const { archivedAt, ...ptData } = archivedPt;
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...(archive[weekKey]||{}) };
+    delete weekArchive[id];
+    if (Object.keys(weekArchive).length===0) delete archive[weekKey];
+    else archive[weekKey] = weekArchive;
+    await save({ ...ward, patients:[...patients, ptData], archive });
+    showToast("Patient restored");
+  };
+
+  const unassignedPatients = patients.filter(p=>!p.section||!p.bedNo);
+  const filteredPatients = sectionFilter==="all" ? patients
+    : sectionFilter==="unassigned" ? unassignedPatients
+    : patients.filter(p=>p.section===sectionFilter);
+
+  const selPt = patients.find(p=>p.id===selectedPt);
+  const openPt = (pt) => {
+    setSelectedPt(pt.id);
+    setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",tags:pt.tags||[]});
+  };
+
+  // Group-color lookup for a student name
+  const groupColors = ["#6366f1","#f97316"];
+  const getGroupColor = (name) => {
+    const gi = getStudentGroup(name);
+    return gi >= 0 ? groupColors[gi] : C.textSub;
+  };
+
+  // Pairing label e.g. "P1"
+  const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
+      {/* Header */}
+      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={20} color={C.textSub}/></button>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.wardName||"Psychiatry Ward"}</div>
+            <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.appointmentType||""}</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {!seniorMode&&!isLeader&&(
+              <button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
+                <Icon name="key" size={11} color={C.textSub}/> Leader
+              </button>
+            )}
+            {isLeader&&!seniorMode&&(
+              <button onClick={()=>{
+                setEditForm({
+                  wardName:setup.wardName||"",
+                  appointmentType:setup.appointmentType||"",
+                  themeColor:setup.themeColor||theme,
+                  paedGroups:(setup.paedGroups||[]).map(g=>({...g,students:(g.students||[]).map(s=>({...s}))})),
+                  psychSections:(setup.wardSections||[]).map(s=>({...s})),
+                  shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),
+                  consultants:(setup.consultants||[]).map(c=>({...c})),
+                  customTags:(setup.customTags||[]).map(t=>({...t})),
+                });
+                setEditMode(true);
+              }} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:"0.72rem",fontFamily:SF}}>
+                <Icon name="settings" size={11} color={C.textSub}/> Settings
+              </button>
+            )}
+          </div>
+        </div>
+        {/* Tabs */}
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",gap:0,borderTop:`1px solid ${C.border}`,marginTop:10}}>
+          {[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}].map(t=>(
+            <button key={t.id} onClick={()=>setActiveTab(t.id)}
+              style={{flex:1,padding:"10px 0",fontSize:"0.8rem",fontWeight:activeTab===t.id?600:400,background:"none",border:"none",cursor:"pointer",fontFamily:SF,
+                color:activeTab===t.id?theme:C.textMuted,
+                borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",transition:"color 0.15s"}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 80px"}}>
+        {activeTab==="ward" && <>
+
+          {/* Pairings panel */}
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:16,boxShadow:C.shadow,overflow:"hidden"}}>
+            <div onClick={()=>setPairingOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none"}}>
+              <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Pairings</span>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                {isLeader&&!seniorMode&&<button onClick={e=>{e.stopPropagation();setPairingForm(pairings.map(p=>({members:[...(p.members||[])]})));setPairingOpen(true);setPairingEdit(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:pairingOpen?"rotate(180deg)":"rotate(0deg)"}}>
+                  <path d="M3 5l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            {pairingOpen&&(
+              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px 14px"}}>
+                {pairingEdit ? (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                      <p style={{fontSize:"0.72rem",color:C.textMuted,margin:0}}>Up to 4 per pairing · max 2 from each group.</p>
+                      <button onClick={()=>{
+                        // Auto-pair: one from each group in order
+                        const g0 = (groups[0]?.students||[]).filter(s=>s.name).map(s=>s.name);
+                        const g1 = (groups[1]?.students||[]).filter(s=>s.name).map(s=>s.name);
+                        const len = Math.max(g0.length, g1.length);
+                        const newForm = [];
+                        for (let i=0; i<len; i++) {
+                          const members = [];
+                          if (g0[i]) members.push(g0[i]);
+                          if (g1[i]) members.push(g1[i]);
+                          if (members.length>0) newForm.push({members});
+                        }
+                        setPairingForm(newForm);
+                      }} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:600,flexShrink:0}}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h8M2 8h5M2 12h3M12 3l2 2-2 2M12 9l2 2-2 2M14 5h-3a2 2 0 00-2 2v2a2 2 0 002 2h3" stroke={theme} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Randomize
+                      </button>
+                    </div>
+
+                    {pairingForm.map((pair,pi)=>{
+                      const members=(pair.members||[]).filter(Boolean);
+                      const otherPairingMap = {};
+                      pairingForm.forEach((p,idx)=>{ if(idx!==pi)(p.members||[]).filter(Boolean).forEach(m=>{ otherPairingMap[m]=idx; }); });
+
+                      return (
+                        <div key={pi} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {pi+1}</span>
+                              {members.length>0&&<span style={{fontSize:"0.7rem",color:C.textSub}}>{members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.4}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>)}</span>}
+                            </div>
+                            <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==pi))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+                          </div>
+
+                          {/* Students grid — grouped */}
+                          {groups.map((g,gi)=>{
+                            const gColor=groupColors[gi]||C.textSub;
+                            const gStudents=(g.students||[]).filter(s=>s.name);
+                            const gSelected=members.filter(m=>getStudentGroup(m)===gi);
+                            const atGroupMax=gSelected.length>=2;
+                            return (
+                              <div key={gi} style={{marginBottom:gi<groups.length-1?10:0}}>
+                                <div style={{fontSize:"0.58rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:5}}>{g.name}</div>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                                  {gStudents.map(s=>{
+                                    const isSelected=members.includes(s.name);
+                                    const inOtherIdx=otherPairingMap[s.name];
+                                    const inOther=inOtherIdx!=null&&inOtherIdx!==undefined;
+                                    const disabled=!isSelected&&atGroupMax;
+                                    return (
+                                      <button key={s.name} onClick={()=>{
+                                        if (disabled) return;
+                                        const f=[...pairingForm];
+                                        const m=[...(f[pi].members||[])].filter(Boolean);
+                                        if (isSelected) {
+                                          f[pi]={...f[pi],members:m.filter(x=>x!==s.name)};
+                                        } else {
+                                          if (members.length>=4) return;
+                                          if (inOther) { const g2=[...(f[inOtherIdx].members||[])].filter(Boolean); f[inOtherIdx]={...f[inOtherIdx],members:g2.filter(x=>x!==s.name)}; }
+                                          f[pi]={...f[pi],members:[...m,s.name]};
+                                        }
+                                        setPairingForm(f);
+                                      }}
+                                        style={{padding:"5px 10px",borderRadius:8,fontSize:"0.75rem",cursor:disabled?"not-allowed":"pointer",fontFamily:SF,fontWeight:isSelected?600:400,
+                                          background:isSelected?`rgba(${hexToRgb(gColor)},0.12)`:C.surface,
+                                          border:`1px solid ${isSelected?gColor:inOther?"rgba(0,0,0,0.1)":C.border}`,
+                                          color:isSelected?gColor:disabled?C.textMuted:C.textSub,
+                                          opacity:disabled?0.45:1,transition:"all 0.1s"}}>
+                                        {s.name.split(" ")[0]}
+                                        {inOther&&!isSelected&&<span style={{fontSize:"0.55rem",marginLeft:3,opacity:0.5}}>P{inOtherIdx+1}</span>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+
+                    <button onClick={()=>setPairingForm(f=>[...f,{members:[]}])} style={{...aMB,marginTop:6}}><Icon name="plus" size={12} color={C.textSub}/> Add Pairing</button>
+
+                    <div style={{display:"flex",gap:10,marginTop:12}}>
+                      <button onClick={()=>setPairingEdit(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                      <button onClick={()=>savePairings(pairingForm.map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0))} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save</button>
+                    </div>
+                  </div>
+                ) : pairings.length===0 ? (
+                  <div style={{textAlign:"center",color:C.textMuted,fontSize:"0.8rem",padding:"10px 0"}}>{isLeader?"No pairings yet — tap Edit to configure.":"No pairings configured."}</div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {pairings.map((pair,pi)=>{
+                      const members=(pair.members||[]).filter(Boolean);
+                      const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
+                      const hasAbsent=members.some(m=>absentSet.has(m));
+                      return (
+                        <div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:C.bg,border:`1px solid rgba(${rgb},0.15)`}}>
+                          <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:"0.88rem",fontWeight:600,color:C.text,lineHeight:1.3}}>
+                              {members.map((m,mi)=>(
+                                <span key={m}>
+                                  {mi>0&&<span style={{color:C.textMuted,fontWeight:400,margin:"0 4px"}}>×</span>}
+                                  <span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                                </span>
+                              ))}
+                            </div>
+                            {hasAbsent&&<div style={{fontSize:"0.6rem",color:C.red,marginTop:2}}>Member absent — fewer patients assigned</div>}
+                          </div>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,borderRadius:5,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{ptCount} pt</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Absent Students Panel */}
+          {(() => {
+            const absentCount = absentStudents.length;
+            return (
+              <div style={{background:C.surface,border:`1px solid ${absentCount>0?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setAbsentExpanded(e=>!e)}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"0.65rem",fontWeight:600,color:absentCount>0?C.red:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Absent Students</span>
+                    {absentCount>0
+                      ? <span style={{fontSize:"0.62rem",fontWeight:700,background:`rgba(${hexToRgb(C.red)},0.1)`,color:C.red,borderRadius:20,padding:"2px 8px"}}>{absentCount} absent</span>
+                      : <span style={{fontSize:"0.62rem",color:C.textMuted}}>None</span>
+                    }
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {isLeader&&!seniorMode&&<span style={{fontSize:"0.68rem",color:theme,fontWeight:500}}>{absentExpanded?"Done":"Select"}</span>}
+                    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" style={{transform:absentExpanded?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}>
+                      <path d="M4 6l4 4 4-4" stroke={C.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+                {!absentExpanded && absentCount>0 && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
+                    {absentStudents.map(name=>(
+                      <span key={name} style={{fontSize:"0.72rem",background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:6,padding:"3px 8px",color:C.red,fontWeight:500}}>
+                        {name.split(" ")[0]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {absentExpanded && isLeader && !seniorMode && (
+                  <div style={{marginTop:12}}>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginBottom:10}}>Tap to mark absent. Absent students reduce how many patients that pair receives.</div>
+                    {groups.map((g,gi)=>{
+                      const gStudents=(g.students||[]).filter(s=>s.name);
+                      if(gStudents.length===0) return null;
+                      const gColor=groupColors[gi]||C.textSub;
+                      return (
+                        <div key={gi} style={{marginBottom:10}}>
+                          <div style={{fontSize:"0.6rem",fontWeight:700,color:gColor,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>{g.name}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                            {gStudents.map(s=>{
+                              const isAbsent=absentStudents.includes(s.name);
+                              return (
+                                <button key={s.name} onClick={()=>toggleAbsent(s.name)}
+                                  style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,cursor:"pointer",fontFamily:SF,fontSize:"0.75rem",fontWeight:isAbsent?600:400,
+                                    background:isAbsent?`rgba(${hexToRgb(C.red)},0.1)`:C.surfaceEl,
+                                    border:`1px solid ${isAbsent?C.red:C.border}`,
+                                    color:isAbsent?C.red:C.textSub,transition:"all 0.12s"}}>
+                                  {isAbsent&&<Icon name="close" size={10} color={C.red}/>}
+                                  {s.no&&<span style={{fontSize:"0.6rem",fontFamily:"monospace",opacity:0.7}}>{s.no}</span>}
+                                  {s.name.split(" ")[0]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {absentExpanded && (!isLeader||seniorMode) && (
+                  absentCount>0
+                    ? <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:10}}>
+                        {absentStudents.map(name=>(
+                          <span key={name} style={{fontSize:"0.75rem",background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:6,padding:"4px 10px",color:C.red,fontWeight:500}}>{name}</span>
+                        ))}
+                      </div>
+                    : <div style={{marginTop:8,fontSize:"0.75rem",color:C.textMuted}}>No students marked absent.</div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Stats */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+            {[
+              {label:"Patients",  val:patients.length,      color:theme},
+              {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
+              {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
+            ].map(s=>(
+              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+                <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
+                <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Section filter pills */}
+          {sections.length>0 && (
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+              {[
+                {id:"all",label:"All"},
+                ...sections.map(s=>({id:s.name,label:s.name})),
+                {id:"unassigned",label:`Unassigned${unassignedPatients.length>0?" ("+unassignedPatients.length+")":""}`},
+              ].map(f=>(
+                <button key={f.id} onClick={()=>setSectionFilter(f.id)}
+                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===f.id?600:400,cursor:"pointer",fontFamily:SF,
+                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.surface,
+                    border:`1px solid ${sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.border}`,
+                    color:sectionFilter===f.id?"#fff":C.textSub}}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Add patient button */}
+          {isLeader&&!seniorMode&&(
+            <button onClick={()=>setShowAddPt(true)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
+              <Icon name="plus" size={14} color={theme}/> Add Patient
+            </button>
+          )}
+
+          {/* Patient grid */}
+          {filteredPatients.length===0
+            ? <div style={{textAlign:"center",padding:"40px 20px",color:C.textMuted,fontSize:"0.85rem"}}>{patients.length===0?(isLeader?"No patients yet. Tap Add Patient to start.":"No patients yet."):"No patients in this section."}</div>
+            : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                {filteredPatients.map(pt=>{
+                  const hasBed = pt.section&&pt.bedNo;
+                  const isUnassigned = !hasBed;
+                  const filled = pt.diagnosis||pt.consultant||(pt.members||[]).length>0;
+                  const pLabel = getPairingLabel(pt.pairingIdx);
+                  return (
+                    <div key={pt.id}
+                      onClick={seniorMode?undefined:()=>openPt(pt)}
+                      style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:isUnassigned?`1px dashed ${C.borderMid}`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
+                      onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}
+                    >
+                      <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
+                        {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                        {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                      </div>
+                      {hasBed ? (
+                        <>
+                          <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section}</div>
+                          <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>{String(pt.bedNo).padStart(2,"0")}</div>
+                        </>
+                      ) : (
+                        <div style={{fontSize:"0.58rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:4}}>Unassigned</div>
+                      )}
+                      <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:3,flexWrap:"wrap"}}>
+                        <span style={{fontSize:"0.78rem",fontWeight:700,color:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{pt.name}</span>
+                      </div>
+                      {pt.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.consultant}</div>}
+                      {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
+                      {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
+                      {pLabel&&(
+                        <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                          <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
+                          {(pt.members||[]).map(m=><span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:getGroupColor(m),fontWeight:600}}>{m.split(" ")[0]}</span>)}
+                        </div>
+                      )}
+                      {(pt.tags||[]).length>0&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>
+                          {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </>}
+
+        {activeTab==="students" && <PsychStudentTab patients={patients} groups={groups} pairings={pairings} theme={theme} rgb={rgb} absentStudents={absentStudents} onSelectPatient={pt=>{ setSelectedPt(pt.id); setPtEdit({name:pt.name||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",tags:pt.tags||[]}); }}/>}
+
+        {activeTab==="archive" && <PaedArchiveTab archive={ward.archive||{}} theme={theme} rgb={rgb} onRestore={restorePatient} onDelete={deleteArchivedPatient}/>}
+      </div>
+
+      {/* Patient detail sheet */}
+      {selectedPt&&selPt&&!seniorMode&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
+          <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{flex:1,marginRight:12}}>
+                <input value={ptEdit.name||""} onChange={e=>setPtEdit(b=>({...b,name:e.target.value}))}
+                  style={{...iS,fontSize:"1.15rem",fontWeight:700,letterSpacing:"-0.02em",width:"100%",boxSizing:"border-box",padding:"6px 10px",marginBottom:6}}/>
+              </div>
+              <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);}} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4,flexShrink:0}}>
+                <Icon name="close" size={13} color={C.textSub}/>
+              </button>
+            </div>
+
+            {isLeader&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+              <div style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:4}}>Pairing</div>
+                {selPt.pairingIdx!=null && pairings[selPt.pairingIdx] ? (
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:"0.7rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"1px 6px"}}>P{selPt.pairingIdx+1}</span>
+                    <span style={{fontSize:"0.82rem",color:C.text}}>
+                      {(pairings[selPt.pairingIdx].members||[]).filter(Boolean).map((m,mi)=>(
+                        <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>
+                      ))}
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{fontSize:"0.78rem",color:C.textMuted}}>Unassigned</span>
+                )}
+              </div>
+            </div>}
+
+            {/* New patient toggle */}
+            <div onClick={()=>{ const v=!ptEdit.isNew; setPtEdit(b=>({...b,isNew:v})); updatePatient(selPt.id,{isNew:v}); }}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:ptEdit.isNew?`rgba(${hexToRgb(C.red)},0.06)`:C.surfaceEl,border:`1px solid ${ptEdit.isNew?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:8,userSelect:"none"}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${ptEdit.isNew?C.red:C.borderMid}`,background:ptEdit.isNew?C.red:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {ptEdit.isNew&&<Icon name="check" size={11} color="#fff"/>}
+              </div>
+              <span style={{fontSize:"0.86rem",color:ptEdit.isNew?C.red:C.text,fontWeight:500}}>New Patient</span>
+              <div style={{marginLeft:"auto"}}><Icon name="newdot" size={13} color={ptEdit.isNew?C.red:C.textMuted}/></div>
+            </div>
+
+            {/* History taken */}
+            <div onClick={()=>{ const v=!ptEdit.historyTaken; setPtEdit(b=>({...b,historyTaken:v,isNew:v?false:b.isNew})); updatePatient(selPt.id,{historyTaken:v,isNew:v?false:selPt.isNew}); }}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.07)`:C.surfaceEl,border:`1px solid ${ptEdit.historyTaken?`rgba(${hexToRgb(C.green)},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${ptEdit.historyTaken?C.green:C.borderMid}`,background:ptEdit.historyTaken?C.green:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {ptEdit.historyTaken&&<Icon name="check" size={11} color="#fff"/>}
+              </div>
+              <span style={{fontSize:"0.86rem",color:ptEdit.historyTaken?C.green:C.text,fontWeight:500}}>History Taken</span>
+              <div style={{marginLeft:"auto"}}><Icon name="history" size={13} color={ptEdit.historyTaken?C.green:C.textMuted}/></div>
+            </div>
+
+            {/* Bed Location */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Bed Location</label>
+              <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                {sections.map(sec=>(
+                  <button key={sec.name} onClick={()=>setPtEdit(b=>({...b,section:b.section===sec.name?"":sec.name,bedNo:b.section===sec.name?"":b.bedNo}))}
+                    style={{background:ptEdit.section===sec.name?theme:C.surfaceEl,border:`1px solid ${ptEdit.section===sec.name?theme:C.border}`,color:ptEdit.section===sec.name?"#fff":C.textSub,borderRadius:8,padding:"6px 12px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
+                    {sec.name}{sec.count&&<span style={{fontSize:"0.62rem",opacity:0.7,marginLeft:4}}>{sec.count}</span>}
+                  </button>
+                ))}
+              </div>
+              {ptEdit.section&&(()=>{
+                const sec = sections.find(s=>s.name===ptEdit.section);
+                const total = sec?.count || 0;
+                const bedNums = [];
+                for (let n=1;n<=total;n++) bedNums.push(n);
+                return bedNums.length>0 ? (
+                  <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:"0.82rem",color:C.textSub,fontWeight:500}}>{ptEdit.section} — Bed</span>
+                    <select value={ptEdit.bedNo} onChange={e=>setPtEdit(b=>({...b,bedNo:e.target.value}))} style={{...iS,padding:"6px 10px",fontSize:"0.82rem"}}>
+                      <option value="">Select</option>
+                      {bedNums.map(n=><option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            {/* Consultant */}
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Consultant</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                {consultants.length>0
+                  ?consultants.map((c,i)=>{ const cN=typeof c==="object"?c.name:c; const cC=typeof c==="object"?c.color:"#6366f1"; const act=ptEdit.consultant===cN;
+                    return <button key={i} onClick={()=>setPtEdit(b=>({...b,consultant:b.consultant===cN?"":cN}))}
+                      style={{display:"flex",alignItems:"center",gap:7,background:act?`rgba(${hexToRgb(cC)},0.12)`:C.surfaceEl,border:`1px solid ${act?cC:C.border}`,color:act?cC:C.textSub,borderRadius:8,padding:"7px 13px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:act?600:400}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:cC}}/>{cN}
+                    </button>; })
+                  :<input value={ptEdit.consultant} onChange={e=>setPtEdit(b=>({...b,consultant:e.target.value}))} placeholder="Consultant name" style={{...iS,width:"100%",boxSizing:"border-box"}}/>
+                }
+              </div>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Diagnosis / Presentation</label>
+              <input value={ptEdit.diagnosis} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,diagnosis:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} placeholder="Working diagnosis…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={labelStyle}>Notes</label>
+              <textarea value={ptEdit.notes} onChange={e=>{ const v=e.target.value; setPtEdit(b=>({...b,notes:v,isNew:v?false:b.isNew})); if(e.target.value) updatePatient(selPt.id,{isNew:false}); }} rows={3} placeholder="Clinical notes…" style={{...iS,marginTop:6,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:SF}}/>
+            </div>
+
+            {/* Custom Tags */}
+            {customTags.length>0&&(
+              <div style={{marginBottom:16}}>
+                <label style={labelStyle}>Tags</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:8}}>
+                  {customTags.map(tag=>{
+                    const isOn=(ptEdit.tags||[]).includes(tag.label);
+                    const tRgb=hexToRgb(tag.color);
+                    return (
+                      <button key={tag.label} onClick={()=>{ const cur=ptEdit.tags||[]; const next=isOn?cur.filter(t=>t!==tag.label):[...cur,tag.label]; setPtEdit(b=>({...b,tags:next})); updatePatient(selPt.id,{tags:next}); }}
+                        style={{display:"flex",alignItems:"center",gap:6,padding:"7px 13px",borderRadius:20,cursor:"pointer",fontFamily:SF,fontSize:"0.8rem",fontWeight:isOn?700:400,
+                          background:isOn?`rgba(${tRgb},0.14)`:C.surface,
+                          border:`1px solid ${isOn?tag.color:`rgba(${tRgb},0.3)`}`,
+                          color:isOn?tag.color:C.textMuted,transition:"all 0.12s"}}>
+                        <span style={{width:8,height:8,borderRadius:"50%",background:tag.color,flexShrink:0,display:"inline-block"}}/>
+                        {tag.label}
+                        {isOn&&<Icon name="check" size={10} color={tag.color}/>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <button onClick={async()=>{ await updatePatient(selPt.id,{...ptEdit,name:ptEdit.name||selPt.name,tags:ptEdit.tags||[]}); setSelectedPt(null); }}
+              style={{background:theme,border:"none",color:"#fff",borderRadius:13,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",boxShadow:`0 4px 14px rgba(${rgb},0.3)`}}>
+              Save
+            </button>
+
+            {!showClearConfirm
+              ?<div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={()=>archivePatient(selPt.id)} style={{flex:1,background:`rgba(${hexToRgb("#f97316")},0.07)`,border:"1px solid rgba(249,115,22,0.3)",color:"#c2410c",borderRadius:12,padding:"11px",fontSize:"0.82rem",cursor:"pointer",fontFamily:SF}}>Archive</button>
+                  <button onClick={()=>setShowClearConfirm(true)} style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.82rem",cursor:"pointer",fontFamily:SF}}>Delete</button>
+                </div>
+              :<div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:12,padding:"14px"}}>
+                  <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Remove this patient permanently?</p>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                    <button onClick={()=>removePatient(selPt.id)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
+                  </div>
+                </div>
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Add patient modal */}
+      {showAddPt&&isLeader&&!seniorMode&&(()=>{
+        const preview = newPt.autoAssign ? computeAutoAssign(patients) : null;
+        return (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:"20px 20px 0 0",padding:"10px 22px 44px",width:"100%",boxShadow:C.shadowMd,maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
+            <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
+
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Patient Name</label>
+              <input value={newPt.name} onChange={e=>setNewPt(p=>({...p,name:e.target.value}))} placeholder="Full name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
+            </div>
+
+            {/* Auto-assign toggle */}
+            <div onClick={()=>setNewPt(p=>({...p,autoAssign:!p.autoAssign,manualPairingIdx:null}))}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:newPt.autoAssign?`rgba(${rgb},0.06)`:C.surfaceEl,border:`1px solid ${newPt.autoAssign?`rgba(${rgb},0.3)`:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:14,userSelect:"none"}}>
+              <div style={{width:22,height:22,borderRadius:7,border:`2px solid ${newPt.autoAssign?theme:C.borderMid}`,background:newPt.autoAssign?theme:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                {newPt.autoAssign&&<Icon name="check" size={12} color="#fff"/>}
+              </div>
+              <div>
+                <div style={{fontSize:"0.88rem",color:newPt.autoAssign?theme:C.text,fontWeight:500}}>Auto-assign to pairing</div>
+                <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>Equitable rotation · absent members reduce that pair's allocation</div>
+              </div>
+            </div>
+
+            {/* Auto-assign preview */}
+            {newPt.autoAssign && preview && pairings.length>0 && (
+              <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>Assignment Preview</div>
+                {preview.pairingIdx!=null ? (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:"0.65rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px"}}>P{preview.pairingIdx+1}</span>
+                      <span style={{fontSize:"0.78rem",color:C.text,fontWeight:500}}>
+                        {(preview.members||[]).map((m,mi)=>(
+                          <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 4px"}}>×</span>}<span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span></span>
+                        ))}
+                      </span>
+                    </div>
+                    <div style={{fontSize:"0.65rem",color:C.textMuted}}>
+                      {patients.filter(p=>p.pairingIdx===preview.pairingIdx).length} patients currently · fewest in rotation
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{fontSize:"0.75rem",color:C.textMuted}}>No pairings configured — patient will be unassigned.</div>
+                )}
+              </div>
+            )}
+
+            {newPt.autoAssign && pairings.length===0 && (
+              <div style={{background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.2)`,borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:"0.75rem",color:C.red}}>
+                No pairings set up yet. Configure pairings first to enable auto-assign.
+              </div>
+            )}
+
+            {/* Manual pairing picker */}
+            {!newPt.autoAssign && (
+              <div style={{marginBottom:14}}>
+                <label style={labelStyle}>Select Pairing</label>
+                {pairings.length===0
+                  ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:8}}>No pairings configured yet.</div>
+                  : <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                      {pairings.map((pair,pi)=>{
+                        const members=(pair.members||[]).filter(Boolean);
+                        const isSel=newPt.manualPairingIdx===pi;
+                        const ptCount=patients.filter(p=>p.pairingIdx===pi).length;
+                        return (
+                          <div key={pi} onClick={()=>setNewPt(p=>({...p,manualPairingIdx:isSel?null:pi}))}
+                            style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",
+                              background:isSel?`rgba(${rgb},0.08)`:C.surfaceEl,
+                              border:`1px solid ${isSel?theme:C.border}`,transition:"all 0.1s"}}>
+                            <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.1)`:"rgba(0,0,0,0.05)",borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
+                            <div style={{flex:1,fontSize:"0.82rem",fontWeight:isSel?600:400}}>
+                              {members.map((m,mi)=>(
+                                <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m)}}>{m.split(" ")[0]}</span></span>
+                              ))}
+                            </div>
+                            <span style={{fontSize:"0.65rem",color:C.textMuted}}>{ptCount} pt</span>
+                            {isSel&&<div style={{width:16,height:16,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="check" size={8} color="#fff"/></div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                }
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>{setShowAddPt(false);setNewPt({name:"",autoAssign:true,manualPairingIdx:null});}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* PIN modal */}
+      {showPin&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <Icon name="key" size={16} color={theme}/>
+              <h3 style={{margin:0,color:C.text,fontWeight:600}}>Leader Access</h3>
+            </div>
+            <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter your leader PIN to unlock editing.</p>
+            <input type="password" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Leader PIN"
+              style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinError?C.red:undefined,animation:pinError?"shake 0.3s":"none"}}/>
+            {pinError&&<div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={()=>{setShowPin(false);setPinInput("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={tryPin} style={{flex:1,...accentBtn(theme,rgb),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {showDelete&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>Permanently removes this ward and all data.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowDelete(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>{setShowDelete(false);onDelete&&onDelete(wardId);}} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit settings */}
+      {editMode&&(
+        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+            <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+              <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+              <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
+            </div>
+          </div>
+          <div style={{maxWidth:560,margin:"0 auto",padding:"24px 20px 80px"}}>
+            <div style={{marginBottom:18}}><label style={labelStyle}>Ward Name</label><input value={editForm.wardName||""} onChange={e=>setEditForm(f=>({...f,wardName:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={editForm.appointmentType||""} onChange={e=>setEditForm(f=>({...f,appointmentType:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
+            <div style={{marginBottom:22}}>
+              <label style={labelStyle}>Accent Colour</label>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+                <input type="color" value={editForm.themeColor||theme} onChange={e=>setEditForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
+                <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${editForm.themeColor||theme})`}}/>
+                <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{editForm.themeColor||theme}</span>
+              </div>
+            </div>
+            <PsychSetupFields form={editForm} setForm={setEditForm}/>
+            <button onClick={async()=>{
+              await save({...ward, setup:{...setup,
+                wardName:editForm.wardName, appointmentType:editForm.appointmentType, themeColor:editForm.themeColor,
+                paedGroups:editForm.paedGroups||setup.paedGroups,
+                wardSections:(editForm.psychSections||editForm.wardSections)||setup.wardSections,
+                shadowHOs:editForm.shadowHOs||setup.shadowHOs,
+                consultants:editForm.consultants||setup.consultants,
+                customTags:(editForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"})),
+              }});
+              setEditMode(false); showToast("Settings saved!");
+            }} style={{background:editForm.themeColor||theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>
+              Save Changes
+            </button>
+            <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
+          </div>
+          <BrandingBar theme={editForm.themeColor||theme}/>
+        </div>
+      )}
+
+      <BrandingBar theme={theme}/>
+      <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}} @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}`}</style>
+    </div>
+  );
+}
