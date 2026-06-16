@@ -6093,7 +6093,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                                   {gStudents.map(s=>{
                                     const isSelected=members.includes(s.name);
                                     const inOtherIdx=otherPairingMap[s.name];
-                                    const inOther=inOtherIdx!=null;
+                                    const inOther=inOtherIdx!=null&&inOtherIdx!==undefined;
                                     const disabled=!isSelected&&atGroupMax;
                                     return (
                                       <button key={s.name} onClick={()=>{
@@ -6104,7 +6104,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                                           f[pi]={...f[pi],members:m.filter(x=>x!==s.name)};
                                         } else {
                                           if (members.length>=4) return;
-                                          if (inOther!=null) { const g2=[...(f[inOtherIdx].members||[])].filter(Boolean); f[inOtherIdx]={...f[inOtherIdx],members:g2.filter(x=>x!==s.name)}; }
+                                          if (inOther) { const g2=[...(f[inOtherIdx].members||[])].filter(Boolean); f[inOtherIdx]={...f[inOtherIdx],members:g2.filter(x=>x!==s.name)}; }
                                           f[pi]={...f[pi],members:[...m,s.name]};
                                         }
                                         setPairingForm(f);
@@ -6115,7 +6115,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                                           color:isSelected?gColor:disabled?C.textMuted:C.textSub,
                                           opacity:disabled?0.45:1,transition:"all 0.1s"}}>
                                         {s.name.split(" ")[0]}
-                                        {inOther!=null&&!isSelected&&<span style={{fontSize:"0.55rem",marginLeft:3,opacity:0.5}}>P{inOther+1}</span>}
+                                        {inOther&&!isSelected&&<span style={{fontSize:"0.55rem",marginLeft:3,opacity:0.5}}>P{inOtherIdx+1}</span>}
                                       </button>
                                     );
                                   })}
