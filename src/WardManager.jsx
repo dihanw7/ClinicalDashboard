@@ -3232,7 +3232,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     }
     const floorCount = updatedPatients.filter(p=>p.isFloor).length;
     const floorBedNo = `F${floorCount+1}`;
-    const floorPt = { ...pt, id:Date.now().toString(), bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true, movedFromBed:`${pt.section} ${pt.bedNo}${pt.side&&pt.side!=="single"?` ${pt.side}`:""}`, addedAt:Date.now() };
+    const sideLabel = (pt.side&&pt.side!=="single") ? (" "+pt.side) : "";
+    const floorPt = { ...pt, id:Date.now().toString(), bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true, movedFromBed:(pt.section+" "+pt.bedNo+sideLabel), addedAt:Date.now() };
     await save({...ward, patients:[...updatedPatients, floorPt]});
     setSelectedPt(null); setShowClearConfirm(false); setSideConflict(null);
     showToast(`Moved to floor as ${floorBedNo}`);
@@ -3989,6 +3990,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </button>
                   );
                 })}
+                {/* Floor pill — only shown for bed patients not already on floor */}
+                {selPt&&selPt.bedNo&&!selPt.isFloor&&selPt.section&&selPt.section!=="Floor"&&(
+                  <button onClick={()=>moveToFloor(selectedPt)}
+                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
+                      background:C.surfaceEl,border:`1px dashed ${C.border}`,color:C.textSub}}>
+                    Floor
+                  </button>
+                )}
               </div>
               {/* Bed grid from setup ranges + special beds */}
               {ptEdit.section&&(()=>{
@@ -4240,11 +4249,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   await save({...ward,patients:newPatients});
                   setSideConflict(null); showToast("Saved"); setSelectedPt(null); setShowClearConfirm(false);
                 }} style={{...accentBtn(theme,rgb),width:"100%",padding:"13px",fontSize:"0.9rem",marginBottom:10}}>Save</button>
-                {selPt.bedNo&&!selPt.isFloor&&selPt.section&&selPt.section!=="Floor"&&(
-                  <button onClick={()=>moveToFloor(selectedPt)} style={{width:"100%",padding:"11px",marginBottom:10,borderRadius:10,fontSize:"0.85rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:`rgba(${rgb},0.07)`,border:`1px solid rgba(${rgb},0.25)`,color:theme}}>
-                    ↓ Move to Floor
-                  </button>
-                )}
+
                 {!showClearConfirm
                   ?<button onClick={()=>setShowClearConfirm(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF,fontSize:"0.85rem"}}>Remove Patient</button>
                   :<div style={{display:"flex",gap:8}}>
