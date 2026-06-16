@@ -3990,8 +3990,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     </button>
                   );
                 })}
-                {/* Floor pill — only shown for bed patients not already on floor */}
-                {selPt&&selPt.bedNo&&!selPt.isFloor&&selPt.section&&selPt.section!=="Floor"&&(
+                {/* Floor pill — shown whenever the patient isn't already a floor patient */}
+                {!selPt?.isFloor&&selPt?.section!=="Floor"&&(
                   <button onClick={()=>moveToFloor(selectedPt)}
                     style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
                       background:C.surfaceEl,border:`1px dashed ${C.border}`,color:C.textSub}}>
