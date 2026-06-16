@@ -3223,22 +3223,6 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setSelectedPt(null); showToast("Patient archived");
   };
 
-  const moveToFloor = async (id) => {
-    const pt = patients.find(p=>p.id===id); if (!pt) return;
-    let updatedPatients = patients.filter(p=>p.id!==id);
-    if (pt.side==="L"||pt.side==="R") {
-      const mate = updatedPatients.find(p=>p.bedNo===pt.bedNo&&p.section===pt.section);
-      if (mate) updatedPatients = updatedPatients.map(p=>p.id===mate.id?{...p,side:"single"}:p);
-    }
-    const floorCount = updatedPatients.filter(p=>p.isFloor).length;
-    const floorBedNo = `F${floorCount+1}`;
-    const sideLabel = (pt.side&&pt.side!=="single") ? (" "+pt.side) : "";
-    const floorPt = { ...pt, id:Date.now().toString(), bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true, movedFromBed:(pt.section+" "+pt.bedNo+sideLabel), addedAt:Date.now() };
-    await save({...ward, patients:[...updatedPatients, floorPt]});
-    setSelectedPt(null); setShowClearConfirm(false); setSideConflict(null);
-    showToast(`Moved to floor as ${floorBedNo}`);
-  };
-
   const addPatient = async () => {
     if (!newPt.patientName.trim()&&!newPt.bht.trim()) { showToast("Enter a name or BHT","error"); return; }
     if (newPt.bedNo&&!newPt.isFloor&&!newPt.side) { showToast("Please select a bed side (L or R)","error"); return; }
@@ -3992,15 +3976,29 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 })}
                 {/* Floor pill — shown whenever the patient isn't already a floor patient */}
                 {!selPt?.isFloor&&selPt?.section!=="Floor"&&(
-                  <button onClick={()=>moveToFloor(selectedPt)}
-                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
-                      background:C.surfaceEl,border:`1px dashed ${C.border}`,color:C.textSub}}>
+                  <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
+                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:ptEdit.isFloor?600:400,cursor:"pointer",fontFamily:SF,
+                      background:ptEdit.isFloor?C.textSub:C.surfaceEl,border:`1px dashed ${ptEdit.isFloor?C.textSub:C.border}`,color:ptEdit.isFloor?"#fff":C.textSub}}>
                     Floor
                   </button>
                 )}
+                {/* Deselect floor pill */}
+                {ptEdit.isFloor&&(
+                  <button onClick={()=>setPtEdit(p=>({...p,isFloor:false,section:selPt?.section||"",bedNo:selPt?.bedNo||"",side:selPt?.side||"single"}))}
+                    style={{padding:"5px 10px",borderRadius:20,fontSize:"0.72rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
+                      background:"none",border:"none",color:C.textMuted}}>
+                    ✕
+                  </button>
+                )}
               </div>
+              {/* Floor pending hint */}
+              {ptEdit.isFloor&&(
+                <div style={{padding:"8px 12px",background:"rgba(0,0,0,0.04)",border:`1px dashed ${C.borderMid||C.border}`,borderRadius:10,fontSize:"0.75rem",color:C.textSub,marginBottom:8}}>
+                  Will be moved to floor (next F number) when you save.
+                </div>
+              )}
               {/* Bed grid from setup ranges + special beds */}
-              {ptEdit.section&&(()=>{
+              {!ptEdit.isFloor&&ptEdit.section&&(()=>{
                 const secSetup = sections.find(s=>s.name===ptEdit.section);
                 let rangeBeds = [];
                 if (secSetup?.range) {
@@ -4241,6 +4239,30 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {isLeader&&!seniorMode&&(
               <>
                 <button onClick={async()=>{
+                  if (ptEdit.isFloor) {
+                    // Move to floor: release bed slot, assign next F number, preserve clinical data
+                    const pt = selPt;
+                    let updatedPatients = patients.filter(p=>p.id!==selectedPt);
+                    if (pt.side==="L"||pt.side==="R") {
+                      const mate = updatedPatients.find(p=>p.bedNo===pt.bedNo&&p.section===pt.section);
+                      if (mate) updatedPatients = updatedPatients.map(p=>p.id===mate.id?{...p,side:"single"}:p);
+                    }
+                    const floorCount = updatedPatients.filter(p=>p.isFloor).length;
+                    const floorBedNo = "F"+(floorCount+1);
+                    const sideLabel = (pt.side&&pt.side!=="single") ? (" "+pt.side) : "";
+                    const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
+                    const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
+                    const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||pt.shadowHO||""):(ptEdit.shadowHO||"");
+                    const floorPt = { ...pt, bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true,
+                      movedFromBed:(pt.section+" "+pt.bedNo+sideLabel),
+                      bht:ptEdit.bht, patientName:ptEdit.patientName, age:ageStr,
+                      pairingIdx:ptEdit.pairingIdx??pt.pairingIdx, members, shadowHO,
+                      consultant:ptEdit.consultant, diagnosis:ptEdit.diagnosis,
+                      notes:ptEdit.notes, tags:ptEdit.tags||[] };
+                    await save({...ward, patients:[...updatedPatients, floorPt]});
+                    setSideConflict(null); showToast("Moved to floor as "+floorBedNo); setSelectedPt(null); setShowClearConfirm(false);
+                    return;
+                  }
                   const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                   const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
                   const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
