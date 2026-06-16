@@ -239,7 +239,7 @@ export default function App() {
               <div style={{fontSize:"0.8rem",marginTop:4}}>Use the admin button to create the first ward.</div>
             </div>
           : <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              {wards.map(ward => <WardCard key={ward.id} ward={ward} onOpen={()=>{ setActiveWardId(ward.id); setScreen("ward"); pollRef.current=false; }}/>)}
+              {[...wards].sort((a,b)=>getWardPatientCount(b)-getWardPatientCount(a)).map(ward => <WardCard key={ward.id} ward={ward} onOpen={()=>{ setActiveWardId(ward.id); setScreen("ward"); pollRef.current=false; }}/>)}
             </div>
         }
       </div>
@@ -248,6 +248,23 @@ export default function App() {
       <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}`}</style>
     </div>
   );
+}
+
+// ── Patient count helper (used for homepage sort) ─────────────────────────────
+function getWardPatientCount(ward) {
+  const setup = ward.setup || {};
+  const beds = ward.beds || {};
+  const patients = ward.patients || [];
+  const tmpl = setup.template || "default";
+  if (tmpl === "paed" || tmpl === "surgery" || tmpl === "psych") return patients.length;
+  if (tmpl === "medicine") {
+    return Object.values(beds).reduce((sum, b) => sum + (b?.patients?.length || 0), 0);
+  }
+  // default
+  return Object.keys(beds).filter(k => {
+    const b = beds[k];
+    return b && (b.diagnosis || b.consultant || b.notes || b.assigned?.length > 0 || b.shadows?.length > 0 || b.isNew || b.historyTaken);
+  }).length;
 }
 
 // ── Ward card on homepage ──────────────────────────────────────────────────────
