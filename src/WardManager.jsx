@@ -2549,157 +2549,152 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
             </button>
           )}
 
-          {/* Bed grid — one tile per patient slot; multi-patient beds grouped */}
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {filteredBedKeys.map(bedNum=>{
+          {/* Bed grid — uniform tile size, one per patient; empty beds = same size tile */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:8}}>
+            {filteredBedKeys.flatMap(bedNum=>{
               const bed = beds[bedNum];
               const pts = bed.patients || [];
               const secName = getBedSection(bedNum);
-              const openBed = () => {
-                if (seniorMode) return;
-                const initPts = pts.map(p=>({...p,assigned:[...(p.assigned||[])],shadows:[...(p.shadows||[])],tags:[...(p.tags||[])]}));
-                setSelectedBed(bedNum);
-                setBedEdit({ patients:initPts, activePtId:initPts.length>0?initPts[0].id:null });
-                setView("bed");
-              };
-              const openBedPt = (ptId) => {
-                if (seniorMode) return;
-                const initPts = pts.map(p=>({...p,assigned:[...(p.assigned||[])],shadows:[...(p.shadows||[])],tags:[...(p.tags||[])]}));
-                setSelectedBed(bedNum);
-                setBedEdit({ patients:initPts, activePtId:ptId });
-                setView("bed");
-              };
               const isMulti = pts.length > 1;
-              const isEmpty = pts.length === 0;
 
-              return (
-                <div key={bedNum}>
-                  {/* Bed header row — always shown */}
-                  <div
-                    onClick={isEmpty?openBed:undefined}
-                    style={{display:"flex",alignItems:"center",gap:7,marginBottom:isMulti?6:0,cursor:isEmpty&&!seniorMode?"pointer":"default"}}
-                  >
-                    <span style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
-                    <span style={{fontSize:"1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em",lineHeight:1}}>{bedNum}</span>
-                    {isMulti&&<span style={{fontSize:"0.58rem",color:C.textMuted,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:5,padding:"1px 6px",fontWeight:500}}>{pts.length} pt</span>}
-                    {isEmpty&&!seniorMode&&<span style={{fontSize:"0.6rem",color:C.textMuted,marginLeft:"auto",opacity:0.5}}>empty</span>}
+              const openBed = (ptId) => {
+                if (seniorMode) return;
+                const initPts = pts.map(p=>({...p,assigned:[...(p.assigned||[])],shadows:[...(p.shadows||[])],tags:[...(p.tags||[])]}));
+                setSelectedBed(bedNum);
+                setBedEdit({ patients:initPts, activePtId:ptId||( initPts.length>0?initPts[0].id:null) });
+                setView("bed");
+              };
+
+              const addAndOpen = (e) => {
+                e.stopPropagation();
+                const initPts = pts.map(p=>({...p,assigned:[...(p.assigned||[])],shadows:[...(p.shadows||[])],tags:[...(p.tags||[])]}));
+                const nextLabel = `P${initPts.length+1}`;
+                const np = mkPatient({ label:nextLabel });
+                setSelectedBed(bedNum);
+                setBedEdit({ patients:[...initPts,np], activePtId:np.id });
+                setView("bed");
+              };
+
+              // Empty bed — single tile matching patient tile size
+              if (pts.length === 0) {
+                return [(
+                  <div key={bedNum} onClick={()=>openBed(null)}
+                    style={{background:C.surface,border:`1px solid rgba(0,0,0,0.07)`,borderRadius:13,
+                      padding:"11px 12px",cursor:seniorMode?"default":"pointer",
+                      display:"flex",flexDirection:"column",justifyContent:"flex-end",
+                      minHeight:72,position:"relative",
+                      boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
+                      opacity:0.55,transition:"opacity 0.12s,box-shadow 0.12s"}}
+                    onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.opacity="1";e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.08)";}}}
+                    onMouseLeave={e=>{e.currentTarget.style.opacity="0.55";e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)";}}>
+                    <span style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,lineHeight:1}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
+                    <span style={{fontSize:"1.3rem",fontWeight:700,color:`rgba(${rgb},0.35)`,letterSpacing:"-0.03em",lineHeight:1.1}}>{bedNum}</span>
                   </div>
+                )];
+              }
 
-                  {/* Empty bed — single minimal tile */}
-                  {isEmpty&&(
-                    <div onClick={openBed}
-                      style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:12,padding:"14px 12px",cursor:seniorMode?"default":"pointer",
-                        display:"flex",alignItems:"center",justifyContent:"center",minHeight:52,opacity:0.6,
-                        transition:"opacity 0.12s"}}
-                      onMouseEnter={e=>{if(!seniorMode)e.currentTarget.style.opacity="1";}}
-                      onMouseLeave={e=>{e.currentTarget.style.opacity="0.6";}}>
-                      <span style={{fontSize:"0.72rem",color:C.textMuted}}>Tap to add patients</span>
+              // Patient tiles — one per slot
+              return pts.map((pt,pi)=>{
+                const cObj = pt.consultant ? consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant) : null;
+                const cRgb = cObj?.color ? hexToRgb(cObj.color) : null;
+                const aN=(pt.assigned||[]).map(s=>typeof s==="object"?s.name:s);
+                const sN=(pt.shadows||[]).map(s=>typeof s==="object"?s.name:s);
+                const hasAssigned = aN.length>0||sN.length>0;
+                const isFirst = pi===0;
+                const isLast = pi===pts.length-1;
+                const tileBoxShadow = cRgb
+                  ? `0 4px 14px rgba(${cRgb},0.1),0 1px 3px rgba(0,0,0,0.05)`
+                  : "0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)";
+                return (
+                  <div key={pt.id}
+                    onClick={()=>openBed(pt.id)}
+                    style={{
+                      background:cRgb?`rgba(${cRgb},0.06)`:C.surface,
+                      border:pt.historyTaken
+                        ?`1px solid rgba(${hexToRgb(C.green)},0.28)`
+                        :cRgb?`1px solid rgba(${cRgb},0.2)`
+                        :`1px solid rgba(0,0,0,0.09)`,
+                      borderRadius:13,
+                      padding:"11px 12px",
+                      cursor:seniorMode?"default":"pointer",
+                      position:"relative",
+                      transition:"transform 0.12s,box-shadow 0.12s",
+                      boxShadow:tileBoxShadow,
+                      userSelect:"none",
+                    }}
+                    onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 22px rgba(0,0,0,0.1)";}}}
+                    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=tileBoxShadow;}}
+                  >
+                    {/* Status icons top-right */}
+                    <div style={{position:"absolute",top:8,right:8,display:"flex",gap:3,alignItems:"center"}}>
+                      {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
+                      {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
                     </div>
-                  )}
 
-                  {/* Patient tiles */}
-                  {pts.length>0&&(
-                    <div style={{
-                      display:"grid",
-                      gridTemplateColumns:isMulti?"repeat(auto-fill,minmax(140px,1fr))":"1fr",
-                      gap:isMulti?6:0,
-                      ...(isMulti?{
-                        paddingLeft:10,
-                        borderLeft:`3px solid rgba(${rgb},0.18)`,
-                        borderRadius:"0 0 0 4px",
-                      }:{})
-                    }}>
-                      {pts.map((pt,pi)=>{
-                        const cObj = pt.consultant ? consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant) : null;
-                        const cRgb = cObj?.color ? hexToRgb(cObj.color) : null;
-                        const aN=(pt.assigned||[]).map(s=>typeof s==="object"?s.name:s);
-                        const sN=(pt.shadows||[]).map(s=>typeof s==="object"?s.name:s);
-                        const hasAssigned = aN.length>0||sN.length>0;
-                        const tileBoxShadow = cRgb
-                          ? `0 4px 16px rgba(${cRgb},0.12),0 1px 3px rgba(0,0,0,0.06)`
-                          : pt.historyTaken
-                            ? "0 4px 16px rgba(0,0,0,0.07),0 1px 3px rgba(0,0,0,0.05)"
-                            : "0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)";
-                        return (
-                          <div key={pt.id}
-                            onClick={()=>openBedPt(pt.id)}
-                            style={{
-                              background:cRgb?`rgba(${cRgb},0.06)`:C.surface,
-                              border:pt.historyTaken
-                                ?`1px solid rgba(${hexToRgb(C.green)},0.28)`
-                                :cRgb?`1px solid rgba(${cRgb},0.2)`
-                                :`1px solid rgba(0,0,0,${isMulti?0.07:0.09})`,
-                              borderRadius:isMulti?10:13,
-                              padding:"11px 11px",
-                              cursor:seniorMode?"default":"pointer",
-                              position:"relative",
-                              transition:"transform 0.12s,box-shadow 0.12s",
-                              boxShadow:tileBoxShadow,
-                              userSelect:"none",
-                            }}
-                            onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.11),0 2px 6px rgba(0,0,0,0.06)";}}}
-                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=tileBoxShadow;}}
-                          >
-                            {/* Top-right status icons */}
-                            <div style={{position:"absolute",top:8,right:8,display:"flex",gap:3,alignItems:"center"}}>
-                              {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
-                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
-                            </div>
+                    {/* Bed number row — shown on first tile; includes + if leader */}
+                    {isFirst&&(
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:isMulti?4:3}}>
+                        <span style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,lineHeight:1,flexShrink:0}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em",lineHeight:1}}>{bedNum}</span>
+                        {isLeader&&!seniorMode&&(
+                          <button
+                            onClick={addAndOpen}
+                            style={{marginLeft:"auto",width:18,height:18,borderRadius:5,border:`1px solid rgba(${rgb},0.3)`,background:`rgba(${rgb},0.08)`,color:theme,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0,lineHeight:1,fontSize:"0.75rem",fontWeight:700,fontFamily:SF}}>
+                            +
+                          </button>
+                        )}
+                      </div>
+                    )}
 
-                            {/* Slot label badge — only for multi-patient beds */}
-                            {isMulti&&(
-                              <div style={{display:"inline-flex",alignItems:"center",gap:3,marginBottom:5,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:5,padding:"1px 7px"}}>
-                                <span style={{fontSize:"0.52rem",fontWeight:700,color:theme,letterSpacing:"0.03em"}}>{pt.label||`P${pi+1}`}</span>
-                              </div>
-                            )}
+                    {/* Slot label — only on non-first tiles of multi-patient beds */}
+                    {!isFirst&&isMulti&&(
+                      <div style={{display:"inline-flex",marginBottom:4,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.16)`,borderRadius:4,padding:"1px 6px"}}>
+                        <span style={{fontSize:"0.5rem",fontWeight:700,color:theme}}>{pt.label||`P${pi+1}`}</span>
+                      </div>
+                    )}
 
-                            {/* Single-bed: show bed number + label inline */}
-                            {!isMulti&&(
-                              <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:4}}>
-                                <span style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
-                                <span style={{fontSize:"1.2rem",fontWeight:700,color:theme,letterSpacing:"-0.03em",lineHeight:1}}>{bedNum}</span>
-                              </div>
-                            )}
+                    {/* Multi-patient slot label on first tile */}
+                    {isFirst&&isMulti&&(
+                      <div style={{display:"inline-flex",marginBottom:4,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.16)`,borderRadius:4,padding:"1px 6px"}}>
+                        <span style={{fontSize:"0.5rem",fontWeight:700,color:theme}}>{pt.label||`P${pi+1}`}</span>
+                      </div>
+                    )}
 
-                            {/* Patient name */}
-                            {pt.patientName&&(
-                              <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 20px)"}}>{pt.patientName}</div>
-                            )}
+                    {/* Patient name */}
+                    {pt.patientName&&(
+                      <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:18}}>{pt.patientName}</div>
+                    )}
 
-                            {/* Consultant */}
-                            {pt.consultant&&(
-                              <div style={{fontSize:"0.6rem",color:cRgb?`rgb(${cRgb})`:C.textSub,fontWeight:500,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
-                                {cRgb&&<div style={{width:5,height:5,borderRadius:"50%",background:`rgb(${cRgb})`,flexShrink:0}}/>}
-                                {pt.consultant}
-                              </div>
-                            )}
+                    {/* Consultant dot + name */}
+                    {pt.consultant&&(
+                      <div style={{fontSize:"0.6rem",color:cRgb?`rgb(${cRgb})`:C.textSub,fontWeight:500,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
+                        {cRgb&&<div style={{width:5,height:5,borderRadius:"50%",background:`rgb(${cRgb})`,flexShrink:0}}/>}
+                        {pt.consultant}
+                      </div>
+                    )}
 
-                            {/* Diagnosis */}
-                            {pt.diagnosis&&(
-                              <div style={{fontSize:"0.63rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 20px)"}}>{pt.diagnosis}</div>
-                            )}
+                    {/* Diagnosis */}
+                    {pt.diagnosis&&(
+                      <div style={{fontSize:"0.63rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:18}}>{pt.diagnosis}</div>
+                    )}
 
-                            {/* Custom tags */}
-                            {(pt.tags||[]).length>0&&(
-                              <div style={{display:"flex",flexWrap:"wrap",gap:2,marginBottom:4}}>
-                                {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
-                              </div>
-                            )}
+                    {/* Custom tags */}
+                    {(pt.tags||[]).length>0&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:2,marginBottom:3}}>
+                        {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
+                      </div>
+                    )}
 
-                            {/* Assigned student chips */}
-                            {!seniorMode&&hasAssigned&&(
-                              <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:4}}>
-                                {aN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:500}}>{n.split(" ")[0]}</span>)}
-                                {sN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>)}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
+                    {/* Assigned chips */}
+                    {!seniorMode&&hasAssigned&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
+                        {aN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:500}}>{n.split(" ")[0]}</span>)}
+                        {sN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
             })}
           </div>
         </>}
