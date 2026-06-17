@@ -6094,6 +6094,14 @@ function PsychStudentTab({ patients, groups, pairings, theme, rgb, absentStudent
     return gi >= 0 ? groupColors[gi] : C.textSub;
   };
 
+  // Return the group number string for superscript display
+  const getGroupNo = (name) => {
+    const gi = getStudentGroup(name);
+    if (gi < 0) return "";
+    const s = (groups[gi]?.students||[]).find(st=>st.name===name);
+    return s?.no ? String(s.no) : gi >= 0 ? String(gi+1) : "";
+  };
+
   const getPairingPatients = (idx) => patients.filter(p=>p.pairingIdx===idx);
   const getStudentPatients = (name) => patients.filter(p=>(p.members||[]).includes(name));
 
@@ -6176,7 +6184,7 @@ function PsychStudentTab({ patients, groups, pairings, theme, rgb, absentStudent
                       : members.map((m,mi)=>(
                           <span key={m} style={{display:"flex",alignItems:"center",gap:3}}>
                             {mi>0&&<span style={{color:C.textMuted,fontSize:"0.72rem"}}>×</span>}
-                            <span style={{fontSize:"0.88rem",fontWeight:600,color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                            <span style={{fontSize:"0.88rem",fontWeight:600,color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span>
                           </span>
                         ))
                     }
@@ -6203,7 +6211,7 @@ function PsychStudentTab({ patients, groups, pairings, theme, rgb, absentStudent
                             background:isAbsent?`rgba(${hexToRgb(C.red)},0.06)`:`rgba(${hexToRgb(gc)},0.08)`,
                             border:`1px solid ${isAbsent?`rgba(${hexToRgb(C.red)},0.25)`:`rgba(${hexToRgb(gc)},0.25)`}`}}>
                             <div style={{width:7,height:7,borderRadius:"50%",background:isAbsent?C.red:gc,flexShrink:0}}/>
-                            <span style={{fontSize:"0.78rem",fontWeight:600,color:isAbsent?C.red:gc,textDecoration:isAbsent?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                            <span style={{fontSize:"0.78rem",fontWeight:600,color:isAbsent?C.red:gc,textDecoration:isAbsent?"line-through":"none"}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span>
                             <span style={{fontSize:"0.6rem",color:isAbsent?C.red:C.textMuted,opacity:0.8}}>{groups[gi]?.name||""}</span>
                             <span style={{fontSize:"0.6rem",fontWeight:600,color:isAbsent?C.red:gc,background:isAbsent?`rgba(${hexToRgb(C.red)},0.1)`:`rgba(${hexToRgb(gc)},0.1)`,borderRadius:4,padding:"0 4px"}}>{mPts.length}</span>
                           </div>
@@ -6265,7 +6273,7 @@ function PsychStudentTab({ patients, groups, pairings, theme, rgb, absentStudent
                         <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px"}}>{pLabel}</span>
                         <span style={{fontSize:"0.72rem",color:C.textSub}}>
                           {(pairings[pairingIdx].members||[]).filter(m=>m!==s.name).map((m,mi)=>(
-                            <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>
+                            <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span></span>
                           ))}
                         </span>
                         {sPts.length>0&&<span style={{marginLeft:"auto",fontSize:"0.65rem",color:C.textMuted}}>{sPts.length} patient{sPts.length!==1?"s":""}</span>}
@@ -6567,6 +6575,14 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
     return gi >= 0 ? groupColors[gi] : C.textSub;
   };
 
+  // Return group number string for superscript display
+  const getGroupNo = (name) => {
+    const gi = getStudentGroup(name);
+    if (gi < 0) return "";
+    const s = (groups[gi]?.students||[]).find(st=>st.name===name);
+    return s?.no ? String(s.no) : String(gi+1);
+  };
+
   // Pairing label e.g. "P1"
   const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
 
@@ -6667,7 +6683,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
                               <span style={{fontSize:"0.72rem",fontWeight:700,color:theme}}>Pairing {pi+1}</span>
-                              {members.length>0&&<span style={{fontSize:"0.7rem",color:C.textSub}}>{members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.4}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>)}</span>}
+                              {members.length>0&&<span style={{fontSize:"0.7rem",color:C.textSub}}>{members.map((m,mi)=><span key={m}>{mi>0&&<span style={{margin:"0 3px",opacity:0.4}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span></span>)}</span>}
                             </div>
                             <button onClick={()=>setPairingForm(f=>f.filter((_,idx)=>idx!==pi))} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
                           </div>
@@ -6742,7 +6758,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                               {members.map((m,mi)=>(
                                 <span key={m}>
                                   {mi>0&&<span style={{color:C.textMuted,fontWeight:400,margin:"0 4px"}}>×</span>}
-                                  <span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span>
+                                  <span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span>
                                 </span>
                               ))}
                             </div>
@@ -6908,7 +6924,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                       {pLabel&&(
                         <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
                           <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
-                          {(pt.members||[]).map(m=><span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:getGroupColor(m),fontWeight:600}}>{m.split(" ")[0]}</span>)}
+                          {(pt.members||[]).map(m=>{const gn=getGroupNo(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:getGroupColor(m),fontWeight:600,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{gn?<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{gn}</sup>:null}</span>;})}
                         </div>
                       )}
                       {(pt.tags||[]).length>0&&(
@@ -6951,7 +6967,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                     <span style={{fontSize:"0.7rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"1px 6px"}}>P{selPt.pairingIdx+1}</span>
                     <span style={{fontSize:"0.82rem",color:C.text}}>
                       {(pairings[selPt.pairingIdx].members||[]).filter(Boolean).map((m,mi)=>(
-                        <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}</span></span>
+                        <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m),fontWeight:500}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span></span>
                       ))}
                     </span>
                   </div>
@@ -7115,7 +7131,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                       <span style={{fontSize:"0.65rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px"}}>P{preview.pairingIdx+1}</span>
                       <span style={{fontSize:"0.78rem",color:C.text,fontWeight:500}}>
                         {(preview.members||[]).map((m,mi)=>(
-                          <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 4px"}}>×</span>}<span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}</span></span>
+                          <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 4px"}}>×</span>}<span style={{color:absentSet.has(m)?C.textMuted:getGroupColor(m),textDecoration:absentSet.has(m)?"line-through":"none"}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span></span>
                         ))}
                       </span>
                     </div>
@@ -7154,7 +7170,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                             <span style={{fontSize:"0.62rem",fontWeight:700,color:isSel?theme:C.textMuted,background:isSel?`rgba(${rgb},0.1)`:"rgba(0,0,0,0.05)",borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{pi+1}</span>
                             <div style={{flex:1,fontSize:"0.82rem",fontWeight:isSel?600:400}}>
                               {members.map((m,mi)=>(
-                                <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m)}}>{m.split(" ")[0]}</span></span>
+                                <span key={m}>{mi>0&&<span style={{color:C.textMuted,margin:"0 3px"}}>×</span>}<span style={{color:getGroupColor(m)}}>{m.split(" ")[0]}{(()=>{const gn=getGroupNo(m);return gn?<sup style={{fontSize:"0.52em",fontWeight:700,marginLeft:"1px",opacity:0.7}}>{gn}</sup>:null;})()}</span></span>
                               ))}
                             </div>
                             <span style={{fontSize:"0.65rem",color:C.textMuted}}>{ptCount} pt</span>
