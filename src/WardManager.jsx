@@ -2308,6 +2308,10 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const sections  = setup.wardSections || [];
   const shadowHOs = setup.shadowHOs || [];
   const consultants = setup.consultants || [];
+  const students  = (setup.students || []).map(s=>typeof s==="object"?s:{name:s,group:""});
+
+  // Look up group string for a student name
+  const getMedGroup = (name) => students.find(s=>s.name===name)?.group||"";
 
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
@@ -2708,8 +2712,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                     {/* Assigned chips */}
                     {!seniorMode&&hasAssigned&&(
                       <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
-                        {aN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:500}}>{n.split(" ")[0]}</span>)}
-                        {sN.map((n,i)=><span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>)}
+                        {aN.map((n,i)=>{const g=getMedGroup(n);return<span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:500,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{n.split(" ")[0]}{g?<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.75}}>{g}</sup>:null}</span>;})}
+                        {sN.map((n,i)=>{const g=getMedGroup(n);return<span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.12)",borderRadius:4,padding:"1px 5px",color:C.textMuted,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{n.split(" ")[0]}{g?<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.6}}>{g}</sup>:null}</span>;})}
                       </div>
                     )}
                   </div>
@@ -2810,8 +2814,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                   <div style={{marginBottom:16,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px"}}>
                     <div style={{fontSize:"0.62rem",color:C.textMuted,marginBottom:8,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:500}}>Assigned</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {(activePt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem",fontWeight:500}}><Icon name="user" size={11} color={theme}/>{n}{g&&<span style={{fontSize:"0.6rem",color:`rgba(${rgb},0.5)`,marginLeft:2}}>·{g}</span>}</span>;})}
-                      {(activePt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textSub,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem"}}><Icon name="shadow" size={11} color={C.textMuted}/>{n} <span style={{fontSize:"0.65rem",color:C.textMuted}}>(shadow)</span></span>;})}
+                      {(activePt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:getMedGroup(n);return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem",fontWeight:500}}><Icon name="user" size={11} color={theme}/>{n}{g&&<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:"2px",opacity:0.7}}>{g}</sup>}</span>;})}
+                      {(activePt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:getMedGroup(n);return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textSub,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem"}}><Icon name="shadow" size={11} color={C.textMuted}/>{n}{g&&<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:"2px",opacity:0.6}}>{g}</sup>} <span style={{fontSize:"0.65rem",color:C.textMuted}}>(shadow)</span></span>;})}
                     </div>
                   </div>
                 )}
@@ -3209,8 +3213,8 @@ function MedArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                           {pt.consultant&&<div style={{fontSize:"0.7rem",color:C.textSub,marginBottom:3}}>{pt.consultant}</div>}
                           {((pt.assigned||[]).length>0||(pt.shadows||[]).length>0)&&(
                             <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                              {(pt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.62rem",background:`rgba(${hexToRgb(theme)},0.08)`,border:`1px solid rgba(${hexToRgb(theme)},0.2)`,borderRadius:5,padding:"2px 7px",color:theme,fontWeight:500}}>{n}</span>;})}
-                              {(pt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{fontSize:"0.62rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:5,padding:"2px 7px",color:C.textMuted}}>{n}</span>;})}
+                              {(pt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{fontSize:"0.62rem",background:`rgba(${hexToRgb(theme)},0.08)`,border:`1px solid rgba(${hexToRgb(theme)},0.2)`,borderRadius:5,padding:"2px 7px",color:theme,fontWeight:500,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{n}{g&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"2px",opacity:0.7}}>{g}</sup>}</span>;})}
+                              {(pt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{fontSize:"0.62rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:5,padding:"2px 7px",color:C.textMuted,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{n}{g&&<sup style={{fontSize:"0.55em",fontWeight:700,marginLeft:"2px",opacity:0.6}}>{g}</sup>}</span>;})}
                             </div>
                           )}
                         </div>
