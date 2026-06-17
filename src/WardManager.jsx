@@ -2625,13 +2625,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                     onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 22px rgba(0,0,0,0.1)";}}}
                     onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=tileBoxShadow;}}
                   >
-                    {/* Status icons top-right */}
-                    <div style={{position:"absolute",top:8,right:8,display:"flex",gap:3,alignItems:"center"}}>
-                      {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
-                      {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
-                    </div>
-
-                    {/* Bed number row — shown on first tile; includes + if leader */}
+                    {/* Bed number row — shown on first tile; + button top-right for leaders */}
                     {isFirst&&(
                       <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:isMulti?4:3}}>
                         <span style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,lineHeight:1,flexShrink:0}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
@@ -2643,6 +2637,27 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                             +
                           </button>
                         )}
+                        {/* Status icons sit next to + (or at right if no +) */}
+                        {(!isLeader||seniorMode)&&(
+                          <div style={{marginLeft:"auto",display:"flex",gap:3,alignItems:"center"}}>
+                            {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
+                            {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Status icons for non-first tiles (multi-patient), or inline for leader first tiles */}
+                    {isFirst&&isLeader&&!seniorMode&&(pt.historyTaken||pt.isNew)&&(
+                      <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:2}}>
+                        {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
+                        {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
+                      </div>
+                    )}
+                    {!isFirst&&(pt.historyTaken||pt.isNew)&&(
+                      <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:2}}>
+                        {pt.historyTaken&&<Icon name="history" size={10} color={C.green}/>}
+                        {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
                       </div>
                     )}
 
@@ -2662,7 +2677,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 
                     {/* Patient name */}
                     {pt.patientName&&(
-                      <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:18}}>{pt.patientName}</div>
+                      <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.patientName}</div>
                     )}
 
                     {/* Consultant dot + name */}
@@ -2675,7 +2690,12 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 
                     {/* Diagnosis */}
                     {pt.diagnosis&&(
-                      <div style={{fontSize:"0.63rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:18}}>{pt.diagnosis}</div>
+                      <div style={{fontSize:"0.63rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>
+                    )}
+
+                    {/* Notes */}
+                    {pt.notes&&(
+                      <div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",lineHeight:1.35}}>{pt.notes}</div>
                     )}
 
                     {/* Custom tags */}
