@@ -4108,15 +4108,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       {allBeds.map(bed=>{
                         const isSel=newPt.bedNo===bed;
                         const full=isFullyOccupied(bed);
-                        const hasSingle=hasAnyOccupant(bed);
-                        const hasAny=patients.some(p=>p.bedNo===bed&&p.section===newPt.section);
-                        const hasOccupant = patients.some(pt=>pt.bedNo===bed&&pt.section===newPt.section);
-                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
+                        const hasOccupant=hasAnyOccupant(bed);
+                        return <button key={bed} onClick={()=>!full&&setNewPt(p=>({...p,bedNo:isSel?"":bed,side:isSel?"single":hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
                           style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                             cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
-                            background:isSel?theme:full?"rgba(0,0,0,0.04)":hasSingle?"rgba(245,158,11,0.08)":C.surface,
-                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasSingle?"rgba(245,158,11,0.4)":C.border}`,
-                            color:isSel?"#fff":full?C.textMuted:hasSingle?"rgb(161,104,0)":C.text,
+                            background:isSel?theme:full?"rgba(0,0,0,0.04)":hasOccupant?"rgba(245,158,11,0.08)":C.surface,
+                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasOccupant?"rgba(245,158,11,0.4)":C.border}`,
+                            color:isSel?"#fff":full?C.textMuted:hasOccupant?"rgb(161,104,0)":C.text,
                             opacity:full&&!isSel?0.4:1,
                             boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>{bed}</button>;
                       })}
@@ -4308,7 +4306,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 {sections.map(s=>{
                   const isSel = ptEdit.section===s.name;
                   return (
-                    <button key={s.name} onClick={()=>setPtEdit(p=>({...p,section:s.name,bedNo:"",side:"single"}))}
+                    <button key={s.name} onClick={()=>{setSideConflict(null);setPtEdit(p=>({...p,section:s.name,bedNo:"",side:"single"}));}}
                       style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
                         background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>
                       {s.name}
@@ -4317,18 +4315,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 })}
                 {/* Floor pill — always shown; toggles ptEdit.isFloor */}
                 {!ptEdit.isFloor
-                  ? <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
+                  ? <button onClick={()=>{setSideConflict(null);setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}));}}
                       style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:400,cursor:"pointer",fontFamily:SF,
                         background:C.surfaceEl,border:`1px dashed ${C.border}`,color:C.textSub}}>
                       Floor
                     </button>
                   : <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <button onClick={()=>setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}))}
+                      <button onClick={()=>{setSideConflict(null);setPtEdit(p=>({...p,isFloor:true,section:"",bedNo:"",side:"single"}));}}
                         style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:600,cursor:"pointer",fontFamily:SF,
                           background:C.textSub,border:`1px solid ${C.textSub}`,color:"#fff"}}>
                         Floor
                       </button>
-                      <button onClick={()=>setPtEdit(p=>({...p,isFloor:false,section:selPt?.section||"",bedNo:selPt?.bedNo||"",side:selPt?.side||"single"}))}
+                      <button onClick={()=>{setSideConflict(null);setPtEdit(p=>({...p,isFloor:false,section:selPt?.section||"",bedNo:selPt?.bedNo||"",side:selPt?.side||"single"}));}}
                         style={{padding:"3px 8px",borderRadius:20,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,
                           background:"none",border:"none",color:C.textMuted}}>
                         ✕
@@ -4355,11 +4353,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 const specBeds = (setup.specialBeds||[]).filter(b=>b.section===ptEdit.section).map(b=>b.id);
                 const allBeds = [...rangeBeds, ...specBeds];
                 const isFullyOccupied = (bed) => {
-                  const others = patients.filter(p=>p.bedNo===bed&&p.id!==selectedPt);
+                  const others = patients.filter(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
                   return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
                 };
                 const hasAnyOccupant = (bed) => {
-                  return patients.some(p=>p.bedNo===bed&&p.id!==selectedPt);
+                  return patients.some(p=>p.bedNo===bed&&p.section===ptEdit.section&&p.id!==selectedPt);
                 };
                 if (allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No bed range configured for this section. Edit ward settings to add one.</div>;
                 return (
@@ -4371,7 +4369,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const full = isFullyOccupied(bed);
                         const hasOccupant = hasAnyOccupant(bed);
                         return (
-                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel&&!hasOccupant?"":bed,side:hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
+                          <button key={bed} onClick={()=>!full&&setPtEdit(p=>({...p,bedNo:isSel?"":bed,side:isSel?"single":hasOccupant?"":"single",_conflictId:null,_conflictSide:null}))}
                             style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
                               cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
                               background:isSel?theme:full?"rgba(0,0,0,0.04)":hasOccupant?"rgba(245,158,11,0.08)":C.surface,
@@ -4385,7 +4383,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       })}
                     </div>
                     {ptEdit.bedNo&&(()=>{
-                      const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.id!==selectedPt);
+                      const others = patients.filter(p=>p.bedNo===ptEdit.bedNo&&p.section===ptEdit.section&&p.id!==selectedPt);
                       const singleOccupant = others.find(p=>p.side==="single"||!p.side);
                       const lOccupant = others.find(p=>p.side==="L");
                       const rOccupant = others.find(p=>p.side==="R");
