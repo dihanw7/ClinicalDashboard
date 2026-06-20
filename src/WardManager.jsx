@@ -148,6 +148,41 @@ const migrateDefaultBeds = (rawBeds, sections) => {
   return out;
 };
 
+// Whether a bed has any data worth protecting from accidental deletion —
+// covers both Default's flat-field shape and Medicine's patients[] shape.
+const bedHasData = (bed) => {
+  if (!bed) return false;
+  if (Array.isArray(bed.patients)) {
+    return bed.patients.some(p => (p.assigned?.length>0) || (p.shadows?.length>0) || p.diagnosis || p.consultant || p.notes);
+  }
+  return (bed.assigned?.length>0) || (bed.shadows?.length>0) || !!bed.diagnosis || !!bed.consultant || !!bed.notes;
+};
+
+// Remove beds no longer implied by current section ranges / special bed list.
+// Beds that still have data are kept (never silently dropped) and reported back
+// via the returned `protectedKeys` so the caller can warn the user.
+const pruneStaleBeds = (existingBeds, wardSections, specialBeds) => {
+  const validKeys = new Set();
+  wardSections.forEach(sec=>{
+    if (sec.range?.includes("-")) {
+      const [start,end] = sec.range.split("-").map(s=>parseInt(String(s).trim()));
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let n=start;n<=end;n++) validKeys.add(qualifyBedKey(sec.name,n));
+      }
+    }
+  });
+  specialBeds.forEach(sb=>validKeys.add(sb.id));
+  const out = {};
+  const protectedKeys = [];
+  for (const [key, bed] of Object.entries(existingBeds)) {
+    if (bed?.isFloor) { out[key] = bed; continue; } // floor patients are never section/range-bound
+    if (validKeys.has(key)) { out[key] = bed; continue; }
+    if (bedHasData(bed)) { out[key] = bed; protectedKeys.push(key); continue; }
+    // Empty and no longer implied by config — safe to drop.
+  }
+  return { beds: out, protectedKeys };
+};
+
 
 const DEFAULT_OP_COLORS = { "pre-op": { bg:"rgba(249,115,22,0.12)", border:"rgba(249,115,22,0.3)", color:"#c2410c", activeBg:"rgba(249,115,22,0.18)", activeBorder:"#f97316" }, "post-op": { bg:"rgba(56,189,248,0.08)", border:"rgba(56,189,248,0.3)", color:"#0369a1", activeBg:"rgba(56,189,248,0.18)", activeBorder:"#38bdf8" } };
 
@@ -1047,6 +1082,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showReset,  setShowReset]  = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showDeleteBedConfirm, setShowDeleteBedConfirm] = useState(false);
   const [setupForm,  setSetupForm]  = useState({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}], wardSections:[], specialBeds:[], customTags:[{label:"Pre-op",color:"#f97316"},{label:"Post-op",color:"#0ea5e9"}] });
   const [shadowEditing, setShadowEditing] = useState(false);
   const [shadowForm, setShadowForm] = useState(null);
@@ -1127,8 +1163,14 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       }
     });
     specialBeds.forEach(sb=>{ if (!existingBeds[sb.id]) existingBeds[sb.id]=mkBed({specialBedSection:sb.section}); });
-    await save({ ...ward, beds:existingBeds, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds, customTags } });
-    setEditMode(false); showToast("Settings saved!");
+    const { beds: prunedBeds, protectedKeys } = pruneStaleBeds(existingBeds, wardSections, specialBeds);
+    await save({ ...ward, beds:prunedBeds, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds, customTags } });
+    setEditMode(false);
+    if (protectedKeys.length>0) {
+      showToast(`Settings saved. ${protectedKeys.length} bed${protectedKeys.length>1?"s":""} kept (still occupied) despite no longer matching a section — clear or move ${protectedKeys.length>1?"them":"it"} first to remove.`);
+    } else {
+      showToast("Settings saved!");
+    }
   };
 
   // ── PIN ────────────────────────────────────────────────────────────────────
@@ -1205,6 +1247,12 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const cleared  = { assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
     await save({ ...ward, beds:{ ...beds, [fromBed]:cleared, [toBed]:bedData } });
     setShowChangeBed(false); setView("home"); setSelectedBed(null); showToast(`Moved to Bed ${toBed}`);
+  };
+  const deleteBed = async (bedNum) => {
+    const rest = { ...beds };
+    delete rest[bedNum];
+    await save({ ...ward, beds: rest });
+    setShowDeleteBedConfirm(false); setView("home"); setSelectedBed(null); showToast("Bed deleted");
   };
   const assignStudents = async (bedNum, assigned, shadows) => {
     const wasEmpty = !(beds[bedNum]?.assigned?.length>0 || beds[bedNum]?.shadows?.length>0);
@@ -1621,8 +1669,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <button onClick={async()=>{await saveBedEdit(selectedBed);setView("home");setSelectedBed(null);}} style={{...accentBtn(theme,rgb),width:"100%",padding:"14px",fontSize:"0.95rem"}}>Save</button>
 
             {/* Bottom action buttons */}
-            {!showClearConfirm && !showChangeBed && (
-              <div style={{display:"flex",gap:8,marginTop:10}}>
+            {!showClearConfirm && !showChangeBed && !showDeleteBedConfirm && (
+              <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowChangeBed(true)}
                   style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
                   Change Bed
@@ -1635,6 +1683,31 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>
                   Clear
                 </button>
+                {isLeader && (
+                  <button onClick={()=>setShowDeleteBedConfirm(true)}
+                    style={{flex:"1 1 100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"9px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
+                    Delete Bed Slot…
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Delete bed confirmation */}
+            {showDeleteBedConfirm && (
+              <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
+                {bedHasData(selBed) ? (
+                  <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.text,textAlign:"center"}}>
+                    This bed still has data (patient, diagnosis, or notes). Clear it first before deleting the slot.
+                  </p>
+                ) : (
+                  <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.text,textAlign:"center"}}>
+                    Permanently delete this bed slot? This removes it from the ward entirely — use this for duplicate or leftover beds, not to discharge a patient.
+                  </p>
+                )}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setShowDeleteBedConfirm(false)} style={{flex:1,background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem"}}>Cancel</button>
+                  {!bedHasData(selBed) && <button onClick={()=>deleteBed(selectedBed)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:600}}>Delete</button>}
+                </div>
               </div>
             )}
 
@@ -2401,6 +2474,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const [showDelete, setShowDelete] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showChangeBed, setShowChangeBed] = useState(false);
+  const [showDeleteBedConfirm, setShowDeleteBedConfirm] = useState(false);
   const [shadowEditing, setShadowEditing] = useState(false);
   const [shadowForm, setShadowForm] = useState(null);
   const [sectionFilter, setSectionFilter] = useState("all");
@@ -2516,6 +2590,12 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
     const cleared = { patients:[], isFloor:false, specialBedSection:"" };
     await save({ ...ward, beds:{ ...rawBeds, [fromBed]:cleared, [toBed]:bedData } });
     setShowChangeBed(false); setView("home"); setSelectedBed(null); showToast(`Moved to Bed ${toBed}`);
+  };
+  const deleteBed = async (bedNum) => {
+    const rest = { ...rawBeds };
+    delete rest[bedNum];
+    await save({ ...ward, beds: rest });
+    setShowDeleteBedConfirm(false); setView("home"); setSelectedBed(null); showToast("Bed deleted");
   };
 
   const saveShadowHOs = async (newHOs) => {
@@ -2990,11 +3070,32 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                   Save
                 </button>
 
-                {!showClearConfirm&&!showChangeBed&&(
-                  <div style={{display:"flex",gap:8}}>
+                {!showClearConfirm&&!showChangeBed&&!showDeleteBedConfirm&&(
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     <button onClick={()=>setShowChangeBed(true)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>Change Bed</button>
                     <button onClick={()=>archiveBed(selectedBed)} style={{flex:1,background:`rgba(${hexToRgb("#f97316")},0.07)`,border:"1px solid rgba(249,115,22,0.3)",color:"#c2410c",borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>Archive</button>
                     <button onClick={()=>setShowClearConfirm(true)} style={{flex:1,background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,color:C.red,borderRadius:12,padding:"11px",fontSize:"0.78rem",cursor:"pointer",fontFamily:SF}}>Clear All</button>
+                    {isLeader && (
+                      <button onClick={()=>setShowDeleteBedConfirm(true)} style={{flex:"1 1 100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"9px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>Delete Bed Slot…</button>
+                    )}
+                  </div>
+                )}
+
+                {showDeleteBedConfirm && (
+                  <div style={{background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
+                    {bedHasData(selBed) ? (
+                      <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.text,textAlign:"center"}}>
+                        This bed still has patients or data. Clear all patients first before deleting the slot.
+                      </p>
+                    ) : (
+                      <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.text,textAlign:"center"}}>
+                        Permanently delete this bed slot? This removes it from the ward entirely — use this for duplicate or leftover beds, not to discharge a patient.
+                      </p>
+                    )}
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setShowDeleteBedConfirm(false)} style={{flex:1,background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem"}}>Cancel</button>
+                      {!bedHasData(selBed) && <button onClick={()=>deleteBed(selectedBed)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF,fontSize:"0.82rem",fontWeight:600}}>Delete</button>}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3160,8 +3261,14 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               });
               specialBeds.forEach(b=>{if(!newBeds[b.id]){newBeds[b.id]={patients:[],isFloor:false,specialBedSection:b.section};}else{newBeds[b.id]={...newBeds[b.id],specialBedSection:b.section};}});
               const customTags=(setupForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
-              await save({...ward,beds:newBeds,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students,consultants,wardSections,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,specialBeds,customTags}});
-              setEditMode(false);showToast("Settings saved!");
+              const { beds: prunedBeds, protectedKeys } = pruneStaleBeds(newBeds, wardSections, specialBeds);
+              await save({...ward,beds:prunedBeds,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students,consultants,wardSections,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,specialBeds,customTags}});
+              setEditMode(false);
+              if (protectedKeys.length>0) {
+                showToast(`Settings saved. ${protectedKeys.length} bed${protectedKeys.length>1?"s":""} kept (still occupied) despite no longer matching a section — clear or move ${protectedKeys.length>1?"them":"it"} first to remove.`);
+              } else {
+                showToast("Settings saved!");
+              }
             }} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Save Changes</button>
             <button onClick={()=>{setEditMode(false);setShowReset(true);}} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,marginBottom:8}}>Reset Ward (New Rotation)</button>
             <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
