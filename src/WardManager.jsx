@@ -88,6 +88,67 @@ const rB = { background:C.surfaceEl, border:`1px solid ${C.border}`, color:C.tex
 const aMB = { marginTop:10, background:"none", border:`1px dashed ${C.border}`, color:C.textSub, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontSize:"0.78rem", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:SF };
 const accentBtn = (t,rgb) => ({ background:t, border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:600, fontFamily:SF, boxShadow:`0 4px 14px rgba(${rgb},0.3)` });
 
+// ── Bed key helpers (Default & Medicine) ────────────────────────────────────────
+// Range-based sections can legitimately overlap in number (e.g. HDU 1-2 and
+// Prenatal 1-14 are different physical beds that both happen to be numbered "1").
+// To avoid them colliding on a single flat beds[] entry, every range-based bed is
+// stored under a section-qualified key "SectionName::N". Special beds (named IDs)
+// and floor beds (F1, F2…) are already unique and keep bare keys.
+const BED_KEY_SEP = "::";
+
+const qualifyBedKey = (sectionName, bedNum) => {
+  if (!sectionName) return String(bedNum);
+  return `${sectionName}${BED_KEY_SEP}${bedNum}`;
+};
+
+// Split a storage key back into { section, num } for display/lookup.
+const splitBedKey = (key) => {
+  const idx = key.indexOf(BED_KEY_SEP);
+  if (idx === -1) return { section: null, num: key };
+  return { section: key.slice(0, idx), num: key.slice(idx + BED_KEY_SEP.length) };
+};
+
+// Find every section whose numeric range contains n (range-based sections only).
+const sectionsContaining = (sections, n) => {
+  const matches = [];
+  for (const sec of sections) {
+    const rangeStr = sec.range || "";
+    if (rangeStr.includes("-")) {
+      const [start, end] = rangeStr.split("-").map(s => Number(s.trim()));
+      if (!isNaN(start) && !isNaN(end) && n >= start && n <= end) matches.push(sec.name);
+    }
+  }
+  return matches;
+};
+
+// Migrate a legacy flat beds{} object (bare numeric keys) into section-qualified
+// keys, based on the ward's current section ranges. Special beds and floor beds
+// are passed through unchanged. If a legacy bed number matches more than one
+// section's range (the overlap bug), the bed's data is copied into each matching
+// section's qualified key so no existing data is lost.
+const migrateDefaultBeds = (rawBeds, sections) => {
+  if (!rawBeds) return {};
+  const out = {};
+  for (const [key, bed] of Object.entries(rawBeds)) {
+    if (!bed) continue;
+    // Already qualified, a special bed, or a floor bed — keep as-is.
+    if (key.includes(BED_KEY_SEP) || bed.specialBedSection || bed.isFloor || isNaN(Number(key))) {
+      out[key] = bed;
+      continue;
+    }
+    const n = Number(key);
+    const matches = sectionsContaining(sections, n);
+    if (matches.length === 0) {
+      // No section claims this bed number — keep it bare (e.g. "Other"/unassigned).
+      out[key] = bed;
+    } else {
+      matches.forEach(secName => { out[qualifyBedKey(secName, n)] = { ...bed }; });
+    }
+  }
+  return out;
+};
+
+
 const DEFAULT_OP_COLORS = { "pre-op": { bg:"rgba(249,115,22,0.12)", border:"rgba(249,115,22,0.3)", color:"#c2410c", activeBg:"rgba(249,115,22,0.18)", activeBorder:"#f97316" }, "post-op": { bg:"rgba(56,189,248,0.08)", border:"rgba(56,189,248,0.3)", color:"#0369a1", activeBg:"rgba(56,189,248,0.18)", activeBorder:"#38bdf8" } };
 
 function BrandingBar({ theme }) {
@@ -442,7 +503,20 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
     } else if (form.template==="medicine") {
       const wardSections = (form.wardSections||[]).filter(s=>s.name?.trim()&&s.range?.trim());
       if (wardSections.length===0) { setError("Add at least one ward section with a bed range."); return; }
-      // Derive bed count from the highest bed number across all ranges
+      const sections    = wardSections.map(s=>({name:s.name.trim(),range:s.range.trim()}));
+      const mkBed = (extra={}) => ({ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", ...extra });
+      const beds = {};
+      // Section-qualified beds — one entry per section per bed number in its range,
+      // so overlapping ranges (e.g. HDU 1-2 and Prenatal 1-14) don't collide.
+      sections.forEach(sec=>{
+        if (sec.range?.includes("-")) {
+          const [start,end] = sec.range.split("-").map(s=>parseInt(s.trim()));
+          if (!isNaN(start) && !isNaN(end)) {
+            for (let n=start;n<=end;n++) beds[qualifyBedKey(sec.name,n)] = mkBed();
+          }
+        }
+      });
+      // Derive bed count from the highest bed number across all ranges (kept for setup.bedCount display)
       let maxBed = 0;
       for (const sec of wardSections) {
         const parts = sec.range.split("-").map(Number);
@@ -450,16 +524,13 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
         if (hi > maxBed) maxBed = hi;
       }
       const count = maxBed || 80;
-      const beds = {};
-      for (let i=1;i<=count;i++) beds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
       const students    = form.students.filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
       const consultants = form.consultants.filter(c=>c.name?.trim()).map(c=>({name:c.name.trim(),color:c.color||"#6366f1"}));
-      const sections    = wardSections.map(s=>({name:s.name.trim(),range:s.range.trim()}));
       const shadowHOs   = form.shadowHOs || [{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}];
       // Add special beds to the beds object
       const specialBeds = (form.specialBeds||[]).filter(b=>b.id?.trim());
       const customTags  = (form.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
-      specialBeds.forEach(b=>{ beds[b.id.trim()]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, specialBedSection:b.section?.trim()||"", tags:[] }; });
+      specialBeds.forEach(b=>{ beds[b.id.trim()]=mkBed({specialBedSection:b.section?.trim()||"",tags:[]}); });
       await onSave(form.groupId, { setup:{ wardName:form.wardName, appointmentType:form.appointmentType, bedCount:count, themeColor:form.themeColor, template:form.template, students, consultants, wardSections:sections, shadowHOs, specialBeds, customTags }, beds });
       showToast("Ward created!"); onCreated(); return;
     }
@@ -982,11 +1053,11 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [sectionFilter, setSectionFilter] = useState("all");
 
   const setup  = ward.setup || {};
-  const beds   = ward.beds  || {};
+  const sections   = setup.wardSections || [];
+  const beds   = migrateDefaultBeds(ward.beds, sections);
   const theme  = setup.themeColor || "#007aff";
   const rgb    = hexToRgb(theme);
   const shadowHOs  = setup.shadowHOs   || [];
-  const sections   = setup.wardSections || [];
 
   const save = useCallback(async (newWard) => {
     await saveWard(newWard);
@@ -1011,9 +1082,23 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     }, 0);
     const effectiveCount = Math.max(count, sectionMax);
     const bedObj = {};
-    for (let i=1;i<=effectiveCount;i++) bedObj[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
+    const mkBed = (extra={}) => ({ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", ...extra });
+    // Plain numbered beds (no section claims them)
+    for (let i=1;i<=effectiveCount;i++) {
+      if (sectionsContaining(wardSections, i).length===0) bedObj[i]=mkBed();
+    }
+    // Section-qualified beds — one entry per section per bed number in its range,
+    // so overlapping ranges (e.g. HDU 1-2 and Prenatal 1-14) don't collide.
+    wardSections.forEach(sec=>{
+      if (sec.range?.includes("-")) {
+        const [start,end] = sec.range.split("-").map(s=>parseInt(s.trim()));
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let n=start;n<=end;n++) bedObj[qualifyBedKey(sec.name,n)] = mkBed();
+        }
+      }
+    });
     // Add special beds
-    specialBeds.forEach(sb=>{ bedObj[sb.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:sb.section }; });
+    specialBeds.forEach(sb=>{ bedObj[sb.id]=mkBed({specialBedSection:sb.section}); });
     await save({ setup:{ wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, bedCount:effectiveCount, themeColor:setupForm.themeColor, students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds, customTags }, beds:bedObj });
     showToast("Ward configured!");
   };
@@ -1026,16 +1111,22 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const wardSections = (setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
     const specialBeds  = (setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
     const customTags   = (setupForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
-    // Add any beds implied by section ranges that don't exist yet
-    const sectionMax = wardSections.reduce((max,s)=>{
-      if (s.range?.includes("-")) { const end=parseInt(s.range.split("-")[1])||0; return Math.max(max,end); }
-      return max;
-    }, 0);
+    const mkBed = (extra={}) => ({ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", ...extra });
+    // `beds` is already migrated to qualified keys at load time; just ensure every
+    // bed implied by the (possibly newly-edited) section ranges exists.
     const existingBeds = { ...beds };
-    for (let i=1;i<=sectionMax;i++) {
-      if (!existingBeds[i]) existingBeds[i]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"" };
-    }
-    specialBeds.forEach(sb=>{ if (!existingBeds[sb.id]) existingBeds[sb.id]={ assigned:[], shadows:[], consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:false, isFloor:false, opStatus:"", specialBedSection:sb.section }; });
+    wardSections.forEach(sec=>{
+      if (sec.range?.includes("-")) {
+        const [start,end] = sec.range.split("-").map(s=>parseInt(s.trim()));
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let n=start;n<=end;n++) {
+            const key = qualifyBedKey(sec.name,n);
+            if (!existingBeds[key]) existingBeds[key]=mkBed();
+          }
+        }
+      }
+    });
+    specialBeds.forEach(sb=>{ if (!existingBeds[sb.id]) existingBeds[sb.id]=mkBed({specialBedSection:sb.section}); });
     await save({ ...ward, beds:existingBeds, setup:{ ...setup, wardName:setupForm.wardName, appointmentType:setupForm.appointmentType, themeColor:setupForm.themeColor, template:setupForm.template||setup.template||"default", students, consultants, shadowHOs:shadowHOsSave, rotationDays, wardSections, specialBeds, customTags } });
     setEditMode(false); showToast("Settings saved!");
   };
@@ -1141,26 +1232,31 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
+  const sectionOrderIndex = (secName) => { const i = sections.findIndex(s=>s.name===secName); return i===-1?999:i; };
   const bedKeys = Object.keys(beds).sort((a,b)=>{
+    const A = splitBedKey(a), B = splitBedKey(b);
+    const aFloor = beds[a]?.isFloor, bFloor = beds[b]?.isFloor;
+    if (aFloor && !bFloor) return 1; if (!aFloor && bFloor) return -1;
+    // Section-qualified beds sort by section order, then number
+    if (A.section && B.section) {
+      if (A.section !== B.section) return sectionOrderIndex(A.section)-sectionOrderIndex(B.section);
+      const an=Number(A.num), bn=Number(B.num);
+      if (!isNaN(an)&&!isNaN(bn)) return an-bn;
+      return A.num.localeCompare(B.num);
+    }
+    if (A.section && !B.section) return -1;
+    if (!A.section && B.section) return 1;
     const af=isNaN(a),bf=isNaN(b);
     if(af&&!bf)return 1; if(!af&&bf)return -1;
     if(!af&&!bf)return Number(a)-Number(b);
     return a.localeCompare(b);
   });
 
-  // Section helpers (like Medicine)
+  // Section helpers — section is now encoded directly in the qualified bed key.
   const getBedSection = (bedNum) => {
     if (beds[bedNum]?.specialBedSection) return beds[bedNum].specialBedSection;
-    const n = Number(bedNum);
-    if (isNaN(n)) return null;
-    for (const sec of sections) {
-      const rangeStr = sec.range||"";
-      if (rangeStr.includes("-")) {
-        const [start,end] = rangeStr.split("-").map(Number);
-        if (n>=start && n<=end) return sec.name;
-      }
-    }
-    return null;
+    const { section } = splitBedKey(String(bedNum));
+    return section;
   };
 
   const filteredBedKeys = sectionFilter==="all" ? bedKeys : bedKeys.filter(k=>{
@@ -1383,7 +1479,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
                   {/* Section label + bed number — Paed style */}
                   <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{bed.isFloor?"Floor":sec||"Bed"}</div>
-                  <div style={{fontSize:"1.25rem",fontWeight:700,color:cRgb?`rgb(${cRgb})`:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>{bedNum}</div>
+                  <div style={{fontSize:"1.25rem",fontWeight:700,color:cRgb?`rgb(${cRgb})`:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>{splitBedKey(String(bedNum)).num}</div>
 
                   {/* Consultant */}
                   {bed.consultant&&<div style={{fontSize:"0.58rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{bed.consultant}</div>}
@@ -1435,7 +1531,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
               <div>
                 <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:500}}>{selBed.isFloor?"Floor Patient":"Bed"}</div>
-                <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{selectedBed}</h2>
+                <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{splitBedKey(String(selectedBed)).num}</h2>
               </div>
               <button onClick={()=>{setView("home");setSelectedBed(null);setShowClearConfirm(false);setShowChangeBed(false);}} style={{background:C.surfaceEl,border:"none",color:C.textSub,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:4}}>
                 <Icon name="close" size={13} color={C.textSub}/>
@@ -1547,7 +1643,13 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{marginTop:10,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:13,padding:"14px"}}>
                 <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:600,marginBottom:10}}>Move to which bed?</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
-                  {bedKeys.filter(k=>!isNaN(k)&&k!==selectedBed).map(k=>{
+                  {bedKeys.filter(k=>{
+                    if (k===selectedBed) return false;
+                    const { section, num } = splitBedKey(k);
+                    if (isNaN(Number(num))) return false; // skip special/floor beds
+                    // Only offer beds within the same section as the bed being moved
+                    return section === splitBedKey(String(selectedBed)).section;
+                  }).map(k=>{
                     const b = beds[k];
                     const occupied = b&&(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
                     return (
@@ -1557,7 +1659,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                           border:`1px solid ${occupied?"rgba(0,0,0,0.1)":`rgba(${rgb},0.3)`}`,
                           color:occupied?C.textMuted:theme,
                           opacity:occupied?0.5:1}}>
-                        {k}
+                        {splitBedKey(k).num}
                       </button>
                     );
                   })}
@@ -1862,7 +1964,11 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
     return !b || !(b.assigned?.length>0||b.shadows?.length>0||b.diagnosis||b.consultant||b.notes);
   };
 
-  const allBedNums = Object.keys(beds).filter(k=>!isNaN(k)).sort((a,b)=>Number(a)-Number(b));
+  const allBedNums = Object.keys(beds).filter(k=>{ const {num}=splitBedKey(k); return !isNaN(Number(num)); }).sort((a,b)=>{
+    const A=splitBedKey(a), B=splitBedKey(b);
+    if (A.section!==B.section) return (A.section||"").localeCompare(B.section||"");
+    return Number(A.num)-Number(B.num);
+  });
 
   const formatWeek = (wk) => {
     const [yr,wNum] = wk.split("-W");
@@ -1898,7 +2004,7 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <span style={{fontSize:"0.6rem",color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500}}>{bed.isFloor?"Floor":"Bed"}</span>
-                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{splitBedKey(String(bedNum)).num}</span>
                         {bed.diagnosis&&<span style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:140}}>{bed.diagnosis}</span>}
                       </div>
                       <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>
@@ -1934,7 +2040,7 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                         <div>
                           <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:500,marginBottom:8}}>Restore to which bed?</div>
                           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-                            {allBedNums.map(k=>{
+                            {allBedNums.filter(k=>splitBedKey(k).section===splitBedKey(bedNum).section).map(k=>{
                               const free = bedIsFree(k);
                               return (
                                 <button key={k} onClick={()=>{if(!free)return; onRestore(selectedWeek,bedNum,k); setRestorePicker(null);}} disabled={!free}
@@ -1942,7 +2048,7 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                                     background:free?`rgba(${rgb},0.1)`:"rgba(0,0,0,0.03)",
                                     border:`1px solid ${free?`rgba(${rgb},0.3)`:"rgba(0,0,0,0.08)"}`,
                                     color:free?theme:C.textMuted,opacity:free?1:0.5}}>
-                                  {k}
+                                  {splitBedKey(k).num}
                                 </button>
                               );
                             })}
@@ -2085,7 +2191,7 @@ function DefaultBedTileSmall({ bedNum, bed, theme, rgb, muted, section, onClick 
         {bed.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>}
       </div>
       <div style={{fontSize:"0.52rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{label}</div>
-      <div style={{fontSize:"1.1rem",fontWeight:700,color:muted?C.textMuted:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:3}}>{bedNum}</div>
+      <div style={{fontSize:"1.1rem",fontWeight:700,color:muted?C.textMuted:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:3}}>{splitBedKey(String(bedNum)).num}</div>
       {bed.consultant&&<div style={{fontSize:"0.56rem",color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1}}>{bed.consultant}</div>}
       {bed.diagnosis&&<div style={{fontSize:"0.58rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bed.diagnosis}</div>}
       {bed.notes&&<div style={{fontSize:"0.55rem",color:C.textMuted,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginTop:2}}>{bed.notes}</div>}
@@ -2099,7 +2205,7 @@ function BedPill({ bedNum, bed, type, rgb, theme }) {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:"0.58rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500}}>{bed.isFloor?"Floor":"Bed"}</span>
-          <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</span>
+          <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{splitBedKey(String(bedNum)).num}</span>
           {type==="shadow"&&<span style={{fontSize:"0.6rem",color:C.textMuted,border:`1px dashed ${C.borderMid}`,borderRadius:4,padding:"1px 5px"}}>shadow</span>}
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -2301,11 +2407,11 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const [setupForm,  setSetupForm]  = useState({});
 
   const setup  = ward.setup || {};
-  const rawBeds = ward.beds || {};
+  const sections  = setup.wardSections || [];
+  const rawBeds = migrateDefaultBeds(ward.beds, sections);
   const beds   = Object.fromEntries(Object.entries(rawBeds).map(([k,v])=>[k, migrateBed(v)||{patients:[]}]));
   const theme  = setup.themeColor || "#007aff";
   const rgb    = hexToRgb(theme);
-  const sections  = setup.wardSections || [];
   const shadowHOs = setup.shadowHOs || [];
   const consultants = setup.consultants || [];
   const students  = (setup.students || []).map(s=>typeof s==="object"?s:{name:s,group:""});
@@ -2417,7 +2523,19 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
     setShadowEditing(false); showToast("Shadow HO posts updated");
   };
 
+  const sectionOrderIndex = (secName) => { const i = sections.findIndex(s=>s.name===secName); return i===-1?999:i; };
   const bedKeys = Object.keys(beds).sort((a,b)=>{
+    const A = splitBedKey(a), B = splitBedKey(b);
+    const aFloor = beds[a]?.isFloor, bFloor = beds[b]?.isFloor;
+    if (aFloor && !bFloor) return 1; if (!aFloor && bFloor) return -1;
+    if (A.section && B.section) {
+      if (A.section !== B.section) return sectionOrderIndex(A.section)-sectionOrderIndex(B.section);
+      const an=Number(A.num), bn=Number(B.num);
+      if (!isNaN(an)&&!isNaN(bn)) return an-bn;
+      return A.num.localeCompare(B.num);
+    }
+    if (A.section && !B.section) return -1;
+    if (!A.section && B.section) return 1;
     const af=isNaN(a),bf=isNaN(b);
     if(af&&!bf) return 1; if(!af&&bf) return -1;
     if(!af&&!bf) return Number(a)-Number(b);
@@ -2426,16 +2544,8 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 
   const getBedSection = (bedNum) => {
     if (beds[bedNum]?.specialBedSection) return beds[bedNum].specialBedSection;
-    const n = Number(bedNum);
-    if (isNaN(n)) return null;
-    for (const sec of sections) {
-      const rangeStr = sec.range||"";
-      if (rangeStr.includes("-")) {
-        const [start,end] = rangeStr.split("-").map(Number);
-        if (n>=start && n<=end) return sec.name;
-      }
-    }
-    return null;
+    const { section } = splitBedKey(String(bedNum));
+    return section;
   };
 
   const filteredBedKeys = sectionFilter==="all" ? bedKeys : bedKeys.filter(k=>{
@@ -2592,7 +2702,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                     onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.opacity="1";e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.08)";}}}
                     onMouseLeave={e=>{e.currentTarget.style.opacity="0.55";e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)";}}>
                     <span style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,lineHeight:1}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
-                    <span style={{fontSize:"1.3rem",fontWeight:700,color:`rgba(${rgb},0.35)`,letterSpacing:"-0.03em",lineHeight:1.1}}>{bedNum}</span>
+                    <span style={{fontSize:"1.3rem",fontWeight:700,color:`rgba(${rgb},0.35)`,letterSpacing:"-0.03em",lineHeight:1.1}}>{splitBedKey(String(bedNum)).num}</span>
                   </div>
                 )];
               }
@@ -2633,7 +2743,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                     {isFirst&&(
                       <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:isMulti?4:3}}>
                         <span style={{fontSize:"0.5rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,lineHeight:1,flexShrink:0}}>{bed.isFloor?"Floor":secName||"Bed"}</span>
-                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em",lineHeight:1}}>{bedNum}</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em",lineHeight:1}}>{splitBedKey(String(bedNum)).num}</span>
                         {isLeader&&!seniorMode&&(
                           <button
                             onClick={addAndOpen}
@@ -2737,7 +2847,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
               <div>
                 <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:500}}>{selBed.isFloor?"Floor Patient":getBedSection(selectedBed)||"Bed"}</div>
-                <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{selectedBed}</h2>
+                <h2 style={{margin:"3px 0 0",fontSize:"2rem",fontWeight:700,color:theme,letterSpacing:"-0.04em"}}>{splitBedKey(String(selectedBed)).num}</h2>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4}}>
                 {selBed.isFloor&&<button onClick={async()=>{const b={...rawBeds};delete b[selectedBed];await save({...ward,beds:b});setView("home");setSelectedBed(null);showToast("Floor patient removed");}} style={{display:"flex",alignItems:"center",justifyContent:"center",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:10,padding:"8px 10px",fontSize:"0.78rem",cursor:"pointer"}}><Icon name="close" size={13} color={C.red}/></button>}
@@ -2910,7 +3020,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                         {grouped[sec].map(k=>{const b=beds[k];const occupied=(b?.patients||[]).length>0;
                           return <button key={k} onClick={()=>!occupied&&changeBedNumber(selectedBed,k)} disabled={occupied}
                             style={{padding:"10px 4px",borderRadius:9,fontSize:"0.8rem",fontWeight:700,cursor:occupied?"default":"pointer",fontFamily:SF,
-                              background:occupied?"rgba(0,0,0,0.04)":`rgba(${rgb},0.1)`,border:`1px solid ${occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.3)`}`,color:occupied?C.textMuted:theme,opacity:occupied?0.45:1}}>{k}</button>;
+                              background:occupied?"rgba(0,0,0,0.04)":`rgba(${rgb},0.1)`,border:`1px solid ${occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.3)`}`,color:occupied?C.textMuted:theme,opacity:occupied?0.45:1}}>{splitBedKey(k).num}</button>;
                         })}
                       </div>
                     </div>
@@ -2922,7 +3032,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
 
             {showClearConfirm&&(
               <div style={{marginTop:10,background:`rgba(${hexToRgb(C.red)},0.05)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:13,padding:"14px"}}>
-                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patients for bed {selectedBed}?</p>
+                <p style={{margin:"0 0 12px",fontSize:"0.82rem",color:C.textSub,textAlign:"center"}}>Clear all patients for bed {splitBedKey(String(selectedBed)).num}?</p>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setShowClearConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
                   <button onClick={()=>clearBed(selectedBed)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"10px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Clear</button>
@@ -3035,6 +3145,19 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               const wardSections=(setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range||""}));
               const specialBeds=(setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
               const newBeds={...rawBeds};
+              // Backfill any beds implied by section ranges that don't exist yet,
+              // using section-qualified keys so overlapping ranges stay distinct.
+              wardSections.forEach(sec=>{
+                if (sec.range?.includes("-")) {
+                  const [start,end] = sec.range.split("-").map(s=>parseInt(s.trim()));
+                  if (!isNaN(start) && !isNaN(end)) {
+                    for (let n=start;n<=end;n++) {
+                      const key = qualifyBedKey(sec.name,n);
+                      if (!newBeds[key]) newBeds[key] = { patients:[], isFloor:false };
+                    }
+                  }
+                }
+              });
               specialBeds.forEach(b=>{if(!newBeds[b.id]){newBeds[b.id]={patients:[],isFloor:false,specialBedSection:b.section};}else{newBeds[b.id]={...newBeds[b.id],specialBedSection:b.section};}});
               const customTags=(setupForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
               await save({...ward,beds:newBeds,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students,consultants,wardSections,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,specialBeds,customTags}});
@@ -3163,7 +3286,11 @@ function MedArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
 
   const weekData = archive[selectedWeek]||{};
   const archivedBedKeys = Object.keys(weekData).sort((a,b)=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b));
-  const allBedNums = Object.keys(beds).filter(k=>!isNaN(k)).sort((a,b)=>Number(a)-Number(b));
+  const allBedNums = Object.keys(beds).filter(k=>{ const {num}=splitBedKey(k); return !isNaN(Number(num)); }).sort((a,b)=>{
+    const A=splitBedKey(a), B=splitBedKey(b);
+    if (A.section!==B.section) return (A.section||"").localeCompare(B.section||"");
+    return Number(A.num)-Number(B.num);
+  });
   const bedIsFree = (bedNum) => { const b=beds[bedNum]; return !b||(b.patients||[]).length===0; };
   const formatWeek = (wk) => { const [yr,wNum]=wk.split("-W"); return `Week ${parseInt(wNum)}, ${yr}`; };
   const toggle = (bedNum) => setExpanded(e=>({...e,[bedNum]:!e[bedNum]}));
@@ -3191,7 +3318,7 @@ function MedArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <span style={{fontSize:"0.6rem",color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500}}>{bed.isFloor?"Floor":"Bed"}</span>
-                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{bedNum}</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{splitBedKey(String(bedNum)).num}</span>
                         <span style={{fontSize:"0.72rem",color:C.textSub,fontWeight:500}}>{pts.length} pt</span>
                       </div>
                       <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>{bed.archivedAt ? new Date(bed.archivedAt).toLocaleDateString() : "Archived"}</div>
@@ -3223,13 +3350,13 @@ function MedArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                         <div>
                           <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:500,marginBottom:8}}>Restore to which bed?</div>
                           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-                            {allBedNums.map(k=>{
+                            {allBedNums.filter(k=>splitBedKey(k).section===splitBedKey(bedNum).section).map(k=>{
                               const free=bedIsFree(k);
                               return <button key={k} onClick={()=>{if(!free)return; onRestore(selectedWeek,bedNum,k); setRestorePicker(null);}} disabled={!free}
                                 style={{padding:"9px 4px",borderRadius:9,fontSize:"0.82rem",fontWeight:700,cursor:free?"pointer":"not-allowed",fontFamily:SF,
                                   background:free?`rgba(${hexToRgb(theme)},0.1)`:"rgba(0,0,0,0.03)",
                                   border:`1px solid ${free?`rgba(${hexToRgb(theme)},0.3)`:"rgba(0,0,0,0.08)"}`,
-                                  color:free?theme:C.textMuted,opacity:free?1:0.5}}>{k}</button>;
+                                  color:free?theme:C.textMuted,opacity:free?1:0.5}}>{splitBedKey(k).num}</button>;
                             })}
                           </div>
                           <button onClick={()=>setRestorePicker(null)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"8px",cursor:"pointer",fontFamily:SF,fontSize:"0.8rem"}}>Cancel</button>
@@ -3248,7 +3375,7 @@ function MedArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                           <button onClick={()=>sameOk?onRestore(selectedWeek,bedNum,bedNum):setRestorePicker(bedNum)}
                             style={{flex:2,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,fontWeight:500,
                               background:`rgba(${hexToRgb(theme)},0.09)`,border:`1px solid rgba(${hexToRgb(theme)},0.25)`,color:theme}}>
-                            {sameOk?`Restore to Bed ${bedNum}`:"Restore to…"}
+                            {sameOk?`Restore to Bed ${splitBedKey(String(bedNum)).num}`:"Restore to…"}
                           </button>
                           <button onClick={()=>setConfirmDelete(bedNum)}
                             style={{flex:1,padding:"9px",borderRadius:10,fontSize:"0.8rem",cursor:"pointer",fontFamily:SF,
@@ -3322,7 +3449,7 @@ function MedStudentsTab({ beds, bedKeys, students, theme, rgb }) {
                         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:ss.shadow.length>0?12:0}}>
                           {ss.primary.map(({bedNum,pt},i)=>(
                             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,border:`1px solid rgba(${rgb},0.15)`,borderRadius:10}}>
-                              <span style={{fontSize:"0.75rem",fontWeight:700,color:theme,minWidth:28}}>{bedNum}</span>
+                              <span style={{fontSize:"0.75rem",fontWeight:700,color:theme,minWidth:28}}>{splitBedKey(String(bedNum)).num}</span>
                               <span style={{fontSize:"0.58rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.1)`,borderRadius:4,padding:"1px 5px",flexShrink:0}}>{pt.label}</span>
                               <div style={{flex:1,overflow:"hidden"}}>
                                 {pt.patientName&&<div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.patientName}</div>}
@@ -3338,7 +3465,7 @@ function MedStudentsTab({ beds, bedKeys, students, theme, rgb }) {
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {ss.shadow.map(({bedNum,pt},i)=>(
                             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surfaceEl,border:"1px dashed rgba(0,0,0,0.12)",borderRadius:10,opacity:0.8}}>
-                              <span style={{fontSize:"0.75rem",fontWeight:700,color:C.textMuted,minWidth:28}}>{bedNum}</span>
+                              <span style={{fontSize:"0.75rem",fontWeight:700,color:C.textMuted,minWidth:28}}>{splitBedKey(String(bedNum)).num}</span>
                               <span style={{fontSize:"0.58rem",fontWeight:600,color:C.textMuted,background:"rgba(0,0,0,0.04)",borderRadius:4,padding:"1px 5px",flexShrink:0}}>{pt.label}</span>
                               <div style={{flex:1,overflow:"hidden"}}>
                                 {pt.patientName&&<div style={{fontSize:"0.72rem",fontWeight:600,color:C.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.patientName}</div>}
