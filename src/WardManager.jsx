@@ -1588,7 +1588,10 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               const sec=getBedSection(bedNum);
               return (
                 <div key={bedNum}
-                  onClick={()=>setViewBed(bedNum)}
+                  onClick={isLeader && !seniorMode
+                    ? ()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[]}); setView("bed"); }
+                    : ()=>setViewBed(bedNum)
+                  }
                   style={{
                     background: cRgb?`rgba(${cRgb},0.06)`:C.surface,
                     border: bed.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:cRgb?`1px solid rgba(${cRgb},0.22)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,
