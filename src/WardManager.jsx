@@ -1168,6 +1168,9 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowForm, setShadowForm] = useState(null);
   const [sectionFilter, setSectionFilter] = useState("all");
   const [viewBed, setViewBed] = useState(null); // bed key for read-only quick-view panel
+
+  const setup  = ward.setup || {};
+  const sections   = setup.wardSections || [];
   const beds   = migrateDefaultBeds(ward.beds, sections);
   const theme  = setup.themeColor || "#007aff";
   const rgb    = hexToRgb(theme);
