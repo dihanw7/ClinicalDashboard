@@ -1068,6 +1068,84 @@ function WardView({ wardId, ward: initialWard, onBack, onSave, onDelete, showToa
 }
 
 // ── Default Ward View ──────────────────────────────────────────────────────────
+// Read-only quick-view panel — shown when tapping a bed tile
+function BedViewPanel({ bedNum, bed, sec, setup, theme, rgb, seniorMode, onClose, onEdit }) {
+  const cObj  = (setup.consultants||[]).find(c=>(typeof c==="object"?c.name:c)===bed.consultant);
+  const cRgb  = cObj?.color ? hexToRgb(cObj.color) : null;
+  const hasAssigned = bed.assigned?.length > 0;
+  const hasShadow   = bed.shadows?.length  > 0;
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.22)",zIndex:150,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{width:"100%",maxHeight:"82vh",display:"flex",flexDirection:"column",background:C.surface,borderRadius:"22px 22px 0 0",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+
+        {/* Fixed header */}
+        <div style={{flexShrink:0,padding:"10px 20px 0"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
+
+          {/* Title row */}
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div>
+                <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{bed.isFloor?"Floor Patient":sec||"Bed"}</div>
+                <div style={{fontSize:"2rem",fontWeight:700,color:cRgb?`rgb(${cRgb})`:theme,lineHeight:1,letterSpacing:"-0.04em"}}>{splitBedKey(String(bedNum)).num}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:5,paddingTop:2}}>
+                {bed.isNew&&<span style={{fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:6,background:`rgba(${hexToRgb(C.red)},0.1)`,color:C.red,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,display:"flex",alignItems:"center",gap:4}}><Icon name="newdot" size={8} color={C.red}/>New</span>}
+                {bed.historyTaken&&<span style={{fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:6,background:`rgba(${hexToRgb(C.green)},0.1)`,color:C.green,border:`1px solid rgba(${hexToRgb(C.green)},0.25)`,display:"flex",alignItems:"center",gap:4}}><Icon name="history" size={8} color={C.green}/>History</span>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {!seniorMode&&(
+                <button onClick={onEdit} title="Edit" style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon name="edit" size={14} color={C.textSub}/>
+                </button>
+              )}
+              <button onClick={onClose} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name="close" size={13} color={C.textSub}/>
+              </button>
+            </div>
+          </div>
+
+          {/* Consultant + tag pills */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+            {bed.consultant&&(
+              <span style={{display:"flex",alignItems:"center",gap:5,background:cRgb?`rgba(${cRgb},0.1)`:C.surfaceEl,border:`1px solid ${cRgb?`rgba(${cRgb},0.3)`:C.border}`,color:cRgb?`rgb(${cRgb})`:C.textSub,borderRadius:20,padding:"4px 10px",fontSize:"0.74rem",fontWeight:600}}>
+                {cRgb&&<div style={{width:7,height:7,borderRadius:"50%",background:`rgb(${cRgb})`,flexShrink:0}}/>}
+                {bed.consultant}
+              </span>
+            )}
+            {(bed.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.72rem",fontWeight:700,padding:"4px 10px",borderRadius:20,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+          </div>
+
+          {/* Diagnosis */}
+          {bed.diagnosis&&<div style={{fontSize:"0.88rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:12,lineHeight:1.4}}>{bed.diagnosis}</div>}
+
+          {/* Students */}
+          {(hasAssigned||hasShadow)&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+              {(bed.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem",fontWeight:500}}><Icon name="user" size={11} color={theme}/>{n}{g&&<sup style={{fontSize:"0.6em",marginLeft:1,opacity:0.6}}>{g}</sup>}</span>;})}
+              {(bed.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textSub,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem"}}><Icon name="shadow" size={11} color={C.textMuted}/>{n}<span style={{fontSize:"0.65rem",color:C.textMuted,marginLeft:2}}>(shadow)</span></span>;})}
+            </div>
+          )}
+
+          {bed.notes&&<div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Notes</div>}
+        </div>
+
+        {/* Scrollable notes */}
+        {bed.notes ? (
+          <div style={{flex:1,overflowY:"auto",padding:"0 20px 36px",WebkitOverflowScrolling:"touch"}}>
+            <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",fontSize:"0.88rem",color:C.text,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{bed.notes}</div>
+          </div>
+        ) : (
+          <div style={{padding:"4px 20px 36px",color:C.textMuted,fontSize:"0.82rem",fontStyle:"italic"}}>No notes recorded.</div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
   const [isLeader,   setIsLeader]   = useState(false);
   const [pinInput,   setPinInput]   = useState("");
@@ -1757,77 +1835,24 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       {/* Assign modal */}
       {assignModal && <AssignModal bedNum={assignModal} students={setup.students||[]} currentAssigned={beds[assignModal]?.assigned||[]} currentShadows={beds[assignModal]?.shadows||[]} shadowHOs={shadowHOs} theme={theme} rgb={rgb} beds={beds} onConfirm={(a,s)=>assignStudents(assignModal,a,s)} onClose={()=>setAssignModal(null)}/>}
 
-      {/* Quick-view panel (eye icon) — read-only */}
-      {viewBed && beds[viewBed] && (()=>{
-        const vb = beds[viewBed];
-        const vSec = getBedSection(viewBed);
-        const vCObj = (setup.consultants||[]).find(c=>(typeof c==="object"?c.name:c)===vb.consultant);
-        const vCRgb = vCObj?.color ? hexToRgb(vCObj.color) : null;
-        const hasAssigned = vb.assigned?.length>0;
-        const hasShadow   = vb.shadows?.length>0;
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.22)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}
-            onClick={e=>{if(e.target===e.currentTarget)setViewBed(null);}}>
-            <div style={{width:"100%",maxHeight:"82vh",display:"flex",flexDirection:"column",background:C.surface,borderRadius:"22px 22px 0 0",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
-              {/* Drag handle */}
-              <div style={{flexShrink:0,padding:"10px 20px 0"}}>
-                <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
-                {/* Header row */}
-                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div>
-                      <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600}}>{vb.isFloor?"Floor Patient":vSec||"Bed"}</div>
-                      <div style={{fontSize:"2rem",fontWeight:700,color:vCRgb?`rgb(${vCRgb})`:theme,lineHeight:1,letterSpacing:"-0.04em"}}>{splitBedKey(String(viewBed)).num}</div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:5,paddingTop:2}}>
-                      {vb.isNew&&<span style={{fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:6,background:`rgba(${hexToRgb(C.red)},0.1)`,color:C.red,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,display:"flex",alignItems:"center",gap:4}}><Icon name="newdot" size={8} color={C.red}/>New</span>}
-                      {vb.historyTaken&&<span style={{fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:6,background:`rgba(${hexToRgb(C.green)},0.1)`,color:C.green,border:`1px solid rgba(${hexToRgb(C.green)},0.25)`,display:"flex",alignItems:"center",gap:4}}><Icon name="history" size={8} color={C.green}/>History</span>}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {!seniorMode&&<button onClick={()=>{setViewBed(null);setSelectedBed(viewBed);setBedEdit({consultant:vb.consultant||"",diagnosis:vb.diagnosis||"",notes:vb.notes||"",historyTaken:!!vb.historyTaken,opStatus:vb.opStatus||"",tags:vb.tags||[]});setView("bed");}} title="Edit" style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="edit" size={14} color={C.textSub}/></button>}
-                    <button onClick={()=>setViewBed(null)} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="close" size={13} color={C.textSub}/></button>
-                  </div>
-                </div>
-
-                {/* Consultant pill + tags row */}
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-                  {vb.consultant&&(
-                    <span style={{display:"flex",alignItems:"center",gap:5,background:vCRgb?`rgba(${vCRgb},0.1)`:C.surfaceEl,border:`1px solid ${vCRgb?`rgba(${vCRgb},0.3)`:C.border}`,color:vCRgb?`rgb(${vCRgb})`:C.textSub,borderRadius:20,padding:"4px 10px",fontSize:"0.74rem",fontWeight:600}}>
-                      {vCRgb&&<div style={{width:7,height:7,borderRadius:"50%",background:`rgb(${vCRgb})`,flexShrink:0}}/>}
-                      {vb.consultant}
-                    </span>
-                  )}
-                  {(vb.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.72rem",fontWeight:700,padding:"4px 10px",borderRadius:20,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
-                </div>
-
-                {/* Diagnosis */}
-                {vb.diagnosis&&<div style={{fontSize:"0.88rem",color:C.text,fontStyle:"italic",fontWeight:500,marginBottom:12,lineHeight:1.4}}>{vb.diagnosis}</div>}
-
-                {/* Assigned students */}
-                {(hasAssigned||hasShadow)&&(
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-                    {(vb.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;const g=typeof s==="object"?s.group:"";return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:`rgba(${rgb},0.09)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem",fontWeight:500}}><Icon name="user" size={11} color={theme}/>{n}{g&&<sup style={{fontSize:"0.6em",marginLeft:1,opacity:0.6}}>{g}</sup>}</span>;})}
-                    {(vb.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return<span key={i} style={{display:"flex",alignItems:"center",gap:5,background:C.surfaceEl,border:`1px dashed ${C.borderMid}`,color:C.textSub,borderRadius:8,padding:"5px 10px",fontSize:"0.78rem"}}><Icon name="shadow" size={11} color={C.textMuted}/>{n}<span style={{fontSize:"0.65rem",color:C.textMuted}}>(shadow)</span></span>;})}
-                  </div>
-                )}
-
-                {/* Notes label */}
-                {vb.notes&&<div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Notes</div>}
-              </div>
-
-              {/* Scrollable notes area */}
-              {vb.notes ? (
-                <div style={{flex:1,overflowY:"auto",padding:"0 20px 36px",WebkitOverflowScrolling:"touch"}}>
-                  <div style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",fontSize:"0.88rem",color:C.text,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{vb.notes}</div>
-                </div>
-              ) : (
-                <div style={{padding:"0 20px 36px",color:C.textMuted,fontSize:"0.82rem",fontStyle:"italic"}}>No notes recorded.</div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {/* Quick-view panel — read-only */}
+      {viewBed && beds[viewBed] && <BedViewPanel
+        bedNum={viewBed}
+        bed={beds[viewBed]}
+        sec={getBedSection(viewBed)}
+        setup={setup}
+        theme={theme}
+        rgb={rgb}
+        seniorMode={seniorMode}
+        onClose={()=>setViewBed(null)}
+        onEdit={()=>{
+          const vb=beds[viewBed];
+          setViewBed(null);
+          setSelectedBed(viewBed);
+          setBedEdit({consultant:vb.consultant||"",diagnosis:vb.diagnosis||"",notes:vb.notes||"",historyTaken:!!vb.historyTaken,opStatus:vb.opStatus||"",tags:vb.tags||[]});
+          setView("bed");
+        }}
+      />}
 
       {/* Shadow HO edit modal */}
       {shadowEditing && shadowForm && (
