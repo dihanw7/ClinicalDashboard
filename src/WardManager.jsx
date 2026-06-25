@@ -1435,6 +1435,20 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setAssigningPatient(null);
     showToast(`${pt.name||pt.bht||"Patient"} assigned to Bed ${splitBedKey(String(bedNum)).num}`);
   };
+
+  const assignUnassignedToFloor = async (patientId) => {
+    const pt = unassignedPatients.find(p=>p.id===patientId);
+    if (!pt) return;
+    const floorKeys = Object.keys(beds).filter(k=>beds[k]?.isFloor);
+    const key = `F${floorKeys.length + 1}`;
+    await save({
+      ...ward,
+      beds: { ...beds, [key]:{ assigned:pt.assigned||[], shadows:pt.shadows||[], patientName:pt.name||"", bht:pt.bht||"", consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, isFloor:true, opStatus:"" } },
+      unassignedPatients: unassignedPatients.filter(p=>p.id!==patientId),
+    });
+    setAssigningPatient(null);
+    showToast(`${pt.name||pt.bht||"Patient"} added as floor patient (${key})`);
+  };
   const resetWard = async () => {
     await save({ setup:null, beds:{} });
     setSetupForm({ wardName:"", appointmentType:"", bedCount:"", themeColor:"#007aff", students:[{name:"",group:""}], consultants:[{name:"",color:"#6366f1"}] });
@@ -1655,51 +1669,64 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>
                 <span style={{fontSize:"0.62rem",fontWeight:700,color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase"}}>Unassigned</span>
                 <span style={{background:`rgba(${rgb},0.12)`,color:theme,fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:10}}>{unassignedPatients.length}</span>
-                {!seniorMode && <span style={{fontSize:"0.65rem",color:C.textMuted,marginLeft:"auto"}}>Tap to assign bed</span>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10,marginBottom:8}}>
                 {unassignedPatients.map(pt=>(
                   <div key={pt.id}
-                    onClick={!seniorMode ? ()=>setAssigningPatient(pt) : undefined}
                     style={{
                       background:C.surface,
-                      border:`1.5px dashed rgba(${rgb},0.4)`,
-                      borderRadius:14, padding:"12px 11px", cursor:seniorMode?"default":"pointer",
+                      border:`1.5px dashed rgba(${rgb},0.35)`,
+                      borderRadius:14, padding:"11px 11px 10px", cursor:"default",
                       position:"relative",
                       boxShadow:"0 2px 10px rgba(0,0,0,0.05)",
-                      transition:"transform 0.12s, box-shadow 0.12s", userSelect:"none",
-                      minHeight:90,
+                      display:"flex", flexDirection:"column", minHeight:110,
                     }}
-                    onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(0,0,0,0.1)";}}}
-                    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}
                   >
-                    {/* blinker + remove */}
-                    <div style={{position:"absolute",top:8,right:8,display:"flex",gap:4,alignItems:"center"}}>
-                      {isLeader && !seniorMode && (
-                        <button onClick={e=>{e.stopPropagation();removeUnassignedPatient(pt.id);}}
-                          style={{background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center",borderRadius:4}}>
-                          <Icon name="close" size={10} color={C.textMuted}/>
-                        </button>
-                      )}
-                      <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={9} color={C.red}/></span>
+                    {/* Top row: label + blinker + remove */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{fontSize:"0.52rem",color:`rgba(${rgb},0.65)`,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:700}}>Unassigned</span>
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                        {isLeader && !seniorMode && (
+                          <button onClick={e=>{e.stopPropagation();removeUnassignedPatient(pt.id);}}
+                            style={{background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center",borderRadius:4,opacity:0.5}}>
+                            <Icon name="close" size={9} color={C.textMuted}/>
+                          </button>
+                        )}
+                        <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={8} color={C.red}/></span>
+                      </div>
                     </div>
-                    <div style={{fontSize:"0.55rem",color:`rgba(${rgb},0.7)`,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>Unassigned</div>
-                    {pt.name
-                      ? <div style={{fontSize:"0.88rem",fontWeight:700,color:C.text,lineHeight:1.2,letterSpacing:"-0.01em",marginBottom:2}}>{pt.name}</div>
-                      : <div style={{fontSize:"0.78rem",fontWeight:500,color:C.textMuted,marginBottom:2}}>Unnamed</div>
-                    }
-                    {pt.bht && <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:4}}>BHT {pt.bht}</div>}
-                    {/* Student chips if pre-assigned */}
-                    {!seniorMode && ((pt.assigned||[]).length>0||(pt.shadows||[]).length>0) && (
-                      <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>
-                        {(pt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.22)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:600}}>{n.split(" ")[0]}</span>;})}
-                        {(pt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.14)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>;})}
-                      </div>
-                    )}
+
+                    {/* Patient name */}
+                    <div style={{flex:1}}>
+                      {pt.name
+                        ? <div style={{fontSize:"0.88rem",fontWeight:700,color:C.text,lineHeight:1.25,letterSpacing:"-0.01em"}}>{pt.name}</div>
+                        : <div style={{fontSize:"0.78rem",fontWeight:500,color:C.textMuted,fontStyle:"italic"}}>No name</div>
+                      }
+                      {pt.bht && <div style={{fontSize:"0.62rem",color:C.textMuted,fontWeight:500,marginTop:2}}>BHT {pt.bht}</div>}
+
+                      {/* Student chips */}
+                      {((pt.assigned||[]).length>0||(pt.shadows||[]).length>0) && (
+                        <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
+                          {(pt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.22)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:600}}>{n.split(" ")[0]}</span>;})}
+                          {(pt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>;})}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Assign button — full width at bottom */}
                     {!seniorMode && (
-                      <div style={{position:"absolute",bottom:9,right:9}}>
-                        <div style={{background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:7,padding:"3px 7px",fontSize:"0.6rem",color:theme,fontWeight:600}}>Assign →</div>
-                      </div>
+                      <button
+                        onClick={()=>setAssigningPatient(pt)}
+                        style={{
+                          marginTop:8, width:"100%",
+                          background:theme, border:"none",
+                          color:"#fff", borderRadius:8,
+                          padding:"7px 0", fontSize:"0.72rem",
+                          fontWeight:600, cursor:"pointer", fontFamily:SF,
+                          letterSpacing:"0.01em",
+                        }}>
+                        Assign Bed / Floor
+                      </button>
                     )}
                   </div>
                 ))}
@@ -2395,35 +2422,54 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         </div>
       )}
 
-      {/* Assign unassigned patient to bed — bed picker sheet */}
+      {/* Assign unassigned patient — bed + floor picker sheet */}
       {assigningPatient && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}} onClick={e=>e.target===e.currentTarget&&setAssigningPatient(null)}>
-          <div style={{width:"100%",maxHeight:"80vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 48px",boxShadow:"0 -4px 40px rgba(0,0,0,0.13)"}}>
-            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
-            <div style={{marginBottom:18}}>
-              <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:4}}>Assigning Patient</div>
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:12}}>
-                <div style={{width:30,height:30,borderRadius:9,background:`rgba(${rgb},0.12)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Icon name="user" size={14} color={theme}/>
-                </div>
-                <div>
-                  {assigningPatient.name&&<div style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>{assigningPatient.name}</div>}
-                  {assigningPatient.bht&&<div style={{fontSize:"0.72rem",color:C.textMuted}}>BHT {assigningPatient.bht}</div>}
-                </div>
+          <div style={{width:"100%",maxHeight:"82vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 48px",boxShadow:"0 -4px 40px rgba(0,0,0,0.13)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+
+            {/* Patient summary */}
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:13,marginBottom:20}}>
+              <div style={{width:34,height:34,borderRadius:10,background:`rgba(${rgb},0.12)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name="user" size={14} color={theme}/>
               </div>
+              <div style={{flex:1,minWidth:0}}>
+                {assigningPatient.name && <div style={{fontSize:"0.92rem",fontWeight:700,color:C.text,letterSpacing:"-0.01em"}}>{assigningPatient.name}</div>}
+                {assigningPatient.bht  && <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:1}}>BHT {assigningPatient.bht}</div>}
+                {!assigningPatient.name&&!assigningPatient.bht&&<div style={{fontSize:"0.82rem",color:C.textMuted}}>Unnamed patient</div>}
+              </div>
+              <button onClick={()=>setAssigningPatient(null)} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center",borderRadius:8}}>
+                <Icon name="close" size={14} color={C.textMuted}/>
+              </button>
             </div>
-            <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:10}}>Select a Bed</div>
+
+            {/* Floor option */}
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:700,marginBottom:8}}>Floor</div>
+              {(() => {
+                const floorKeys = Object.keys(beds).filter(k=>beds[k]?.isFloor);
+                const nextFloor = `F${floorKeys.length+1}`;
+                return (
+                  <button onClick={()=>assignUnassignedToFloor(assigningPatient.id)}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:11,fontSize:"0.84rem",fontWeight:600,cursor:"pointer",fontFamily:SF,
+                      background:`rgba(${rgb},0.07)`,border:`1px solid rgba(${rgb},0.25)`,color:theme,width:"100%"}}>
+                    <Icon name="floor" size={13} color={theme}/>
+                    Add as Floor Patient ({nextFloor})
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Bed sections */}
+            <div style={{fontSize:"0.6rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Select a Bed</div>
             {sections.length>0 ? (
               sections.map(sec=>{
-                const secBeds = bedKeys.filter(k=>{
-                  if (beds[k]?.isFloor) return false;
-                  return getBedSection(k)===sec.name;
-                });
+                const secBeds = bedKeys.filter(k=>!beds[k]?.isFloor && getBedSection(k)===sec.name);
                 if (secBeds.length===0) return null;
                 return (
                   <div key={sec.name} style={{marginBottom:16}}>
-                    <div style={{fontSize:"0.72rem",fontWeight:600,color:C.textSub,letterSpacing:"0.03em",marginBottom:8,textTransform:"uppercase"}}>{sec.name}</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(68px,1fr))",gap:6}}>
+                    <div style={{fontSize:"0.68rem",fontWeight:600,color:C.textSub,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:8}}>{sec.name}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(62px,1fr))",gap:6}}>
                       {secBeds.map(bedNum=>{
                         const bed=beds[bedNum];
                         const occupied=!!(bed.patientName||bed.diagnosis||bed.consultant||bed.notes||(bed.assigned||[]).length>0);
@@ -2431,11 +2477,11 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         return (
                           <button key={bedNum} onClick={()=>!occupied&&assignUnassignedToBed(assigningPatient.id,bedNum)}
                             disabled={occupied}
-                            style={{padding:"10px 4px",borderRadius:10,fontWeight:700,fontSize:"0.85rem",fontFamily:SF,cursor:occupied?"default":"pointer",
-                              background:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.08)`,
-                              border:`1px solid ${occupied?"rgba(0,0,0,0.09)":`rgba(${rgb},0.3)`}`,
+                            style={{padding:"11px 4px",borderRadius:10,fontWeight:700,fontSize:"0.88rem",fontFamily:SF,cursor:occupied?"default":"pointer",
+                              background:occupied?`rgba(0,0,0,0.03)`:`rgba(${rgb},0.08)`,
+                              border:`1px solid ${occupied?"rgba(0,0,0,0.07)":`rgba(${rgb},0.3)`}`,
                               color:occupied?C.textMuted:theme,
-                              opacity:occupied?0.55:1,
+                              opacity:occupied?0.45:1,
                               transition:"all 0.1s"}}>
                             {num}
                           </button>
@@ -2446,7 +2492,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 );
               })
             ) : (
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(68px,1fr))",gap:6,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(62px,1fr))",gap:6,marginBottom:16}}>
                 {bedKeys.filter(k=>!beds[k]?.isFloor).map(bedNum=>{
                   const bed=beds[bedNum];
                   const occupied=!!(bed.patientName||bed.diagnosis||bed.consultant||bed.notes||(bed.assigned||[]).length>0);
@@ -2454,18 +2500,19 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   return (
                     <button key={bedNum} onClick={()=>!occupied&&assignUnassignedToBed(assigningPatient.id,bedNum)}
                       disabled={occupied}
-                      style={{padding:"10px 4px",borderRadius:10,fontWeight:700,fontSize:"0.85rem",fontFamily:SF,cursor:occupied?"default":"pointer",
-                        background:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.08)`,
-                        border:`1px solid ${occupied?"rgba(0,0,0,0.09)":`rgba(${rgb},0.3)`}`,
+                      style={{padding:"11px 4px",borderRadius:10,fontWeight:700,fontSize:"0.88rem",fontFamily:SF,cursor:occupied?"default":"pointer",
+                        background:occupied?`rgba(0,0,0,0.03)`:`rgba(${rgb},0.08)`,
+                        border:`1px solid ${occupied?"rgba(0,0,0,0.07)":`rgba(${rgb},0.3)`}`,
                         color:occupied?C.textMuted:theme,
-                        opacity:occupied?0.55:1}}>
+                        opacity:occupied?0.45:1}}>
                       {num}
                     </button>
                   );
                 })}
               </div>
             )}
-            <button onClick={()=>setAssigningPatient(null)} style={{width:"100%",background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:SF,fontSize:"0.88rem",marginTop:6}}>Cancel</button>
+
+            <button onClick={()=>setAssigningPatient(null)} style={{width:"100%",background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:SF,fontSize:"0.88rem",marginTop:8}}>Cancel</button>
           </div>
         </div>
       )}
