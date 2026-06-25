@@ -1825,7 +1825,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             })}
           </div>
         </>}
-        {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb} getBedSection={getBedSection} onBedClick={(bedNum,bed)=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[],patientName:bed.patientName||"",bht:bed.bht||""}); setView("bed"); }}/>}
+        {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb} getBedSection={getBedSection} unassignedPatients={unassignedPatients} seniorMode={seniorMode} onAssign={pt=>setAssigningPatient(pt)} onBedClick={(bedNum,bed)=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[],patientName:bed.patientName||"",bht:bed.bht||""}); setView("bed"); }}/>}
 
         {activeTab==="archive" && (
           <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed} onDelete={deleteArchivedBed}/>
@@ -2850,7 +2850,7 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
   );
 }
 
-function StudentsTab({ beds, bedKeys, students, theme, rgb, getBedSection, onBedClick }) {
+function StudentsTab({ beds, bedKeys, students, theme, rgb, getBedSection, onBedClick, unassignedPatients=[], seniorMode=false, onAssign }) {
   const [selected, setSelected] = useState(null);
 
   // Build per-student bed lists
@@ -2871,6 +2871,50 @@ function StudentsTab({ beds, bedKeys, students, theme, rgb, getBedSection, onBed
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+      {/* Unassigned patients strip */}
+      {unassignedPatients.length > 0 && (
+        <div style={{marginBottom:6}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+            <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>
+            <span style={{fontSize:"0.62rem",fontWeight:700,color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase"}}>Unassigned</span>
+            <span style={{background:`rgba(${rgb},0.12)`,color:theme,fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:10}}>{unassignedPatients.length}</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+            {unassignedPatients.map(pt=>(
+              <div key={pt.id}
+                style={{background:C.surface,border:`1.5px dashed rgba(${rgb},0.35)`,borderRadius:14,
+                  padding:"11px 11px 10px",position:"relative",
+                  boxShadow:"0 2px 10px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",minHeight:110}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:"0.52rem",color:`rgba(${rgb},0.65)`,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:700}}>Unassigned</span>
+                  <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={8} color={C.red}/></span>
+                </div>
+                <div style={{flex:1}}>
+                  {pt.name
+                    ? <div style={{fontSize:"0.88rem",fontWeight:700,color:C.text,lineHeight:1.25,letterSpacing:"-0.01em"}}>{pt.name}</div>
+                    : <div style={{fontSize:"0.78rem",fontWeight:500,color:C.textMuted,fontStyle:"italic"}}>No name</div>
+                  }
+                  {pt.bht && <div style={{fontSize:"0.62rem",color:C.textMuted,fontWeight:500,marginTop:2}}>BHT {pt.bht}</div>}
+                  {((pt.assigned||[]).length>0||(pt.shadows||[]).length>0) && (
+                    <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
+                      {(pt.assigned||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.22)`,borderRadius:4,padding:"1px 5px",color:theme,fontWeight:600}}>{n.split(" ")[0]}</span>;})}
+                      {(pt.shadows||[]).map((s,i)=>{const n=typeof s==="object"?s.name:s;return <span key={i} style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{n.split(" ")[0]}</span>;})}
+                    </div>
+                  )}
+                </div>
+                {!seniorMode && (
+                  <button onClick={()=>onAssign&&onAssign(pt)}
+                    style={{marginTop:8,width:"100%",background:theme,border:"none",color:"#fff",borderRadius:8,
+                      padding:"7px 0",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
+                    Assign Bed / Floor
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {sorted.map(s=>{
         const sb = studentBeds[s.name] || {primary:[],shadow:[]};
         const total = sb.primary.length + sb.shadow.length;
@@ -6656,8 +6700,8 @@ function PaedStudentTab({ patients, groups, theme, rgb, onSelectPatient }) {
     const {primary: bp, shadow: bs_} = getStudentPatients(b.name);
     const aTotal = ap.length + as_.length;
     const bTotal = bp.length + bs_.length;
-    if (bTotal !== aTotal) return bTotal - aTotal;           // most patients first
-    if (a.groupIdx !== b.groupIdx) return a.groupIdx - b.groupIdx; // then group order
+    if (bTotal !== aTotal) return bTotal - aTotal;
+    if (a.groupIdx !== b.groupIdx) return a.groupIdx - b.groupIdx;
     return a.name.localeCompare(b.name);
   });
 
@@ -6666,12 +6710,67 @@ function PaedStudentTab({ patients, groups, theme, rgb, onSelectPatient }) {
   const groupColors = ["#6366f1","#f97316"];
   const tabOptions = [{id:"all",label:"All"}, ...groups.map((g,i)=>({id:g.name,label:g.name,color:groupColors[i]}))];
 
+  // Unassigned patients — those with no section or bedNo
+  const unassigned = patients.filter(p=>!p.section||!p.bedNo);
+
   if (allStudents.length===0) return (
     <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem"}}>No students added in setup.</div>
   );
 
   return (
     <div>
+      {/* Unassigned patients strip */}
+      {unassigned.length > 0 && (
+        <div style={{marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+            <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>
+            <span style={{fontSize:"0.62rem",fontWeight:700,color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase"}}>Unassigned</span>
+            <span style={{background:`rgba(${rgb},0.12)`,color:theme,fontSize:"0.6rem",fontWeight:700,padding:"2px 7px",borderRadius:10}}>{unassigned.length}</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+            {unassigned.map(pt => {
+              const gc0 = groupColors[0]; const gc1 = groupColors[1];
+              const p1s = allStudents.find(s=>s.name===pt.primary1);
+              const p2s = allStudents.find(s=>s.name===pt.primary2);
+              return (
+                <div key={pt.id}
+                  onClick={()=>onSelectPatient&&onSelectPatient(pt)}
+                  style={{background:C.surface,border:`1.5px dashed rgba(${rgb},0.35)`,borderRadius:14,padding:"11px 11px 10px",
+                    cursor:onSelectPatient?"pointer":"default",position:"relative",
+                    boxShadow:"0 2px 10px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",minHeight:110,userSelect:"none"}}>
+                  {/* Top row */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                    <span style={{fontSize:"0.52rem",color:`rgba(${rgb},0.65)`,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:700}}>Unassigned</span>
+                    <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={8} color={C.red}/></span>
+                  </div>
+                  {/* Name + age */}
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"0.88rem",fontWeight:700,color:C.text,lineHeight:1.25,letterSpacing:"-0.01em"}}>
+                      {pt.name||<span style={{fontStyle:"italic",fontWeight:400,color:C.textMuted}}>No name</span>}
+                    </div>
+                    {pt.age && <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:1}}>{pt.age}</div>}
+                    {/* Student chips */}
+                    {(pt.primary1||pt.primary2||pt.shadow) && (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
+                        {pt.primary1&&<span style={{fontSize:"0.52rem",background:`rgba(${hexToRgb(gc0)},0.1)`,border:`1px solid rgba(${hexToRgb(gc0)},0.25)`,borderRadius:4,padding:"1px 5px",color:gc0,fontWeight:600}}>{pt.primary1.split(" ")[0]}{p1s?.no&&<sup style={{fontSize:"0.42em"}}>{p1s.no}</sup>}</span>}
+                        {pt.primary2&&<span style={{fontSize:"0.52rem",background:`rgba(${hexToRgb(gc1)},0.1)`,border:`1px solid rgba(${hexToRgb(gc1)},0.25)`,borderRadius:4,padding:"1px 5px",color:gc1,fontWeight:600}}>{pt.primary2.split(" ")[0]}{p2s?.no&&<sup style={{fontSize:"0.42em"}}>{p2s.no}</sup>}</span>}
+                        {pt.shadow&&<span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.04)",border:"1px dashed rgba(0,0,0,0.15)",borderRadius:4,padding:"1px 5px",color:C.textMuted}}>{pt.shadow.split(" ")[0]}</span>}
+                      </div>
+                    )}
+                  </div>
+                  {/* Tap hint */}
+                  {onSelectPatient && (
+                    <div style={{marginTop:8,fontSize:"0.68rem",color:theme,fontWeight:600,textAlign:"center",
+                      background:`rgba(${rgb},0.07)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:7,padding:"5px 0"}}>
+                      Tap to assign bed
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* Group sub-tabs */}
       <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
         {tabOptions.map(t=>(
