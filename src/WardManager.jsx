@@ -1176,6 +1176,8 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [addPtForm, setAddPtForm] = useState({ name:"", bht:"", isFloor:false, bedNum:"", section:"", assigned:[], shadows:[] });
   const [addPtError, setAddPtError] = useState("");
+  const [addPtSubView, setAddPtSubView] = useState(null); // null | "students" | "bed"
+  const [addPtBlockedMsg, setAddPtBlockedMsg] = useState(null);
   // ── Assign unassigned patient to bed ─────────────────────────────────────
   const [assigningPatient, setAssigningPatient] = useState(null); // patient obj being assigned
 
@@ -2092,11 +2094,16 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         </div>
       )}
 
-      {/* Add Patient modal — comprehensive form */}
+      {/* Add Patient modal — name/BHT + action buttons */}
       {showAddPatient && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}} onClick={e=>e.target===e.currentTarget&&setShowAddPatient(false)}>
-          <div style={{width:"100%",maxHeight:"92vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 52px",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)"}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}}
+          onClick={e=>{ if(e.target===e.currentTarget){ if(addPtSubView){setAddPtSubView(null);}else{setShowAddPatient(false);} } }}>
+
+          {/* ── Main sheet ── */}
+          <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 52px",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)",
+            transform:addPtSubView?"translateY(100%)":"translateY(0)",transition:"transform 0.28s cubic-bezier(0.32,0.72,0,1)",pointerEvents:addPtSubView?"none":"auto"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
+
             {/* Header */}
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
               <div style={{width:38,height:38,borderRadius:11,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -2113,7 +2120,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             </div>
 
             {/* Name + BHT */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
               <div>
                 <label style={labelStyle}>Patient Name</label>
                 <input autoFocus value={addPtForm.name} onChange={e=>setAddPtForm(f=>({...f,name:e.target.value}))}
@@ -2126,48 +2133,220 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               </div>
             </div>
 
-            {/* Bed assignment */}
-            <div style={{marginBottom:16}}>
-              <label style={labelStyle}>Bed Assignment</label>
-              {/* Floor toggle */}
-              <div onClick={()=>setAddPtForm(f=>({...f,isFloor:!f.isFloor,bedNum:"",section:""}))}
-                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:addPtForm.isFloor?`rgba(${rgb},0.06)`:C.surfaceEl,border:`1px solid ${addPtForm.isFloor?`rgba(${rgb},0.3)`:C.border}`,borderRadius:11,cursor:"pointer",userSelect:"none",marginTop:8,marginBottom:8}}>
-                <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${addPtForm.isFloor?theme:C.borderMid}`,background:addPtForm.isFloor?theme:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
-                  {addPtForm.isFloor&&<Icon name="check" size={11} color="#fff"/>}
-                </div>
+            {/* Action buttons — Assign Students + Add Bed */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+              {/* Assign Students button */}
+              <button onClick={()=>{setAddPtBlockedMsg(null);setAddPtSubView("students");}}
+                style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4,padding:"12px 14px",borderRadius:13,cursor:"pointer",fontFamily:SF,
+                  background:(addPtForm.assigned||[]).length>0||(addPtForm.shadows||[]).length>0?`rgba(${rgb},0.06)`:C.surfaceEl,
+                  border:`1px solid ${(addPtForm.assigned||[]).length>0||(addPtForm.shadows||[]).length>0?`rgba(${rgb},0.35)`:C.border}`,
+                  textAlign:"left"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <Icon name="floor" size={13} color={addPtForm.isFloor?theme:C.textMuted}/>
-                  <span style={{fontSize:"0.84rem",color:addPtForm.isFloor?theme:C.text,fontWeight:500}}>Floor patient (no bed)</span>
+                  <Icon name="user" size={14} color={(addPtForm.assigned||[]).length>0?theme:C.textMuted}/>
+                  <span style={{fontSize:"0.82rem",fontWeight:600,color:(addPtForm.assigned||[]).length>0?theme:C.text}}>Assign Students</span>
+                </div>
+                {(addPtForm.assigned||[]).length>0||(addPtForm.shadows||[]).length>0 ? (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:2}}>
+                    {(addPtForm.assigned||[]).map((s,i)=><span key={i} style={{fontSize:"0.6rem",background:`rgba(${rgb},0.12)`,border:`1px solid rgba(${rgb},0.3)`,color:theme,borderRadius:4,padding:"1px 6px",fontWeight:600}}>{(typeof s==="object"?s.name:s).split(" ")[0]}</span>)}
+                    {(addPtForm.shadows||[]).map((s,i)=><span key={i} style={{fontSize:"0.6rem",background:"rgba(0,0,0,0.05)",border:"1px dashed rgba(0,0,0,0.15)",color:C.textSub,borderRadius:4,padding:"1px 6px"}}>{(typeof s==="object"?s.name:s).split(" ")[0]}</span>)}
+                  </div>
+                ) : (
+                  <span style={{fontSize:"0.7rem",color:C.textMuted}}>None selected</span>
+                )}
+              </button>
+
+              {/* Add Bed button */}
+              <button onClick={()=>setAddPtSubView("bed")}
+                style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4,padding:"12px 14px",borderRadius:13,cursor:"pointer",fontFamily:SF,
+                  background:addPtForm.bedNum||addPtForm.isFloor?`rgba(${rgb},0.06)`:C.surfaceEl,
+                  border:`1px solid ${addPtForm.bedNum||addPtForm.isFloor?`rgba(${rgb},0.35)`:C.border}`,
+                  textAlign:"left"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <Icon name={addPtForm.isFloor?"floor":"ward"} size={14} color={addPtForm.bedNum||addPtForm.isFloor?theme:C.textMuted}/>
+                  <span style={{fontSize:"0.82rem",fontWeight:600,color:addPtForm.bedNum||addPtForm.isFloor?theme:C.text}}>Add Bed</span>
+                </div>
+                {addPtForm.isFloor
+                  ? <span style={{fontSize:"0.7rem",color:theme,fontWeight:600}}>Floor patient</span>
+                  : addPtForm.bedNum
+                    ? <span style={{fontSize:"0.7rem",color:theme,fontWeight:600}}>Bed {addPtForm.bedNum}{addPtForm.section?` · ${addPtForm.section}`:""}</span>
+                    : <span style={{fontSize:"0.7rem",color:C.textMuted}}>None — unassigned</span>
+                }
+              </button>
+            </div>
+
+            {addPtError&&<div style={{color:C.red,fontSize:"0.78rem",marginBottom:10}}>{addPtError}</div>}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowAddPatient(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"13px",cursor:"pointer",fontFamily:SF,fontSize:"0.88rem"}}>Cancel</button>
+              <button onClick={addUnassignedPatient} style={{flex:2,...accentBtn(theme,rgb),padding:"13px",fontSize:"0.9rem"}}>
+                {addPtForm.isFloor?"Add Floor Patient":addPtForm.bedNum?`Assign to Bed ${addPtForm.bedNum}`:"Add Patient"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Sub-sheet: Assign Students (mirrors AssignModal) ── */}
+          {addPtSubView==="students" && (()=>{
+            const students = setup.students||[];
+            const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
+            const sorted = [...students].sort((a,b)=>{const ag=parseInt(typeof a==="object"?a.group:"")||999,bg=parseInt(typeof b==="object"?b.group:"")||999;return ag!==bg?ag-bg:(typeof a==="object"?a.name:a).localeCompare(typeof b==="object"?b.name:b);});
+            const getName = s=>typeof s==="object"?s.name:s;
+            const getGroup = s=>typeof s==="object"?s.group:"";
+            const curAssigned = addPtForm.assigned||[];
+            const curShadows  = addPtForm.shadows||[];
+            const isAssigned  = s=>curAssigned.some(x=>getName(x)===getName(s));
+            const isShadow    = s=>curShadows.some(x=>getName(x)===getName(s));
+            const isShadowHO  = s=>shadowHONames.has(getName(s));
+            const eligible    = sorted.filter(s=>!isShadowHO(s));
+            const hoStudents  = sorted.filter(s=>isShadowHO(s));
+            const countPrimary = name=>Object.entries(beds).filter(([,b])=>(b.assigned||[]).some(x=>(typeof x==="object"?x.name:x)===name)).length;
+            const countShadow  = name=>Object.entries(beds).filter(([,b])=>(b.shadows||[]).some(x=>(typeof x==="object"?x.name:x)===name)).length;
+            const handlePrimary = s=>{
+              if(isShadowHO(s)){setAddPtBlockedMsg("Shadow HOs cannot be assigned as primary");setTimeout(()=>setAddPtBlockedMsg(null),2000);return;}
+              if(isAssigned(s)){setAddPtForm(f=>({...f,assigned:[]}));return;}
+              setAddPtForm(f=>({...f,shadows:f.shadows.filter(x=>getName(x)!==getName(s)),assigned:[s]}));
+            };
+            const handleShadow = s=>{
+              if(isShadowHO(s)){setAddPtBlockedMsg("Shadow HOs cannot be shadow-assigned here");setTimeout(()=>setAddPtBlockedMsg(null),2000);return;}
+              if(isShadow(s)){setAddPtForm(f=>({...f,shadows:[]}));return;}
+              setAddPtForm(f=>({...f,assigned:f.assigned.filter(x=>getName(x)!==getName(s)),shadows:[s]}));
+            };
+            const Chip = ({s,zone})=>{
+              const ip=isAssigned(s),is=isShadow(s);
+              const active=zone==="primary"?ip:is;
+              const isPrimary=zone==="primary";
+              const accentColor=isPrimary?theme:C.textSub;
+              const accentRgb=isPrimary?rgb:hexToRgb("#3a3a44");
+              const handler=isPrimary?()=>handlePrimary(s):()=>handleShadow(s);
+              const grp=getGroup(s); const name=getName(s);
+              const pCount=countPrimary(name); const sCount=countShadow(name);
+              return (
+                <div onClick={handler} style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
+                  padding:"12px 6px 10px",borderRadius:14,cursor:"pointer",textAlign:"center",transition:"all 0.12s",userSelect:"none",
+                  background:active?`rgba(${accentRgb},0.08)`:C.surfaceEl,
+                  border:`1px solid ${active?accentColor:C.border}`,
+                  boxShadow:active?`0 0 0 1px ${accentColor}`:"none"}}>
+                  {active&&<div style={{position:"absolute",top:5,right:5,width:16,height:16,borderRadius:"50%",background:accentColor,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={9} color="#fff"/></div>}
+                  {grp&&<span style={{fontSize:"0.58rem",color:active?accentColor:C.textMuted,fontFamily:"monospace",fontWeight:600,lineHeight:1}}>{grp}</span>}
+                  <span style={{fontSize:"0.78rem",fontWeight:active?700:500,color:active?accentColor:C.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 4px"}}>{name.split(" ")[0]}</span>
+                  <div style={{display:"flex",gap:3,justifyContent:"center",flexWrap:"wrap",marginTop:1}}>
+                    {active
+                      ?<span style={{fontSize:"0.52rem",fontWeight:700,color:accentColor,letterSpacing:"0.02em"}}>{isPrimary?"primary":"shadow"}</span>
+                      :<>{pCount>0&&<span style={{fontSize:"0.58rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.3)`,borderRadius:20,padding:"0px 5px",lineHeight:"16px"}}>{pCount}</span>}
+                        {sCount>0&&<span style={{fontSize:"0.58rem",fontWeight:500,color:C.textMuted,background:"rgba(0,0,0,0.03)",border:`1px dashed ${C.borderMid}`,borderRadius:20,padding:"0px 5px",lineHeight:"16px"}}>{sCount}s</span>}
+                        {!pCount&&!sCount&&<span style={{fontSize:"0.6rem",color:C.border}}>—</span>}</>}
+                  </div>
+                </div>
+              );
+            };
+            return (
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"flex-end",pointerEvents:"auto"}}
+                onClick={e=>e.target===e.currentTarget&&setAddPtSubView(null)}>
+                <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 48px",maxHeight:"82vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.18)"}}>
+                  <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                    <h3 style={{margin:0,color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students</h3>
+                    <button onClick={()=>setAddPtSubView(null)} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <Icon name="close" size={13} color={C.textSub}/>
+                    </button>
+                  </div>
+                  <p style={{margin:"0 0 16px",fontSize:"0.74rem",color:C.textMuted}}>Select one primary and one shadow.</p>
+                  {addPtBlockedMsg&&<div style={{background:`rgba(${hexToRgb(C.red)},0.08)`,border:`1px solid rgba(${hexToRgb(C.red)},0.25)`,borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:"0.78rem",color:C.red,textAlign:"center"}}>{addPtBlockedMsg}</div>}
+                  {sorted.length===0
+                    ?<p style={{color:C.textMuted,fontSize:"0.82rem",textAlign:"center",padding:"20px 0"}}>No students in setup.</p>
+                    :<>
+                      <div style={{marginBottom:20}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                          <span style={{fontSize:"0.65rem",color:theme,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Primary</span>
+                          {curAssigned.length>0&&<span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:4}}>· {getName(curAssigned[0])}</span>}
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                          {eligible.map(s=><Chip key={getName(s)} s={s} zone="primary"/>)}
+                        </div>
+                      </div>
+                      <div style={{marginBottom:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                          <span style={{fontSize:"0.65rem",color:C.textSub,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Shadow</span>
+                          {curShadows.length>0&&<span style={{fontSize:"0.62rem",color:C.textMuted,marginLeft:4}}>· {getName(curShadows[0])}</span>}
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                          {eligible.map(s=><Chip key={getName(s)} s={s} zone="shadow"/>)}
+                        </div>
+                      </div>
+                    </>
+                  }
+                  {hoStudents.length>0&&(
+                    <div style={{marginTop:14,padding:"8px 12px",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:9,fontSize:"0.72rem",color:C.textMuted}}>
+                      <span style={{fontWeight:600}}>Excluded — Shadow HOs (not assignable here):</span>{" "}{hoStudents.map(s=>getName(s)).join(", ")}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:10,marginTop:20}}>
+                    <button onClick={()=>setAddPtSubView(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"12px",cursor:"pointer",fontSize:"0.88rem",fontFamily:SF}}>Cancel</button>
+                    <button onClick={()=>setAddPtSubView(null)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"12px",cursor:"pointer",fontWeight:600,fontSize:"0.88rem",fontFamily:SF}}>Done</button>
+                  </div>
                 </div>
               </div>
+            );
+          })()}
 
-              {/* Bed picker — only if not floor */}
-              {!addPtForm.isFloor && (
-                <>
+          {/* ── Sub-sheet: Bed Picker ── */}
+          {addPtSubView==="bed" && (()=>{
+            const floorKeys = Object.keys(beds).filter(k=>beds[k]?.isFloor);
+            const nextFloor = `F${floorKeys.length+1}`;
+            // Build section list for pills
+            const allSectionNames = [...new Set(sections.map(s=>s.name))];
+            return (
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"flex-end",pointerEvents:"auto"}}
+                onClick={e=>e.target===e.currentTarget&&setAddPtSubView(null)}>
+                <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 48px",maxHeight:"82vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.18)"}}>
+                  <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                    <h3 style={{margin:0,color:C.text,fontSize:"1.05rem",fontWeight:600}}>Select Bed</h3>
+                    <button onClick={()=>setAddPtSubView(null)} style={{background:C.surfaceEl,border:"none",borderRadius:50,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <Icon name="close" size={13} color={C.textSub}/>
+                    </button>
+                  </div>
+
+                  {/* Current selection summary */}
+                  {(addPtForm.bedNum||addPtForm.isFloor)&&(
+                    <div style={{background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:11,padding:"8px 12px",marginBottom:14,fontSize:"0.78rem",color:theme,fontWeight:600}}>
+                      ✓ {addPtForm.isFloor?`Floor patient (${nextFloor})`:`Bed ${addPtForm.bedNum}${addPtForm.section?` · ${addPtForm.section}`:""}`}
+                    </div>
+                  )}
+
+                  {/* Floor pill */}
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Floor</div>
+                    <button onClick={()=>setAddPtForm(f=>({...f,isFloor:!f.isFloor,bedNum:f.isFloor?f.bedNum:"",section:f.isFloor?f.section:""}))}
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:10,fontSize:"0.82rem",fontWeight:addPtForm.isFloor?700:500,cursor:"pointer",fontFamily:SF,
+                        background:addPtForm.isFloor?`rgba(${rgb},0.1)`:C.surfaceEl,
+                        border:`1px solid ${addPtForm.isFloor?theme:C.border}`,
+                        color:addPtForm.isFloor?theme:C.textSub}}>
+                      <Icon name="floor" size={13} color={addPtForm.isFloor?theme:C.textMuted}/>
+                      Floor ({nextFloor})
+                    </button>
+                  </div>
+
+                  {/* Bed sections */}
                   {sections.length>0 ? (
                     sections.map(sec=>{
-                      const rangeStr = sec.range||"";
-                      let bedNums = [];
-                      if (rangeStr.includes("-")) {
-                        const [st,en]=rangeStr.split("-").map(Number);
-                        for(let n=st;n<=en;n++) bedNums.push(String(n));
-                      }
-                      if (bedNums.length===0) return null;
+                      const rangeStr=sec.range||"";
+                      let bedNums=[];
+                      if(rangeStr.includes("-")){const[st,en]=rangeStr.split("-").map(Number);for(let n=st;n<=en;n++)bedNums.push(String(n));}
+                      if(bedNums.length===0) return null;
                       return (
-                        <div key={sec.name} style={{marginBottom:10}}>
-                          <div style={{fontSize:"0.66rem",color:C.textMuted,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:6}}>{sec.name}</div>
-                          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        <div key={sec.name} style={{marginBottom:16}}>
+                          <div style={{fontSize:"0.66rem",color:C.textMuted,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>{sec.name}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                             {bedNums.map(n=>{
                               const key=Object.keys(beds).find(k=>getBedSection(k)===sec.name&&splitBedKey(String(k)).num===n);
                               const bed=key?beds[key]:null;
                               const occupied=!!(bed&&(bed.patientName||bed.diagnosis||bed.consultant||bed.notes||(bed.assigned||[]).length>0));
-                              const isSel=addPtForm.section===sec.name&&addPtForm.bedNum===n;
+                              const isSel=!addPtForm.isFloor&&addPtForm.section===sec.name&&addPtForm.bedNum===n;
                               return (
-                                <button key={n} onClick={()=>!occupied&&setAddPtForm(f=>({...f,section:isSel?"":sec.name,bedNum:isSel?"":n}))}
+                                <button key={n} onClick={()=>!occupied&&setAddPtForm(f=>({...f,isFloor:false,section:isSel?"":sec.name,bedNum:isSel?"":n}))}
                                   disabled={occupied}
-                                  style={{padding:"6px 11px",borderRadius:8,fontSize:"0.8rem",fontWeight:700,fontFamily:SF,cursor:occupied?"default":"pointer",
-                                    background:isSel?theme:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.07)`,
-                                    border:`1px solid ${isSel?theme:occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.25)`}`,
+                                  style={{padding:"8px 13px",borderRadius:9,fontSize:"0.85rem",fontWeight:700,fontFamily:SF,cursor:occupied?"default":"pointer",
+                                    background:isSel?theme:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.08)`,
+                                    border:`1px solid ${isSel?theme:occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.28)`}`,
                                     color:isSel?"#fff":occupied?C.textMuted:theme,opacity:occupied?0.5:1}}>
                                   {n}
                                 </button>
@@ -2178,76 +2357,41 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       );
                     })
                   ) : (
-                    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
-                      {bedKeys.filter(k=>!beds[k]?.isFloor).map(k=>{
-                        const bed=beds[k];
-                        const num=splitBedKey(String(k)).num;
-                        const occupied=!!(bed.patientName||bed.diagnosis||bed.consultant||bed.notes||(bed.assigned||[]).length>0);
-                        const isSel=addPtForm.bedNum===String(k);
-                        return (
-                          <button key={k} onClick={()=>!occupied&&setAddPtForm(f=>({...f,bedNum:isSel?"":String(k),section:""}))}
-                            disabled={occupied}
-                            style={{padding:"6px 11px",borderRadius:8,fontSize:"0.8rem",fontWeight:700,fontFamily:SF,cursor:occupied?"default":"pointer",
-                              background:isSel?theme:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.07)`,
-                              border:`1px solid ${isSel?theme:occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.25)`}`,
-                              color:isSel?"#fff":occupied?C.textMuted:theme,opacity:occupied?0.5:1}}>
-                            {num}
-                          </button>
-                        );
-                      })}
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:"0.66rem",color:C.textMuted,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>Beds</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {bedKeys.filter(k=>!beds[k]?.isFloor).map(k=>{
+                          const bed=beds[k];
+                          const num=splitBedKey(String(k)).num;
+                          const occupied=!!(bed.patientName||bed.diagnosis||bed.consultant||bed.notes||(bed.assigned||[]).length>0);
+                          const isSel=!addPtForm.isFloor&&addPtForm.bedNum===String(k);
+                          return (
+                            <button key={k} onClick={()=>!occupied&&setAddPtForm(f=>({...f,isFloor:false,bedNum:isSel?"":String(k),section:""}))}
+                              disabled={occupied}
+                              style={{padding:"8px 13px",borderRadius:9,fontSize:"0.85rem",fontWeight:700,fontFamily:SF,cursor:occupied?"default":"pointer",
+                                background:isSel?theme:occupied?`rgba(0,0,0,0.04)`:`rgba(${rgb},0.08)`,
+                                border:`1px solid ${isSel?theme:occupied?"rgba(0,0,0,0.08)":`rgba(${rgb},0.28)`}`,
+                                color:isSel?"#fff":occupied?C.textMuted:theme,opacity:occupied?0.5:1}}>
+                              {num}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
-                  {!addPtForm.bedNum && <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:4}}>No bed selected — patient will be added as unassigned</div>}
-                  {addPtForm.bedNum && <div style={{fontSize:"0.72rem",color:theme,fontWeight:600,marginTop:4}}>✓ Bed {addPtForm.bedNum} selected{addPtForm.section?` · ${addPtForm.section}`:""}</div>}
-                </>
-              )}
-            </div>
 
-            {/* Student assignment */}
-            {(setup.students||[]).length>0 && (
-              <div style={{marginBottom:16}}>
-                <label style={labelStyle}>Assign Students</label>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
-                  {(setup.students||[]).filter(s=>s.name).map((s,i)=>{
-                    const n=typeof s==="object"?s.name:s;
-                    const g=typeof s==="object"?s.group:"";
-                    const isHO=(shadowHOs||[]).some(h=>h.name===n);
-                    const isPrimary=(addPtForm.assigned||[]).some(a=>(typeof a==="object"?a.name:a)===n);
-                    const isShadow=(addPtForm.shadows||[]).some(a=>(typeof a==="object"?a.name:a)===n);
-                    const sObj={name:n,group:g};
-                    return (
-                      <button key={i} onClick={()=>{
-                        if (isHO) {
-                          setAddPtForm(f=>({...f,shadows:isShadow?f.shadows.filter(a=>(typeof a==="object"?a.name:a)!==n):[...f.shadows,sObj]}));
-                        } else {
-                          if (isPrimary) setAddPtForm(f=>({...f,assigned:f.assigned.filter(a=>(typeof a==="object"?a.name:a)!==n)}));
-                          else if (isShadow) setAddPtForm(f=>({...f,shadows:f.shadows.filter(a=>(typeof a==="object"?a.name:a)!==n)}));
-                          else setAddPtForm(f=>({...f,assigned:[...f.assigned,sObj]}));
-                        }
-                      }}
-                        style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:9,fontSize:"0.78rem",fontWeight:isPrimary||isShadow?600:400,cursor:"pointer",fontFamily:SF,transition:"all 0.1s",
-                          background:isPrimary?`rgba(${rgb},0.12)`:isShadow?`rgba(0,0,0,0.06)`:C.surfaceEl,
-                          border:`1px solid ${isPrimary?`rgba(${rgb},0.35)`:isShadow?"rgba(0,0,0,0.14)":C.border}`,
-                          color:isPrimary?theme:isShadow?C.textSub:C.text}}>
-                        <Icon name={isShadow?"shadow":"user"} size={11} color={isPrimary?theme:isShadow?C.textMuted:C.textMuted}/>
-                        {n}{g&&<sup style={{fontSize:"0.6em",opacity:0.6}}>{g}</sup>}
-                        {isHO&&<span style={{fontSize:"0.58rem",color:C.textMuted,marginLeft:2}}>(HO)</span>}
-                      </button>
-                    );
-                  })}
+                  <div style={{display:"flex",gap:10,marginTop:8}}>
+                    <button onClick={()=>{setAddPtForm(f=>({...f,isFloor:false,bedNum:"",section:""}));setAddPtSubView(null);}}
+                      style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"12px",cursor:"pointer",fontSize:"0.88rem",fontFamily:SF}}>Clear</button>
+                    <button onClick={()=>setAddPtSubView(null)}
+                      style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"12px",cursor:"pointer",fontWeight:600,fontSize:"0.88rem",fontFamily:SF}}>
+                      {addPtForm.isFloor?`Set as Floor (${nextFloor})`:addPtForm.bedNum?`Set Bed ${addPtForm.bedNum}`:"Done"}
+                    </button>
+                  </div>
                 </div>
-                <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:6}}>Tap once = primary · HO students auto-shadow</div>
               </div>
-            )}
-
-            {addPtError&&<div style={{color:C.red,fontSize:"0.78rem",marginBottom:10}}>{addPtError}</div>}
-            <div style={{display:"flex",gap:10,marginTop:4}}>
-              <button onClick={()=>setShowAddPatient(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"13px",cursor:"pointer",fontFamily:SF,fontSize:"0.88rem"}}>Cancel</button>
-              <button onClick={addUnassignedPatient} style={{flex:2,...accentBtn(theme,rgb),padding:"13px",fontSize:"0.9rem"}}>
-                {addPtForm.isFloor?"Add Floor Patient":addPtForm.bedNum?"Assign to Bed "+addPtForm.bedNum:"Add Patient"}
-              </button>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       )}
 
