@@ -79,6 +79,7 @@ const Icon = ({ name, size=14, color="currentColor" }) => {
     ward:     <svg style={s} viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke={color} strokeWidth="1.5"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M8 7.5v3M6.5 9h3" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>,
     eye:      <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M1.5 8C2.5 5 5 3 8 3s5.5 2 6.5 5c-1 3-3.5 5-6.5 5S2.5 11 1.5 8z" stroke={color} strokeWidth="1.4"/><circle cx="8" cy="8" r="2" stroke={color} strokeWidth="1.4"/></svg>,
     edit:     <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5a1.414 1.414 0 012 2L5 13H3v-2L11.5 2.5z" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    trash:    <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.3 4.5V3a1 1 0 011-1h1.4a1 1 0 011 1v1.5M4.6 4.5l.5 8.3a1 1 0 001 1h3.8a1 1 0 001-1l.5-8.3" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.6 7.3v3.8M9.4 7.3v3.8" stroke={color} strokeWidth="1.2" strokeLinecap="round"/></svg>,
   };
   return icons[name] || null;
 };
@@ -1172,6 +1173,10 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowForm, setShadowForm] = useState(null);
   const [sectionFilter, setSectionFilter] = useState("all");
   const [viewBed, setViewBed] = useState(null); // bed key for read-only quick-view panel
+  // ── House-cleaning (bulk bed delete) mode ────────────────────────────────
+  const [cleanupMode, setCleanupMode] = useState(false);
+  const [cleanupSelected, setCleanupSelected] = useState([]);
+  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
   // ── Add Patient (unassigned pool) ────────────────────────────────────────
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [addPtForm, setAddPtForm] = useState({ name:"", bht:"", isFloor:false, bedNum:"", section:"", assigned:[], shadows:[] });
@@ -1348,6 +1353,19 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     delete rest[bedNum];
     await save({ ...ward, beds: rest });
     setShowDeleteBedConfirm(false); setView("home"); setSelectedBed(null); showToast("Bed deleted");
+  };
+  // ── House-cleaning (bulk delete) ops ──────────────────────────────────────
+  const toggleCleanupSelect = (bedNum) => {
+    setCleanupSelected(prev => prev.includes(bedNum) ? prev.filter(k=>k!==bedNum) : [...prev, bedNum]);
+  };
+  const exitCleanupMode = () => { setCleanupMode(false); setCleanupSelected([]); setShowCleanupConfirm(false); };
+  const cleanupDeleteSelected = async () => {
+    const rest = { ...beds };
+    cleanupSelected.forEach(k=>{ delete rest[k]; });
+    await save({ ...ward, beds: rest });
+    const n = cleanupSelected.length;
+    setShowCleanupConfirm(false); setCleanupSelected([]); setCleanupMode(false);
+    showToast(`${n} bed${n>1?"s":""} cleared and deleted`);
   };
   const assignStudents = async (bedNum, assigned, shadows) => {
     const wasEmpty = !(beds[bedNum]?.assigned?.length>0 || beds[bedNum]?.shadows?.length>0);
@@ -1583,7 +1601,15 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </button>
             )}
             {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader && !seniorMode && <button onClick={()=>{
+            {isLeader && !seniorMode && !cleanupMode && <button onClick={()=>{setCleanupMode(true);setCleanupSelected([]);}} title="House-cleaning: select beds to clear & delete"
+              style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
+              <Icon name="trash" size={14} color={C.textMuted}/>
+            </button>}
+            {isLeader && !seniorMode && cleanupMode && <button onClick={exitCleanupMode}
+              style={{display:"flex",alignItems:"center",gap:5,background:C.red,border:"none",color:"#fff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
+              <Icon name="close" size={11} color="#fff"/> Exit Clean-Up
+            </button>}
+            {isLeader && !seniorMode && !cleanupMode && <button onClick={()=>{
               setEditMode(true);
               setSetupForm({
                 wardName: setup.wardName||"",
@@ -1650,7 +1676,18 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             ))}
           </div>
 
-          {isLeader && !seniorMode && (
+          {/* House-cleaning mode banner */}
+          {cleanupMode && (
+            <div style={{background:`rgba(${hexToRgb(C.red)},0.06)`,border:`1px solid rgba(${hexToRgb(C.red)},0.28)`,borderRadius:14,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+              <Icon name="trash" size={16} color={C.red}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"0.82rem",fontWeight:600,color:C.red}}>Clean-Up Mode</div>
+                <div style={{fontSize:"0.68rem",color:C.textSub,marginTop:1}}>Tap beds to select them for deletion. Selected beds will have all data cleared and be removed from the ward.</div>
+              </div>
+            </div>
+          )}
+
+          {isLeader && !seniorMode && !cleanupMode && (
             <button onClick={()=>{ setAddPtForm({name:"",bht:"",isFloor:false,bedNum:"",section:"",assigned:[],shadows:[]}); setAddPtError(""); setShowAddPatient(true); }}
               style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"12px",fontSize:"0.85rem",marginBottom:20,background:C.surface,border:`1.5px dashed rgba(${rgb},0.4)`,color:theme,borderRadius:13,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1663,7 +1700,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           )}
 
           {/* Unassigned patients — same grid as bed tiles */}
-          {unassignedPatients.length > 0 && (
+          {!cleanupMode && unassignedPatients.length > 0 && (
             <div style={{marginBottom:20}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
                 <span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>
@@ -1759,27 +1796,37 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               const cObj=(setup.consultants||[]).find(c=>(typeof c==="object"?c.name:c)===bed.consultant);
               const cRgb=cObj?.color?hexToRgb(cObj.color):null;
               const sec=getBedSection(bedNum);
+              const isSelectedForCleanup = cleanupSelected.includes(bedNum);
               return (
                 <div key={bedNum}
-                  onClick={isLeader && !seniorMode
-                    ? ()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[],patientName:bed.patientName||"",bht:bed.bht||""}); setView("bed"); }
-                    : ()=>setViewBed(bedNum)
+                  onClick={cleanupMode
+                    ? ()=>toggleCleanupSelect(bedNum)
+                    : (isLeader && !seniorMode
+                      ? ()=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[],patientName:bed.patientName||"",bht:bed.bht||""}); setView("bed"); }
+                      : ()=>setViewBed(bedNum))
                   }
                   style={{
-                    background: cRgb?`rgba(${cRgb},0.06)`:C.surface,
-                    border: bed.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:cRgb?`1px solid rgba(${cRgb},0.22)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,
+                    background: isSelectedForCleanup?`rgba(${hexToRgb(C.red)},0.08)`:cRgb?`rgba(${cRgb},0.06)`:C.surface,
+                    border: isSelectedForCleanup?`2px solid ${C.red}`:bed.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:cRgb?`1px solid rgba(${cRgb},0.22)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,
                     borderRadius:14, padding:"12px 11px", cursor:"pointer",
                     position:"relative",
                     boxShadow: filled ? "0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)" : "0 2px 10px rgba(0,0,0,0.05)",
                     transition:"transform 0.12s, box-shadow 0.12s", userSelect:"none",
+                    opacity: cleanupMode && !isSelectedForCleanup ? 0.72 : 1,
                   }}
                   onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11), 0 2px 6px rgba(0,0,0,0.06)";}}
                   onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}
                 >
-                  {/* Top-right: status flags */}
+                  {/* Top-right: status flags / cleanup checkbox */}
                   <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
-                    {bed.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
-                    {bed.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                    {cleanupMode ? (
+                      <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${isSelectedForCleanup?C.red:C.borderMid}`,background:isSelectedForCleanup?C.red:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {isSelectedForCleanup && <Icon name="check" size={11} color="#fff"/>}
+                      </div>
+                    ) : <>
+                      {bed.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                      {bed.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                    </>}
                   </div>
 
                   {/* Section label + bed number — Paed style */}
@@ -2513,6 +2560,41 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             )}
 
             <button onClick={()=>setAssigningPatient(null)} style={{width:"100%",background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:SF,fontSize:"0.88rem",marginTop:8}}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* House-cleaning floating action bar */}
+      {cleanupMode && (
+        <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:150,padding:"12px 16px calc(14px + env(safe-area-inset-bottom))",background:"rgba(245,245,247,0.92)",borderTop:`1px solid ${C.border}`,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+          <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,fontSize:"0.82rem",fontWeight:600,color:C.text}}>
+              {cleanupSelected.length===0 ? "Select beds to delete" : `${cleanupSelected.length} bed${cleanupSelected.length>1?"s":""} selected`}
+            </div>
+            <button onClick={exitCleanupMode} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"10px 16px",fontSize:"0.82rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+            <button onClick={()=>cleanupSelected.length>0&&setShowCleanupConfirm(true)} disabled={cleanupSelected.length===0}
+              style={{background:cleanupSelected.length>0?C.red:"rgba(0,0,0,0.08)",border:"none",color:cleanupSelected.length>0?"#fff":C.textMuted,borderRadius:10,padding:"10px 16px",fontSize:"0.82rem",fontWeight:600,cursor:cleanupSelected.length>0?"pointer":"default",fontFamily:SF,display:"flex",alignItems:"center",gap:6}}>
+              <Icon name="trash" size={13} color={cleanupSelected.length>0?"#fff":C.textMuted}/> Delete Selected
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* House-cleaning delete confirmation */}
+      {showCleanupConfirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete {cleanupSelected.length} bed{cleanupSelected.length>1?"s":""}?</h3>
+            <p style={{margin:"0 0 12px",color:C.textSub,fontSize:"0.82rem"}}>All patient data for the selected bed{cleanupSelected.length>1?"s":""} will be cleared and the bed slot{cleanupSelected.length>1?"s":""} permanently removed from the ward.</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
+              {cleanupSelected.map(k=>(
+                <span key={k} style={{fontSize:"0.72rem",fontWeight:600,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:8,padding:"3px 8px"}}>{splitBedKey(String(k)).num}</span>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowCleanupConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={cleanupDeleteSelected} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
+            </div>
           </div>
         </div>
       )}
