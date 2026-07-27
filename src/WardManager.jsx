@@ -111,6 +111,25 @@ const splitBedKey = (key) => {
   return { section: key.slice(0, idx), num: key.slice(idx + BED_KEY_SEP.length) };
 };
 
+// ── Week-key helpers ───────────────────────────────────────────────────────────
+// Archive weeks are stored as "YYYY-Www" keys (see getWeekKey in each ward view).
+// weekKeyToStartDate reconstructs the calendar date the week began on, so weeks
+// can be labelled by the day they started rather than an opaque week number.
+const weekKeyToStartDate = (wk) => {
+  const [yrStr, wStr] = String(wk).split("-W");
+  const y = parseInt(yrStr, 10), w = parseInt(wStr, 10);
+  if (!y || !w) return null;
+  const jan1 = new Date(y, 0, 1);
+  let d = (w - 1) * 7 - jan1.getDay();
+  if (d < 0) d = 0;
+  return new Date(y, 0, 1 + d);
+};
+const formatWeekLabel = (wk) => {
+  const start = weekKeyToStartDate(wk);
+  if (!start) return wk;
+  return `Week of ${start.toLocaleDateString(undefined, { day:"numeric", month:"short", year:"numeric" })}`;
+};
+
 // Find every section whose numeric range contains n (range-based sections only).
 const sectionsContaining = (sections, n) => {
   const matches = [];
@@ -1875,7 +1894,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         {activeTab==="students" && <StudentsTab beds={beds} bedKeys={bedKeys} students={setup.students||[]} theme={theme} rgb={rgb} getBedSection={getBedSection} unassignedPatients={unassignedPatients} seniorMode={seniorMode} onAssign={pt=>setAssigningPatient(pt)} onBedClick={(bedNum,bed)=>{ setSelectedBed(bedNum); setBedEdit({consultant:bed.consultant||"",diagnosis:bed.diagnosis||"",notes:bed.notes||"",historyTaken:!!bed.historyTaken,opStatus:bed.opStatus||"",tags:bed.tags||[],patientName:bed.patientName||"",bht:bed.bht||""}); setView("bed"); }}/>}
 
         {activeTab==="archive" && (
-          <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed} onDelete={deleteArchivedBed}/>
+          <ArchiveTab archive={ward.archive||{}} beds={beds} theme={theme} rgb={rgb} onRestore={restoreBed} onDelete={deleteArchivedBed} wardName={setup.wardName}/>
         )}
       </div>
 
@@ -2786,12 +2805,53 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
 }
 
 // ── Archive Tab ────────────────────────────────────────────────────────────────
-function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
+function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete, wardName }) {
   const weeks = Object.keys(archive||{}).sort().reverse();
   const [selectedWeek, setSelectedWeek] = useState(weeks[0]||"");
   const [expanded,     setExpanded]     = useState({});        // {bedNum: bool}
   const [restorePicker,setRestorePicker]= useState(null);      // bedNum being restored
   const [confirmDelete,setConfirmDelete]= useState(null);      // bedNum to delete
+  const [exporting,    setExporting]    = useState(false);
+
+  const exportArchiveToExcel = async () => {
+    const allWeeks = Object.keys(archive||{}).sort();
+    const rows = [];
+    allWeeks.forEach(wk=>{
+      const weekData = archive[wk]||{};
+      Object.keys(weekData).sort((a,b)=>isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b)).forEach(bedNum=>{
+        const bed = weekData[bedNum]||{};
+        const { section, num } = splitBedKey(String(bedNum));
+        rows.push({
+          "Week": formatWeekLabel(wk),
+          "Type": bed.isFloor ? "Floor" : "Bed",
+          "Section": section || "",
+          "Bed/Floor No": num,
+          "Patient Name": bed.patientName || "",
+          "BHT No": bed.bht || "",
+          "Diagnosis": bed.diagnosis || "",
+          "Consultant": bed.consultant || "",
+          "Assigned Students": (bed.assigned||[]).map(s=>typeof s==="object"?s.name:s).join(", "),
+          "Shadow HOs": (bed.shadows||[]).map(s=>typeof s==="object"?s.name:s).join(", "),
+          "History Taken": bed.historyTaken ? "Yes" : "No",
+          "Notes": bed.notes || "",
+          "Archived On": bed.archivedAt ? new Date(bed.archivedAt).toLocaleString() : "",
+        });
+      });
+    });
+    if (!rows.length) return;
+    setExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [{wch:20},{wch:7},{wch:14},{wch:11},{wch:20},{wch:12},{wch:26},{wch:16},{wch:26},{wch:24},{wch:12},{wch:32},{wch:18}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Archive");
+      const safeName = (wardName || "Ward").replace(/[^a-z0-9]+/gi,"_");
+      XLSX.writeFile(wb, `${safeName}_Archive_${new Date().toISOString().slice(0,10)}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (weeks.length===0) return (
     <div style={{textAlign:"center",padding:"60px 20px",color:C.textMuted,fontSize:"0.85rem",fontFamily:SF}}>
@@ -2813,22 +2873,26 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
     return Number(A.num)-Number(B.num);
   });
 
-  const formatWeek = (wk) => {
-    const [yr,wNum] = wk.split("-W");
-    return `Week ${parseInt(wNum)}, ${yr}`;
-  };
+  const formatWeek = (wk) => formatWeekLabel(wk);
 
   const toggle = (bedNum) => setExpanded(e=>({...e,[bedNum]:!e[bedNum]}));
 
   return (
     <div>
-      {/* Week selector */}
-      <div style={{marginBottom:18}}>
-        <label style={labelStyle}>Select Week</label>
-        <select value={selectedWeek} onChange={e=>{setSelectedWeek(e.target.value);setExpanded({});setRestorePicker(null);setConfirmDelete(null);}}
-          style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
-          {weeks.map(w=><option key={w} value={w}>{formatWeek(w)}</option>)}
-        </select>
+      {/* Week selector + export */}
+      <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:18}}>
+        <div style={{flex:1}}>
+          <label style={labelStyle}>Select Week</label>
+          <select value={selectedWeek} onChange={e=>{setSelectedWeek(e.target.value);setExpanded({});setRestorePicker(null);setConfirmDelete(null);}}
+            style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}>
+            {weeks.map(w=><option key={w} value={w}>{formatWeek(w)}</option>)}
+          </select>
+        </div>
+        <button onClick={exportArchiveToExcel} disabled={exporting}
+          style={{display:"flex",alignItems:"center",gap:6,padding:"11px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,color:theme,fontFamily:SF,fontSize:"0.8rem",fontWeight:600,cursor:exporting?"default":"pointer",boxShadow:C.shadow,opacity:exporting?0.6:1,whiteSpace:"nowrap"}}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l-3-3m3 3l3-3" stroke={theme} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 12.5v.5a1.5 1.5 0 001.5 1.5h7a1.5 1.5 0 001.5-1.5v-.5" stroke={theme} strokeWidth="1.5" strokeLinecap="round"/></svg>
+          {exporting ? "Exporting…" : "Export All (.xlsx)"}
+        </button>
       </div>
 
       {archivedBedKeys.length===0
@@ -2850,6 +2914,12 @@ function ArchiveTab({ archive, beds, theme, rgb, onRestore, onDelete }) {
                         <span style={{fontSize:"1.1rem",fontWeight:700,color:theme,letterSpacing:"-0.03em"}}>{splitBedKey(String(bedNum)).num}</span>
                         {bed.diagnosis&&<span style={{fontSize:"0.72rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:140}}>{bed.diagnosis}</span>}
                       </div>
+                      {(bed.patientName||bed.bht)&&(
+                        <div style={{fontSize:"0.72rem",color:C.textSub,fontWeight:600,marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+                          {bed.patientName&&<span>{bed.patientName}</span>}
+                          {bed.bht&&<span style={{fontSize:"0.62rem",color:C.textMuted,fontWeight:500,fontFamily:"monospace"}}>BHT {bed.bht}</span>}
+                        </div>
+                      )}
                       <div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>
                         {bed.archivedAt ? new Date(bed.archivedAt).toLocaleDateString() : "Archived"}
                         {bed.consultant&&` · ${bed.consultant}`}
