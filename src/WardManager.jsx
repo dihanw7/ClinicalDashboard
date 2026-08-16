@@ -80,6 +80,8 @@ const Icon = ({ name, size=14, color="currentColor" }) => {
     eye:      <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M1.5 8C2.5 5 5 3 8 3s5.5 2 6.5 5c-1 3-3.5 5-6.5 5S2.5 11 1.5 8z" stroke={color} strokeWidth="1.4"/><circle cx="8" cy="8" r="2" stroke={color} strokeWidth="1.4"/></svg>,
     edit:     <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5a1.414 1.414 0 012 2L5 13H3v-2L11.5 2.5z" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
     trash:    <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.3 4.5V3a1 1 0 011-1h1.4a1 1 0 011 1v1.5M4.6 4.5l.5 8.3a1 1 0 001 1h3.8a1 1 0 001-1l.5-8.3" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.6 7.3v3.8M9.4 7.3v3.8" stroke={color} strokeWidth="1.2" strokeLinecap="round"/></svg>,
+    copy:     <svg style={s} viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="1.3" stroke={color} strokeWidth="1.4"/><path d="M3 10V3.8A1.3 1.3 0 014.3 2.5H10" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>,
+    paste:    <svg style={s} viewBox="0 0 16 16" fill="none"><rect x="3.5" y="3" width="9" height="11" rx="1.3" stroke={color} strokeWidth="1.4"/><path d="M6 3V2.4A1 1 0 017 1.4h2a1 1 0 011 1V3" stroke={color} strokeWidth="1.4"/><path d="M6 8.3l1.4 1.4L10.5 6.8" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   };
   return icons[name] || null;
 };
@@ -90,6 +92,56 @@ const iS = { background:C.surface, border:`1px solid ${C.border}`, borderRadius:
 const rB = { background:C.surfaceEl, border:`1px solid ${C.border}`, color:C.textMuted, borderRadius:8, padding:"0 12px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", height:42 };
 const aMB = { marginTop:10, background:"none", border:`1px dashed ${C.border}`, color:C.textSub, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontSize:"0.78rem", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:SF };
 const accentBtn = (t,rgb) => ({ background:t, border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:600, fontFamily:SF, boxShadow:`0 4px 14px rgba(${rgb},0.3)` });
+const miniClipBtn = { display:"inline-flex", alignItems:"center", gap:3, background:C.surfaceEl, border:`1px solid ${C.border}`, color:C.textMuted, borderRadius:6, padding:"3px 7px", fontSize:"0.66rem", cursor:"pointer", fontFamily:SF, fontWeight:500, whiteSpace:"nowrap" };
+
+// ── Section clipboard ──────────────────────────────────────────────────────────
+// Lets a leader copy a whole section (e.g. Consultants, with colours) from one
+// ward's setup form and paste it into another ward's setup form. Stored in
+// localStorage so it survives navigating between wards (and page reloads).
+const SECTION_CLIPBOARD_KEY = "wardmanager_section_clipboard_v1";
+const sectionClipboard = {
+  write(kind, data, sourceLabel) {
+    try { localStorage.setItem(SECTION_CLIPBOARD_KEY, JSON.stringify({ kind, data, sourceLabel, ts: Date.now() })); } catch(e) {}
+  },
+  read(kind) {
+    try {
+      const raw = localStorage.getItem(SECTION_CLIPBOARD_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && parsed.kind === kind ? parsed : null;
+    } catch(e) { return null; }
+  },
+};
+
+// Small inline Copy/Paste control for a setup-form section header.
+// kind: string identifying the section type (e.g. "consultants", "customTags") —
+//       paste only works between sections of the same kind.
+// data: current array for this section (used by Copy).
+// onPaste: (pastedArray) => void — called with a cloned copy of the clipboard data.
+function SectionCopyPaste({ kind, data, onPaste, label }) {
+  const [msg, setMsg] = useState("");
+  const flash = (m) => { setMsg(m); setTimeout(()=>setMsg(""), 1400); };
+  const doCopy = () => {
+    const clean = (data||[]).filter(item => (item?.name || item?.label || "").toString().trim());
+    if (!clean.length) { flash("Nothing to copy"); return; }
+    sectionClipboard.write(kind, clean, label);
+    flash("Copied");
+  };
+  const doPaste = () => {
+    const entry = sectionClipboard.read(kind);
+    if (!entry || !entry.data?.length) { flash("Clipboard empty"); return; }
+    onPaste(entry.data.map(item=>({...item})));
+    flash("Pasted");
+  };
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+      <button type="button" onClick={doCopy} title={`Copy ${label||kind}`} style={miniClipBtn}><Icon name="copy" size={11} color={C.textMuted}/>Copy</button>
+      <button type="button" onClick={doPaste} title={`Paste ${label||kind}`} style={miniClipBtn}><Icon name="paste" size={11} color={C.textMuted}/>Paste</button>
+      {msg && <span style={{fontSize:"0.62rem",color:msg.includes("empty")||msg.includes("Nothing")?C.textMuted:C.green,fontWeight:600}}>{msg}</span>}
+    </span>
+  );
+}
+const sectionHeaderRow = { display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" };
 
 // ── Bed key helpers (Default & Medicine) ────────────────────────────────────────
 // Range-based sections can legitimately overlap in number (e.g. HDU 1-2 and
@@ -683,7 +735,10 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
             </div>
             {/* Consultants */}
             <div style={{marginBottom:32}}>
-              <label style={labelStyle}>Consultants</label>
+              <div style={sectionHeaderRow}>
+                <label style={labelStyle}>Consultants</label>
+                <SectionCopyPaste kind="consultants" data={form.consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+              </div>
               {form.consultants.map((c,i)=>(
                 <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
                   <input type="color" value={c.color||"#6366f1"} onChange={e=>setForm(f=>{const a=[...f.consultants];a[i]={...a[i],color:e.target.value};return{...f,consultants:a};})} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -765,7 +820,10 @@ function MedicineSetupFields({ form, setForm }) {
 
       {/* Custom Tags */}
       <div style={{marginBottom:22}}>
-        <label style={labelStyle}>Custom Tags</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Custom Tags</label>
+          <SectionCopyPaste kind="customTags" data={form.customTags||[]} onPaste={d=>setForm(f=>({...f,customTags:d}))} label="Custom Tags"/>
+        </div>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Add your own tags e.g. Pre-op, Post-op, Dialysis, Isolation.</p>
         {(form.customTags||[]).map((tag,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
@@ -809,7 +867,10 @@ function MedicineSetupFields({ form, setForm }) {
 
       {/* Consultants */}
       <div style={{marginBottom:32}}>
-        <label style={labelStyle}>Consultants</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Consultants</label>
+          <SectionCopyPaste kind="consultants" data={consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+        </div>
         {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -880,7 +941,10 @@ function SurgerySetupFields({ form, setForm }) {
 
       {/* Custom Tags */}
       <div style={{marginBottom:22}}>
-        <label style={labelStyle}>Custom Tags</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Custom Tags</label>
+          <SectionCopyPaste kind="customTags" data={form.customTags||[]} onPaste={d=>setForm(f=>({...f,customTags:d}))} label="Custom Tags"/>
+        </div>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>Add your own tags e.g. Pre-op, Post-op, Dialysis, Isolation.</p>
         {(form.customTags||[]).map((tag,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
@@ -924,7 +988,10 @@ function SurgerySetupFields({ form, setForm }) {
 
       {/* Consultants */}
       <div style={{marginBottom:32}}>
-        <label style={labelStyle}>Consultants</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Consultants</label>
+          <SectionCopyPaste kind="consultants" data={consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+        </div>
         {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -1013,7 +1080,10 @@ function PaedSetupFields({ form, setForm }) {
 
       {/* Consultants */}
       <div style={{marginBottom:32}}>
-        <label style={labelStyle}>Consultants</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Consultants</label>
+          <SectionCopyPaste kind="consultants" data={consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+        </div>
         {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -2777,7 +2847,10 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       </div>
       {/* Consultants */}
       <div style={{marginBottom:28}}>
-        <label style={labelStyle}>Consultants</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Consultants</label>
+          <SectionCopyPaste kind="consultants" data={consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+        </div>
         {consultants.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updateConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -2789,7 +2862,10 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       </div>
       {/* Custom Tags */}
       <div style={{marginBottom:28}}>
-        <label style={labelStyle}>Custom Tags <span style={{color:C.textMuted,fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Custom Tags <span style={{color:C.textMuted,fontWeight:400,textTransform:"none",letterSpacing:0}}>(optional)</span></label>
+          <SectionCopyPaste kind="customTags" data={form.customTags||[]} onPaste={d=>setForm(f=>({...f,customTags:d}))} label="Custom Tags"/>
+        </div>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Add coloured labels for the bed sheet e.g. Catheter, IV Line, Monitoring.</p>
         {(form.customTags||[]).map((tag,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
@@ -7583,7 +7659,10 @@ function PsychSetupFields({ form, setForm }) {
 
       {/* Consultants */}
       <div style={{marginBottom:22}}>
-        <label style={labelStyle}>Consultants</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Consultants</label>
+          <SectionCopyPaste kind="consultants" data={form.consultants||consultants} onPaste={d=>setForm(f=>({...f,consultants:d}))} label="Consultants"/>
+        </div>
         {(form.consultants||consultants).map((c,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
             <input type="color" value={c.color||"#6366f1"} onChange={e=>updConsultant(i,"color",e.target.value)} style={{width:38,height:38,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",padding:2,background:"none",flexShrink:0}}/>
@@ -7596,7 +7675,10 @@ function PsychSetupFields({ form, setForm }) {
 
       {/* Custom Tags */}
       <div style={{marginBottom:32}}>
-        <label style={labelStyle}>Custom Tags</label>
+        <div style={sectionHeaderRow}>
+          <label style={labelStyle}>Custom Tags</label>
+          <SectionCopyPaste kind="customTags" data={form.customTags||[]} onPaste={d=>setForm(f=>({...f,customTags:d}))} label="Custom Tags"/>
+        </div>
         <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 8px"}}>e.g. High Risk, Voluntary, Involuntary, On Leave</p>
         {(form.customTags||[]).map((tag,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
