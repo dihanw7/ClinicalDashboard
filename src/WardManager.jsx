@@ -835,7 +835,8 @@ function SurgerySetupFields({ form, setForm }) {
   const updShadowHO  = (i,v) => setForm(f=>{ const s=[...(f.shadowHOs||shadowHOs)]; s[i]={...s[i],name:v}; return {...f,shadowHOs:s}; });
   const addShadowHO  = () => { const n=(form.shadowHOs||shadowHOs).length+1; setForm(f=>({...f,shadowHOs:[...(f.shadowHOs||shadowHOs),{post:`Shadow HO ${n}`,name:""}]})); };
   const remShadowHO  = (i) => setForm(f=>({...f,shadowHOs:(f.shadowHOs||shadowHOs).filter((_,idx)=>idx!==i)}));
-  const addStudent   = () => setForm(f=>({...f,students:[...(f.students||students),{name:"",group:""}]}));
+  const nextGroupNo  = (list) => { const nums=(list||[]).map(s=>parseInt(s.group,10)).filter(n=>!isNaN(n)); return String(nums.length?Math.max(...nums)+1:1); };
+  const addStudent   = () => setForm(f=>{ const current=f.students||students; return {...f,students:[...current,{name:"",group:nextGroupNo(current)}]}; });
   const updStudent   = (i,k,v) => setForm(f=>{ const a=[...(f.students||students)]; a[i]={...a[i],[k]:v}; return {...f,students:a}; });
   const remStudent   = (i) => setForm(f=>({...f,students:(f.students||students).filter((_,idx)=>idx!==i)}));
   const addConsultant= () => setForm(f=>({...f,consultants:[...(f.consultants||consultants),{name:"",color:"#6366f1"}]}));
