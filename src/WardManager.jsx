@@ -724,7 +724,7 @@ function GroupsRepoScreen({ onBack, showToast }) {
                 Randomize
               </button>
             </div>
-            <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 10px"}}>Used for appointments like Surgery, where students work the ward in pairs. Tap names to add or remove them from a pair (max 3 per pair).</p>
+            <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 10px"}}>Used for appointments like Surgery, where students work the ward in pairs. Tap names to add or remove them from a pair (max 3 per pair). This group is a static snapshot — Shadow HOs aren't tracked here; assign them in the ward after loading this group.</p>
             {pairings.map((pair,pi)=>{
               const members = (pair.members||[]).filter(Boolean);
               const otherPairingMap = {};
@@ -4995,6 +4995,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [loadGroupConfirm,  setLoadGroupConfirm]  = useState(null); // group object pending confirmation
   const [showSaveGroup,     setShowSaveGroup]     = useState(false);
   const [saveGroupName,     setSaveGroupName]     = useState("");
+  const [saveGroupTargetId, setSaveGroupTargetId] = useState(""); // "" = create new, else overwrite this group's id
 
   const setup       = ward.setup    || {};
   const patients    = ward.patients || [];
@@ -5149,12 +5150,17 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   // happens on "Save Changes"). Array order is preserved, so each pairing keeps
   // its INDEX — meaning existing patients (which reference pairingIdx, not names)
   // will automatically show this group's students once saved.
+  // Groups are a static snapshot of roster + pairs only — no shadow HO data.
+  // Loading a group always clears the ward's current Shadow HO post names (post
+  // slots are kept) so the leader reassigns shadows fresh through the normal
+  // Shadow HO flow, which already handles pairing-slot swaps correctly.
   const applyLoadedGroup = (group) => {
     const newStudents = (group.students||[]).map(s=>({...s}));
     const newPairings = (group.pairings||[]).map(p=>({members:[...(p.members||[])]}));
-    setSetupForm(f=>({...f, students:newStudents, pairings:newPairings}));
+    const clearedShadowHOs = (setupForm.shadowHOs||setup.shadowHOs||[]).map(h=>({...h,name:""}));
+    setSetupForm(f=>({...f, students:newStudents, pairings:newPairings, shadowHOs:clearedShadowHOs}));
     setLoadGroupConfirm(null); setLoadGroupPick("");
-    showToast(`Loaded "${group.name}" — review then tap Save Changes`);
+    showToast(`Loaded "${group.name}" — reassign Shadow HOs, then tap Save Changes`);
   };
 
   const saveCurrentAsGroup = async () => {
@@ -5162,16 +5168,22 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     if (!name) { showToast("Enter a group name","error"); return; }
     const groupStudents = (setupForm.students||students).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
     const groupPairings = (setupForm.pairings||pairings).map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0);
-    const newGroup = { id:Date.now().toString(), name, students:groupStudents, pairings:groupPairings };
     try {
       const row = await db.get(GROUPS_REPO_KEY);
       const parsed = row ? JSON.parse(row.value) : { groups: [] };
-      const newGroups = [...(parsed.groups||[]), newGroup];
+      const existing = parsed.groups||[];
+      let newGroups;
+      if (saveGroupTargetId) {
+        // Overwrite the chosen group in place (same id).
+        newGroups = existing.map(g=>g.id===saveGroupTargetId ? { id:g.id, name, students:groupStudents, pairings:groupPairings } : g);
+      } else {
+        newGroups = [...existing, { id:Date.now().toString(), name, students:groupStudents, pairings:groupPairings }];
+      }
       await db.upsert(GROUPS_REPO_KEY, { groups:newGroups });
       setGroupsRepo(newGroups); setGroupsRepoLoaded(true);
-      showToast("Saved to Groups repository");
+      showToast(saveGroupTargetId ? "Group updated" : "Saved to Groups repository");
     } catch { showToast("Failed to save group","error"); }
-    setShowSaveGroup(false); setSaveGroupName("");
+    setShowSaveGroup(false); setSaveGroupName(""); setSaveGroupTargetId("");
   };
 
   const searchActive = searchQuery.trim().length > 0;
@@ -6358,7 +6370,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {/* Student Group Repository — swap the whole roster/pairs in one go */}
             <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
               <label style={labelStyle}>Student Group (Repository)</label>
-              <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students & pairs into this ward. Existing patients keep their bed and pairing slot, and will automatically show the new group's students. Handy when handing this ward off to a new batch (e.g. swapping Male/Female Surgery groups).</p>
+              <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students & pairs into this ward. Existing patients keep their bed and pairing slot, and will automatically show the new group's students. Shadow HO post names are cleared on load — reassign them fresh afterward via the normal Shadow HO flow. Handy when handing this ward off to a new batch (e.g. swapping Male/Female Surgery groups).</p>
               {groupsRepo.length===0 ? (
                 <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No groups saved yet. Manage groups from the Home screen's "Groups" button, or save this ward's current roster below.</div>
               ) : (
@@ -6374,11 +6386,27 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </div>
               )}
               {!showSaveGroup
-                ? <button onClick={()=>{setSaveGroupName(setupForm.wardName||"");setShowSaveGroup(true);}} style={{...aMB,marginTop:0}}><Icon name="plus" size={12} color={C.textSub}/> Save Current Roster as Group</button>
-                : <div style={{display:"flex",gap:8,marginTop:8}}>
-                    <input value={saveGroupName} onChange={e=>setSaveGroupName(e.target.value)} placeholder="Group name" style={{...iS,flex:1,padding:"9px 12px"}}/>
-                    <button onClick={()=>setShowSaveGroup(false)} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
-                    <button onClick={saveCurrentAsGroup} style={{background:theme,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>Save</button>
+                ? <button onClick={()=>{setSaveGroupName(setupForm.wardName||"");setSaveGroupTargetId("");setShowSaveGroup(true);}} style={{...aMB,marginTop:0}}><Icon name="plus" size={12} color={C.textSub}/> Save Current Roster as Group</button>
+                : <div style={{marginTop:8}}>
+                    {groupsRepo.length>0 && (
+                      <div style={{marginBottom:8}}>
+                        <select value={saveGroupTargetId} onChange={e=>{
+                          const id = e.target.value;
+                          setSaveGroupTargetId(id);
+                          const g = groupsRepo.find(x=>x.id===id);
+                          setSaveGroupName(g ? g.name : (setupForm.wardName||""));
+                        }} style={{...iS,width:"100%",padding:"9px 12px",boxSizing:"border-box"}}>
+                          <option value="">— Create new group —</option>
+                          {groupsRepo.map(g=><option key={g.id} value={g.id}>Update "{g.name}"</option>)}
+                        </select>
+                        <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:4}}>{saveGroupTargetId ? "This will overwrite that group's saved roster and pairs." : "Creates a brand-new group entry."}</div>
+                      </div>
+                    )}
+                    <div style={{display:"flex",gap:8}}>
+                      <input value={saveGroupName} onChange={e=>setSaveGroupName(e.target.value)} placeholder="Group name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+                      <button onClick={()=>{setShowSaveGroup(false);setSaveGroupTargetId("");}} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                      <button onClick={saveCurrentAsGroup} style={{background:theme,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>{saveGroupTargetId?"Update":"Save"}</button>
+                    </div>
                   </div>
               }
             </div>
@@ -6416,7 +6444,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
-              This replaces the student roster and pairs in the form below with {(loadGroupConfirm.students||[]).length} students and {(loadGroupConfirm.pairings||[]).length} pairs from this group. Existing patients keep their bed — they'll show the new group's students once you tap <strong>Save Changes</strong>. Nothing is saved until then.
+              This replaces the student roster and pairs in the form below with {(loadGroupConfirm.students||[]).length} students and {(loadGroupConfirm.pairings||[]).length} pairs from this group. Existing patients keep their bed — they'll show the new group's students once you tap <strong>Save Changes</strong>. Shadow HO post names will be cleared (the old posts belonged to the previous roster) — reassign them below after loading. Nothing is saved until you tap Save Changes.
             </p>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
