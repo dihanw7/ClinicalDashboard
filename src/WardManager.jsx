@@ -18,6 +18,17 @@ const ALL_LEADER_PINS = Object.values(GROUP_PINS);
 const isAdminPin  = (p) => ALL_LEADER_PINS.includes(p) || p === SUPER_PIN;
 const isLeaderPin = (p, wardId) => p === GROUP_PINS[wardId] || p === SUPER_PIN;
 
+// ── Persistent leader login ───────────────────────────────────────────────────
+// The validated PIN is stashed in localStorage so a leader stays logged in
+// across reloads/navigation until they explicitly log out. Each ward view
+// re-checks the stored PIN against isLeaderPin(storedPin, wardId) on mount,
+// so a group-specific PIN only unlocks its own ward while the super PIN
+// unlocks all of them — same rule tryPin() already enforces.
+const LEADER_PIN_KEY = "wardmanager:leaderPin";
+const getStoredLeaderPin   = () => { try { return localStorage.getItem(LEADER_PIN_KEY) || ""; } catch(e) { return ""; } };
+const setStoredLeaderPin   = (pin) => { try { localStorage.setItem(LEADER_PIN_KEY, pin); } catch(e) {} };
+const clearStoredLeaderPin = () => { try { localStorage.removeItem(LEADER_PIN_KEY); } catch(e) {} };
+
 const WARD_TEMPLATES = {
   default:  { label:"Default (Bed-based)",  desc:"Assign students to numbered beds. Used for Gynaecology, Medicine, Obstetrics." },
   medicine: { label:"Medicine",              desc:"Bed-based with named ward sections (e.g. Elective, Emergency, HDU), Shadow HO banner, and shadow assigned from active Shadow HOs." },
@@ -1528,7 +1539,7 @@ function BedViewPanel({ bedNum, bed, sec, setup, theme, rgb, seniorMode, onClose
 }
 
 function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
-  const [isLeader,   setIsLeader]   = useState(false);
+  const [isLeader,   setIsLeader]   = useState(()=>isLeaderPin(getStoredLeaderPin(), wardId));
   const [pinInput,   setPinInput]   = useState("");
   const [pinError,   setPinError]   = useState(false);
   const [showPin,    setShowPin]    = useState(false);
@@ -1660,7 +1671,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   // ── PIN ────────────────────────────────────────────────────────────────────
   const tryPin = () => {
-    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setStoredLeaderPin(pinInput); setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
@@ -2129,7 +2140,13 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {!seniorMode && (isLeader
-              ? <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20,letterSpacing:"0.04em"}}>LEADER</span>
+              ? <>
+                  <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20,letterSpacing:"0.04em"}}>LEADER</span>
+                  <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out"
+                    style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
+                    Log out
+                  </button>
+                </>
               : <button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
                   <Icon name="key" size={12} color={C.textSub}/> Login
                 </button>
@@ -3900,7 +3917,7 @@ const migrateBed = (bed) => {
 
 // ── Medicine Ward View ────────────────────────────────────────────────────────
 function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
-  const [isLeader,   setIsLeader]   = useState(false);
+  const [isLeader,   setIsLeader]   = useState(()=>isLeaderPin(getStoredLeaderPin(), wardId));
   const [pinInput,   setPinInput]   = useState("");
   const [pinError,   setPinError]   = useState(false);
   const [showPin,    setShowPin]    = useState(false);
@@ -3945,7 +3962,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
   const tryPin = () => {
-    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setStoredLeaderPin(pinInput); setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
@@ -4183,7 +4200,10 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {!seniorMode&&(isLeader
-              ?<span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+              ?<>
+                <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>Log out</button>
+              </>
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
@@ -5302,7 +5322,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt }
 // SURGERY WARD VIEW — patient-list model, sub-team pairings, bed L/R slots
 // ══════════════════════════════════════════════════════════════════════════════
 function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
-  const [isLeader,          setIsLeader]          = useState(false);
+  const [isLeader,          setIsLeader]          = useState(()=>isLeaderPin(getStoredLeaderPin(), wardId));
   const [pinInput,          setPinInput]          = useState("");
   const [pinError,          setPinError]          = useState(false);
   const [showPin,           setShowPin]           = useState(false);
@@ -5365,7 +5385,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const save = useCallback(async (w) => { await saveWard(w); }, [saveWard]);
 
   const tryPin = () => {
-    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setStoredLeaderPin(pinInput); setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
@@ -5561,7 +5581,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {!seniorMode&&(isLeader
-              ?<span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+              ?<>
+                <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>Log out</button>
+              </>
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
@@ -6802,7 +6825,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
 function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
   const [activeTab, setActiveTab] = useState("ward");
-  const [isLeader,  setIsLeader]  = useState(false);  const [pinInput,  setPinInput]  = useState("");
+  const [isLeader,  setIsLeader]  = useState(()=>isLeaderPin(getStoredLeaderPin(), wardId));  const [pinInput,  setPinInput]  = useState("");
   const [pinError,  setPinError]  = useState(false);
   const [showPin,   setShowPin]   = useState(false);
   const [editMode,  setEditMode]  = useState(false);
@@ -6831,7 +6854,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
   const tryPin = () => {
-    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setStoredLeaderPin(pinInput); setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
@@ -6979,7 +7002,10 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {!seniorMode&&(isLeader
-              ?<span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+              ?<>
+                <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
+                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>Log out</button>
+              </>
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
@@ -8436,7 +8462,7 @@ function PsychSetupFields({ form, setForm }) {
 // ── PsychWardView ────────────────────────────────────────────────────────────
 function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, seniorMode }) {
   const [activeTab,    setActiveTab]    = useState("ward");
-  const [isLeader,     setIsLeader]     = useState(false);
+  const [isLeader,     setIsLeader]     = useState(()=>isLeaderPin(getStoredLeaderPin(), wardId));
   const [pinInput,     setPinInput]     = useState("");
   const [pinError,     setPinError]     = useState(false);
   const [showPin,      setShowPin]      = useState(false);
@@ -8481,7 +8507,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const save = useCallback(async (newWard) => { await saveWard(newWard); }, [saveWard]);
 
   const tryPin = () => {
-    if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
+    if (isLeaderPin(pinInput, wardId)) { setStoredLeaderPin(pinInput); setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
   };
 
@@ -8632,6 +8658,12 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
             {!seniorMode&&!isLeader&&(
               <button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
                 <Icon name="key" size={11} color={C.textSub}/> Leader
+              </button>
+            )}
+            {isLeader&&!seniorMode&&(
+              <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out"
+                style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:10,padding:"6px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
+                Log out
               </button>
             )}
             {isLeader&&!seniorMode&&(
