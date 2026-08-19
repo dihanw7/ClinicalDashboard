@@ -62,6 +62,21 @@ const C = {
 const SF = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif";
 const hexToRgb = h => { const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r?`${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}`:"0,122,255"; };
 
+// Distributes `names` across `slotCount` positions as evenly as possible (each
+// name appears floor(slotCount/names.length) or +1 times), then shuffles the
+// resulting pool so *which* slot gets which name is random. Used by "Randomize
+// & Assign Fairly" to balance owner/shadow load across beds while still feeling random.
+const fairRandomAssign = (names, slotCount) => {
+  if (!names.length || !slotCount) return Array(slotCount).fill(null);
+  const base = Math.floor(slotCount / names.length);
+  const rem  = slotCount % names.length;
+  const shuffledNames = [...names].sort(()=>Math.random()-0.5);
+  const pool = [];
+  shuffledNames.forEach((n,i)=>{ pool.push(...Array(base + (i<rem?1:0)).fill(n)); });
+  for (let i=pool.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool;
+};
+
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const Icon = ({ name, size=14, color="currentColor" }) => {
   const s = { width:size, height:size, display:"inline-block", flexShrink:0 };
@@ -1554,6 +1569,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [showSaveGroup,     setShowSaveGroup]     = useState(false);
   const [saveGroupName,     setSaveGroupName]     = useState("");
   const [saveGroupTargetId, setSaveGroupTargetId] = useState("");
+  const [randomizeConfirm,  setRandomizeConfirm]  = useState(false);
 
   const setup  = ward.setup || {};
   const sections   = setup.wardSections || [];
@@ -1689,6 +1705,33 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       showToast(saveGroupTargetId ? "Group updated" : "Saved to Groups repository");
     } catch { showToast("Failed to save group","error"); }
     setShowSaveGroup(false); setSaveGroupName(""); setSaveGroupTargetId("");
+  };
+
+  // Clears every bed's current owner/shadow and re-assigns from the LIVE (saved)
+  // roster as evenly and randomly as possible. Only touches assigned/shadows —
+  // diagnosis, notes, history, etc. are left alone. Handy right after loading a
+  // new Student Group so bed ownership catches up with the new roster.
+  const randomizeAssignFairly = async () => {
+    const shadowHONames = new Set((setup.shadowHOs||[]).map(h=>h.name).filter(Boolean));
+    const eligible = (setup.students||[]).map(s=>s.name).filter(n=>n && !shadowHONames.has(n));
+    if (eligible.length===0) { showToast("No eligible students to assign","error"); setRandomizeConfirm(false); return; }
+    const studentObj = (name) => (setup.students||[]).find(s=>s.name===name) || {name,group:""};
+    const bedKeysAll = Object.keys(beds);
+    const primaryPool = fairRandomAssign(eligible, bedKeysAll.length);
+    const shadowPool  = eligible.length>1 ? fairRandomAssign(eligible, bedKeysAll.length) : bedKeysAll.map(()=>null);
+    for (let i=0;i<bedKeysAll.length;i++) {
+      if (shadowPool[i] && shadowPool[i]===primaryPool[i]) {
+        const j = (i+1)%bedKeysAll.length;
+        if (shadowPool[j] && shadowPool[j]!==primaryPool[i]) { [shadowPool[i],shadowPool[j]]=[shadowPool[j],shadowPool[i]]; }
+      }
+    }
+    const newBeds = {...beds};
+    bedKeysAll.forEach((k,i)=>{
+      newBeds[k] = { ...newBeds[k], assigned:[studentObj(primaryPool[i])], shadows: shadowPool[i]?[studentObj(shadowPool[i])]:[] };
+    });
+    await save({...ward, beds:newBeds});
+    setRandomizeConfirm(false);
+    showToast("Assignments randomized fairly");
   };
 
   // ── Bed ops ────────────────────────────────────────────────────────────────
@@ -2021,6 +2064,14 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               </div>
           }
         </div>
+        {/* Randomize & Assign Fairly — run after Save Changes, once the new roster is live */}
+        <div style={{marginTop:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+          <label style={labelStyle}>Bed Assignments</label>
+          <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Clears every bed's current owner & shadow, then redistributes the current roster (Save Changes first if you just loaded a new group) as evenly and randomly as possible. Shadow HOs are skipped. Diagnosis, notes, and history are left untouched.</p>
+          <button onClick={()=>setRandomizeConfirm(true)} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",color:"#007aff",borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
+            Randomize & Assign Fairly
+          </button>
+        </div>
         {loadGroupConfirm && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
@@ -2031,6 +2082,20 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <div style={{display:"flex",gap:10}}>
                 <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
                 <button onClick={()=>applyLoadedGroup(loadGroupConfirm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Load</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {randomizeConfirm && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+            <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+              <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700,fontSize:"1rem"}}>Randomize All Bed Assignments?</h3>
+              <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+                This clears every bed's current owner and shadow and reassigns from the saved roster at random, balanced as evenly as possible. This can't be undone. Diagnosis, notes, and history stay as they are.
+              </p>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setRandomizeConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                <button onClick={randomizeAssignFairly} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Randomize</button>
               </div>
             </div>
           </div>
@@ -3862,6 +3927,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const [showSaveGroup,     setShowSaveGroup]     = useState(false);
   const [saveGroupName,     setSaveGroupName]     = useState("");
   const [saveGroupTargetId, setSaveGroupTargetId] = useState("");
+  const [randomizeConfirm,  setRandomizeConfirm]  = useState(false);
 
   const setup  = ward.setup || {};
   const sections  = setup.wardSections || [];
@@ -4027,6 +4093,37 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
       showToast(saveGroupTargetId ? "Group updated" : "Saved to Groups repository");
     } catch { showToast("Failed to save group","error"); }
     setShowSaveGroup(false); setSaveGroupName(""); setSaveGroupTargetId("");
+  };
+
+  // Clears every patient's current owner/shadow across every bed and re-assigns
+  // from the LIVE (saved) roster as evenly and randomly as possible. Only
+  // touches assigned/shadows — diagnosis, notes, history, etc. are untouched.
+  const randomizeAssignFairly = async () => {
+    const shadowHONames = new Set((setup.shadowHOs||[]).map(h=>h.name).filter(Boolean));
+    const eligible = students.map(s=>s.name).filter(n=>n && !shadowHONames.has(n));
+    if (eligible.length===0) { showToast("No eligible students to assign","error"); setRandomizeConfirm(false); return; }
+    const studentObj = (name) => students.find(s=>s.name===name) || {name,group:""};
+    const bedKeysAll = Object.keys(beds);
+    // Flatten every patient (across every bed) into one ordered slot list.
+    const slots = [];
+    bedKeysAll.forEach(k=>{ (beds[k]?.patients||[]).forEach(pt=>{ slots.push({bedKey:k, ptId:pt.id}); }); });
+    const primaryPool = fairRandomAssign(eligible, slots.length);
+    const shadowPool  = eligible.length>1 ? fairRandomAssign(eligible, slots.length) : slots.map(()=>null);
+    for (let i=0;i<slots.length;i++) {
+      if (shadowPool[i] && shadowPool[i]===primaryPool[i]) {
+        const j = (i+1)%slots.length;
+        if (shadowPool[j] && shadowPool[j]!==primaryPool[i]) { [shadowPool[i],shadowPool[j]]=[shadowPool[j],shadowPool[i]]; }
+      }
+    }
+    const newBeds = {...beds};
+    slots.forEach((slot,i)=>{
+      newBeds[slot.bedKey] = { ...newBeds[slot.bedKey], patients:(newBeds[slot.bedKey].patients||[]).map(pt=>
+        pt.id===slot.ptId ? { ...pt, assigned:[studentObj(primaryPool[i])], shadows: shadowPool[i]?[studentObj(shadowPool[i])]:[] } : pt
+      )};
+    });
+    await save({...ward, beds:newBeds});
+    setRandomizeConfirm(false);
+    showToast("Assignments randomized fairly");
   };
 
   const sectionOrderIndex = (secName) => { const i = sections.findIndex(s=>s.name===secName); return i===-1?999:i; };
@@ -4708,6 +4805,14 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                   </div>
               }
             </div>
+            {/* Randomize & Assign Fairly — run after Save Changes, once the new roster is live */}
+            <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+              <label style={labelStyle}>Bed Assignments</label>
+              <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Clears every patient's current owner & shadow, then redistributes the current roster (Save Changes first if you just loaded a new group) as evenly and randomly as possible. Shadow HOs are skipped. Diagnosis, notes, and history are left untouched.</p>
+              <button onClick={()=>setRandomizeConfirm(true)} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",color:"#007aff",borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
+                Randomize & Assign Fairly
+              </button>
+            </div>
             <MedicineSetupFields form={setupForm} setForm={setSetupForm}/>
             <button onClick={async()=>{
               const students=(setupForm.students||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
@@ -4757,6 +4862,22 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={()=>applyLoadedGroup(loadGroupConfirm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Load</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Randomize confirmation */}
+      {randomizeConfirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700,fontSize:"1rem"}}>Randomize All Bed Assignments?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+              This clears every patient's current owner and shadow and reassigns from the saved roster at random, balanced as evenly as possible. This can't be undone. Diagnosis, notes, and history stay as they are.
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setRandomizeConfirm(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={randomizeAssignFairly} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Randomize</button>
             </div>
           </div>
         </div>
