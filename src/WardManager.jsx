@@ -5,6 +5,7 @@ const SUPABASE_URL = "https://kpwfldmucvfbgasnkcag.supabase.co";
 const SUPABASE_KEY = "sb_publishable_--WwMN5Z4CSgeHcrBN3VRw_ssGCevfr";
 const SUPER_PIN    = "CD##SUPER99";
 const TABLE        = "ward_data";
+const GROUPS_REPO_KEY = "groups:repo"; // stored in ward_data via db helpers; doesn't match "ward:" prefix so it's excluded from the ward list
 
 const GROUP_PINS = {
   "cg1":  "CG1LEAD",  "cg2":  "CG2LEAD",  "cg3":  "CG3LEAD",
@@ -384,6 +385,13 @@ export default function App() {
     />
   );
 
+  if (screen==="groups") return (
+    <GroupsRepoScreen
+      onBack={()=>setScreen("home")}
+      showToast={showToast}
+    />
+  );
+
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
       {/* Header */}
@@ -396,7 +404,10 @@ export default function App() {
             </div>
             <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1}}>{seniorMode ? "Senior view — read only" : "All active wards"}</div>
           </div>
-          {!seniorMode && <AdminButton onCreateWard={()=>setScreen("create")}/>}
+          {!seniorMode && <div style={{display:"flex",gap:8}}>
+            <GroupsButton onOpenGroups={()=>setScreen("groups")}/>
+            <AdminButton onCreateWard={()=>setScreen("create")}/>
+          </div>}
           {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
         </div>
       </div>
@@ -550,6 +561,266 @@ function AdminButton({ onCreateWard }) {
         </div>
       )}
     </>
+  );
+}
+
+function GroupsButton({ onOpenGroups }) {
+  const [open,   setOpen]  = useState(false);
+  const [pin,    setPin]   = useState("");
+  const [pinErr, setPinErr]= useState(false);
+
+  const tryPin = () => {
+    if (isAdminPin(pin)) { setOpen(false); setPin(""); onOpenGroups(); }
+    else { setPinErr(true); setTimeout(()=>setPinErr(false),1500); }
+  };
+
+  return (
+    <>
+      <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
+        <Icon name="user" size={12} color={C.textSub}/> Groups
+      </button>
+      {open && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <Icon name="key" size={16} color="#007aff"/>
+              <h3 style={{margin:0,color:C.text,fontWeight:600}}>Leader Access</h3>
+            </div>
+            <p style={{margin:"0 0 16px",color:C.textSub,fontSize:"0.84rem"}}>Enter your leader PIN to manage the student group repository.</p>
+            <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="Leader PIN"
+              style={{...iS,width:"100%",boxSizing:"border-box",textAlign:"center",letterSpacing:"0.2em",borderColor:pinErr?C.red:undefined}}/>
+            {pinErr && <div style={{color:C.red,fontSize:"0.78rem",textAlign:"center",marginTop:6}}>Incorrect PIN</div>}
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={()=>{setOpen(false);setPin("");}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={tryPin} style={{flex:1,...accentBtn("#007aff","0,122,255"),padding:"11px",fontSize:"0.9rem"}}>Unlock</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Student Groups Repository ───────────────────────────────────────────────────
+// A shared, ward-agnostic library of named student groups (roster + pairs). Any
+// leader can create/edit/delete groups here, then "Load" one into a ward's Edit
+// Settings screen. Because patients reference their pairing by INDEX (pairingIdx),
+// loading a new group's pairs into a ward automatically re-labels existing
+// patients with the new group's students at the same pairing slot — no manual
+// per-patient reassignment needed. This is what makes ward hand-overs (e.g.
+// swapping the Male/Female Surgery groups) a one-click operation.
+function GroupsRepoScreen({ onBack, showToast }) {
+  const [loading,   setLoading]   = useState(true);
+  const [groups,    setGroups]    = useState([]);
+  const [editingId, setEditingId] = useState(null); // id of group being edited, or "__new__"
+  const [form,      setForm]      = useState(null);
+  const [showDelete,setShowDelete]= useState(null);
+
+  useEffect(() => { (async () => {
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      setGroups(parsed.groups || []);
+    } catch { setGroups([]); }
+    setLoading(false);
+  })(); }, []);
+
+  const persist = async (newGroups) => {
+    setGroups(newGroups);
+    await db.upsert(GROUPS_REPO_KEY, { groups: newGroups });
+  };
+
+  const startNew = () => { setForm({ id:Date.now().toString(), name:"", students:[{name:"",group:"1"}], pairings:[] }); setEditingId("__new__"); };
+  const startEdit = (g) => { setForm({ ...g, students:(g.students||[{name:"",group:""}]).map(s=>({...s})), pairings:(g.pairings||[]).map(p=>({members:[...(p.members||[])]})) }); setEditingId(g.id); };
+
+  const saveForm = async () => {
+    const name = (form.name||"").trim();
+    if (!name) { showToast("Group needs a name","error"); return; }
+    const students = (form.students||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+    const pairings = (form.pairings||[]).map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0);
+    const cleanGroup = { id:form.id, name, students, pairings };
+    const exists = groups.some(g=>g.id===form.id);
+    const newGroups = exists ? groups.map(g=>g.id===form.id?cleanGroup:g) : [...groups, cleanGroup];
+    await persist(newGroups);
+    setEditingId(null); setForm(null); showToast("Group saved");
+  };
+
+  const deleteGroup = async (id) => {
+    await persist(groups.filter(g=>g.id!==id));
+    setShowDelete(null); showToast("Group deleted");
+  };
+
+  // ── Editor helpers ──
+  const nextTag = (list) => { const nums=(list||[]).map(s=>parseInt(s.group,10)).filter(n=>!isNaN(n)); return String(nums.length?Math.max(...nums)+1:1); };
+  const addStudent = () => setForm(f=>{ const current=f.students||[]; return {...f,students:[...current,{name:"",group:nextTag(current)}]}; });
+  const updStudent = (i,k,v) => setForm(f=>{ const a=[...(f.students||[])]; a[i]={...a[i],[k]:v}; return {...f,students:a}; });
+  const remStudent = (i) => setForm(f=>({...f,students:(f.students||[]).filter((_,idx)=>idx!==i)}));
+
+  const addPairing = () => setForm(f=>({...f,pairings:[...(f.pairings||[]),{members:[]}]}));
+  const remPairing = (i) => setForm(f=>({...f,pairings:(f.pairings||[]).filter((_,idx)=>idx!==i)}));
+  const togglePairMember = (pi, name) => setForm(f=>{
+    const pairs = (f.pairings||[]).map(p=>({members:[...(p.members||[])]}));
+    // remove from any other pair first
+    pairs.forEach((p,idx)=>{ if(idx!==pi) p.members=p.members.filter(m=>m!==name); });
+    const cur = pairs[pi].members;
+    if (cur.includes(name)) pairs[pi].members = cur.filter(m=>m!==name);
+    else if (cur.length<3) pairs[pi].members = [...cur, name];
+    return {...f, pairings:pairs};
+  });
+
+  if (loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg,color:C.textSub,fontFamily:SF}}>Loading…</div>
+  );
+
+  // ── Editor view ──
+  if (editingId) {
+    const students = form.students||[];
+    const pairings = form.pairings||[];
+    const validNames = students.map(s=>s.name?.trim()).filter(Boolean);
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
+        <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
+          <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>{setEditingId(null);setForm(null);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>{editingId==="__new__"?"New Group":"Edit Group"}</span>
+          </div>
+        </div>
+        <div style={{maxWidth:560,margin:"0 auto",padding:"24px 20px 100px"}}>
+          <div style={{marginBottom:22}}>
+            <label style={labelStyle}>Group Name</label>
+            <input value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Group J, Group I" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/>
+          </div>
+
+          <div style={{marginBottom:24}}>
+            <label style={labelStyle}>Students</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 56px",gap:4,marginTop:8,marginBottom:4,paddingLeft:2}}>
+              <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em"}}>NAME</span>
+              <span style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textAlign:"center"}}>TAG</span>
+            </div>
+            {students.map((s,i)=>(
+              <div key={i} style={{display:"flex",gap:6,marginTop:6}}>
+                <input value={s.name} onChange={e=>updStudent(i,"name",e.target.value)} placeholder={`Student ${i+1}`} style={{...iS,flex:1,padding:"9px 12px"}}/>
+                <input value={s.group||""} onChange={e=>updStudent(i,"group",e.target.value)} placeholder={String(i+1)} style={{...iS,width:48,padding:"9px 8px",textAlign:"center",flexShrink:0}}/>
+                {students.length>1 && <button onClick={()=>remStudent(i)} style={rB}><Icon name="close" size={12} color={C.textMuted}/></button>}
+              </div>
+            ))}
+            <button onClick={addStudent} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Student</button>
+          </div>
+
+          <div style={{marginBottom:24}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <label style={labelStyle}>Pairs</label>
+              <button onClick={()=>{
+                const eligible = validNames.slice().sort(()=>Math.random()-0.5);
+                const newPairs = [];
+                for (let i=0;i<eligible.length;i+=2) {
+                  const members=[eligible[i]];
+                  if (eligible[i+1]) members.push(eligible[i+1]);
+                  if (i+2===eligible.length-1) { members.push(eligible[i+2]); i++; }
+                  newPairs.push({members});
+                }
+                setForm(f=>({...f,pairings:newPairs}));
+              }} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",color:"#007aff",borderRadius:8,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:600}}>
+                Randomize
+              </button>
+            </div>
+            <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"0 0 10px"}}>Used for appointments like Surgery, where students work the ward in pairs. Tap names to add or remove them from a pair (max 3 per pair).</p>
+            {pairings.map((pair,pi)=>{
+              const members = (pair.members||[]).filter(Boolean);
+              const otherPairingMap = {};
+              pairings.forEach((p,idx)=>{ if(idx!==pi)(p.members||[]).filter(Boolean).forEach(m=>{ otherPairingMap[m]=idx; }); });
+              return (
+                <div key={pi} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"0.72rem",fontWeight:700,color:"#007aff"}}>Pair {pi+1}</span>
+                      {members.length>0&&<span style={{fontSize:"0.72rem",color:C.textSub}}>{members.join(" × ")}</span>}
+                    </div>
+                    <button onClick={()=>remPairing(pi)} style={rB}><Icon name="close" size={11} color={C.textMuted}/></button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(76px,1fr))",gap:6}}>
+                    {validNames.map(name=>{
+                      const isSelected = members.includes(name);
+                      const inOtherIdx = otherPairingMap[name];
+                      const inOther = inOtherIdx!=null;
+                      const atMax = members.length>=3 && !isSelected;
+                      return (
+                        <div key={name} onClick={()=>togglePairMember(pi,name)}
+                          style={{padding:"8px 4px",borderRadius:8,cursor:atMax?"not-allowed":"pointer",textAlign:"center",
+                            background:isSelected?"rgba(0,122,255,0.12)":inOther?"rgba(245,158,11,0.07)":C.surface,
+                            border:`1px solid ${isSelected?"#007aff":inOther?"rgba(245,158,11,0.35)":C.border}`,
+                            opacity:atMax?0.5:1}}>
+                          <div style={{fontSize:"0.74rem",fontWeight:600,color:isSelected?"#007aff":inOther?"rgb(161,104,0)":C.text,lineHeight:1.2}}>{name.split(" ")[0]}</div>
+                          {inOther&&!isSelected&&<div style={{fontSize:"0.46rem",color:"rgb(161,104,0)",marginTop:1}}>Pair {inOtherIdx+1}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={addPairing} style={aMB}><Icon name="plus" size={12} color={C.textSub}/> Add Pair</button>
+          </div>
+
+          <button onClick={saveForm} style={{background:"#007aff",border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px"}}>Save Group</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── List view ──
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
+      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"14px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <div>
+              <div style={{fontSize:"1rem",fontWeight:700,color:C.text}}>Student Groups</div>
+              <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1}}>Shared repository — loadable into any ward</div>
+            </div>
+          </div>
+          <button onClick={startNew} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
+            <Icon name="plus" size={12} color={C.textSub}/> New Group
+          </button>
+        </div>
+      </div>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px 80px"}}>
+        {groups.length===0
+          ? <div style={{textAlign:"center",padding:"80px 20px",color:C.textMuted}}>
+              <div style={{fontSize:"0.9rem"}}>No groups saved yet.</div>
+              <div style={{fontSize:"0.8rem",marginTop:4}}>Create a group here, then load it into any ward's Edit Settings screen — handy for handing a ward off to a new batch (e.g. swapping Male/Female Surgery groups).</div>
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {groups.map(g=>(
+                <div key={g.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <div style={{fontSize:"0.92rem",fontWeight:600,color:C.text}}>{g.name}</div>
+                    <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:2}}>{(g.students||[]).length} students · {(g.pairings||[]).length} pairs</div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>startEdit(g)} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:8,padding:"6px 12px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF}}>Edit</button>
+                    <button onClick={()=>setShowDelete(g.id)} style={{background:"none",border:`1px solid ${C.red}`,color:C.red,borderRadius:8,padding:"6px 12px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF}}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+      {showDelete && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Group?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>This only removes it from the repository — wards that already loaded it keep their current roster.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowDelete(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>deleteGroup(showDelete)} style={{flex:1,background:C.red,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:SF}}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <BrandingBar theme="#007aff"/>
+    </div>
   );
 }
 
@@ -4718,6 +4989,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [pendingShadowForm, setPendingShadowForm] = useState(null);
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
   const [searchQuery,       setSearchQuery]       = useState("");
+  const [groupsRepo,        setGroupsRepo]        = useState([]);
+  const [groupsRepoLoaded,  setGroupsRepoLoaded]  = useState(false);
+  const [loadGroupPick,     setLoadGroupPick]     = useState("");
+  const [loadGroupConfirm,  setLoadGroupConfirm]  = useState(null); // group object pending confirmation
+  const [showSaveGroup,     setShowSaveGroup]     = useState(false);
+  const [saveGroupName,     setSaveGroupName]     = useState("");
 
   const setup       = ward.setup    || {};
   const patients    = ward.patients || [];
@@ -4856,6 +5133,47 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     setPairingEdit(false); showToast("Pairings saved");
   };
 
+  // ── Student Groups Repository integration ──
+  // Fetch the shared repo once, lazily (only needed inside Edit Settings).
+  const ensureGroupsRepoLoaded = async () => {
+    if (groupsRepoLoaded) return;
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      setGroupsRepo(parsed.groups || []);
+    } catch { setGroupsRepo([]); }
+    setGroupsRepoLoaded(true);
+  };
+
+  // Stage a repository group's roster+pairs into the setup form (not saved yet —
+  // happens on "Save Changes"). Array order is preserved, so each pairing keeps
+  // its INDEX — meaning existing patients (which reference pairingIdx, not names)
+  // will automatically show this group's students once saved.
+  const applyLoadedGroup = (group) => {
+    const newStudents = (group.students||[]).map(s=>({...s}));
+    const newPairings = (group.pairings||[]).map(p=>({members:[...(p.members||[])]}));
+    setSetupForm(f=>({...f, students:newStudents, pairings:newPairings}));
+    setLoadGroupConfirm(null); setLoadGroupPick("");
+    showToast(`Loaded "${group.name}" — review then tap Save Changes`);
+  };
+
+  const saveCurrentAsGroup = async () => {
+    const name = saveGroupName.trim();
+    if (!name) { showToast("Enter a group name","error"); return; }
+    const groupStudents = (setupForm.students||students).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+    const groupPairings = (setupForm.pairings||pairings).map(p=>({members:(p.members||[]).filter(Boolean)})).filter(p=>p.members.length>0);
+    const newGroup = { id:Date.now().toString(), name, students:groupStudents, pairings:groupPairings };
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      const newGroups = [...(parsed.groups||[]), newGroup];
+      await db.upsert(GROUPS_REPO_KEY, { groups:newGroups });
+      setGroupsRepo(newGroups); setGroupsRepoLoaded(true);
+      showToast("Saved to Groups repository");
+    } catch { showToast("Failed to save group","error"); }
+    setShowSaveGroup(false); setSaveGroupName("");
+  };
+
   const searchActive = searchQuery.trim().length > 0;
   const searchLower  = searchQuery.trim().toLowerCase();
   const sectionFiltered = sectionFilter==="all" ? patients : patients.filter(p=>p.section===sectionFilter);
@@ -4895,7 +5213,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t}))});setEditMode(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
           </div>
         </div>
       </div>
@@ -5515,7 +5833,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);setSideConflict(null);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
                 <span style={{fontWeight:700,color:theme,fontSize:"1.1rem"}}>{selPt.patientName||selPt.bht||"Patient"}</span>
               </div>
-              {isLeader&&!seniorMode&&<button onClick={()=>archivePatient(selectedPt)} style={{fontSize:"0.72rem",color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:SF}}>Archive</button>}
+              {!seniorMode&&<button onClick={()=>archivePatient(selectedPt)} style={{fontSize:"0.72rem",color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:SF}}>Archive</button>}
             </div>
           </div>
           <div style={{maxWidth:560,margin:"0 auto",padding:"20px 18px 100px"}}>
@@ -6037,6 +6355,33 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setupForm.themeColor||"#007aff"})`}}/>
               </div>
             </div>
+            {/* Student Group Repository — swap the whole roster/pairs in one go */}
+            <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+              <label style={labelStyle}>Student Group (Repository)</label>
+              <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students & pairs into this ward. Existing patients keep their bed and pairing slot, and will automatically show the new group's students. Handy when handing this ward off to a new batch (e.g. swapping Male/Female Surgery groups).</p>
+              {groupsRepo.length===0 ? (
+                <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No groups saved yet. Manage groups from the Home screen's "Groups" button, or save this ward's current roster below.</div>
+              ) : (
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <select value={loadGroupPick} onChange={e=>setLoadGroupPick(e.target.value)} style={{...iS,flex:1,padding:"9px 12px"}}>
+                    <option value="">Select a group…</option>
+                    {groupsRepo.map(g=><option key={g.id} value={g.id}>{g.name} ({(g.students||[]).length} students, {(g.pairings||[]).length} pairs)</option>)}
+                  </select>
+                  <button onClick={()=>{
+                    const g = groupsRepo.find(x=>x.id===loadGroupPick);
+                    if (g) setLoadGroupConfirm(g);
+                  }} disabled={!loadGroupPick} style={{background:loadGroupPick?theme:C.surfaceEl,border:"none",color:loadGroupPick?"#fff":C.textMuted,borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:loadGroupPick?"pointer":"not-allowed",fontFamily:SF,flexShrink:0}}>Load</button>
+                </div>
+              )}
+              {!showSaveGroup
+                ? <button onClick={()=>{setSaveGroupName(setupForm.wardName||"");setShowSaveGroup(true);}} style={{...aMB,marginTop:0}}><Icon name="plus" size={12} color={C.textSub}/> Save Current Roster as Group</button>
+                : <div style={{display:"flex",gap:8,marginTop:8}}>
+                    <input value={saveGroupName} onChange={e=>setSaveGroupName(e.target.value)} placeholder="Group name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+                    <button onClick={()=>setShowSaveGroup(false)} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                    <button onClick={saveCurrentAsGroup} style={{background:theme,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>Save</button>
+                  </div>
+              }
+            </div>
             <SurgerySetupFields form={setupForm} setForm={setSetupForm}/>
             <button onClick={async()=>{
               const studs=(setupForm.students||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
@@ -6044,13 +6389,40 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               const secs=(setupForm.wardSections||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),range:s.range?.trim()||""}));
               const specialBeds=(setupForm.specialBeds||[]).filter(b=>b.id?.trim()).map(b=>({id:b.id.trim(),section:b.section?.trim()||""}));
               const tags=(setupForm.customTags||[]).filter(t=>t.label?.trim()).map(t=>({label:t.label.trim(),color:t.color||"#6366f1"}));
-              await save({...ward,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students:studs,consultants:cons,wardSections:secs,shadowHOs:setupForm.shadowHOs||setup.shadowHOs,customTags:tags,specialBeds}});
+              const newShadowHOs = setupForm.shadowHOs||setup.shadowHOs||[];
+              const newPairings = (setupForm.pairings||setup.pairings||[]).map(p=>({members:(p.members||[]).filter(Boolean)}));
+              const newShadowHONames = new Set(newShadowHOs.map(h=>h.name).filter(Boolean));
+              // Re-derive each patient's displayed pairing members from the (possibly
+              // brand-new) pairings array, keyed by their existing pairingIdx. This is
+              // what makes a loaded group "auto assign to the old patients".
+              const newPatients = patients.map(pt=>{
+                if (pt.pairingIdx==null||!newPairings[pt.pairingIdx]) return pt;
+                const members=(newPairings[pt.pairingIdx].members||[]).filter(m=>m&&!newShadowHONames.has(m));
+                return {...pt,members};
+              });
+              await save({...ward,patients:newPatients,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students:studs,consultants:cons,wardSections:secs,shadowHOs:newShadowHOs,customTags:tags,specialBeds,pairings:newPairings}});
               setEditMode(false);showToast("Settings saved!");
             }} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Save Changes</button>
             <button onClick={()=>{setEditMode(false);setShowReset(true);}} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,marginBottom:8}}>Reset Ward (New Rotation)</button>
             <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
           </div>
           <BrandingBar theme={theme}/>
+        </div>
+      )}
+
+      {/* Load-group confirmation */}
+      {loadGroupConfirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+              This replaces the student roster and pairs in the form below with {(loadGroupConfirm.students||[]).length} students and {(loadGroupConfirm.pairings||[]).length} pairs from this group. Existing patients keep their bed — they'll show the new group's students once you tap <strong>Save Changes</strong>. Nothing is saved until then.
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>applyLoadedGroup(loadGroupConfirm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Load</button>
+            </div>
+          </div>
         </div>
       )}
 
