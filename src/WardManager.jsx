@@ -1546,6 +1546,14 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [addPtBlockedMsg, setAddPtBlockedMsg] = useState(null);
   // ── Assign unassigned patient to bed ─────────────────────────────────────
   const [assigningPatient, setAssigningPatient] = useState(null); // patient obj being assigned
+  // ── Student Groups Repository ────────────────────────────────────────────
+  const [groupsRepo,        setGroupsRepo]        = useState([]);
+  const [groupsRepoLoaded,  setGroupsRepoLoaded]  = useState(false);
+  const [loadGroupPick,     setLoadGroupPick]     = useState("");
+  const [loadGroupConfirm,  setLoadGroupConfirm]  = useState(null);
+  const [showSaveGroup,     setShowSaveGroup]     = useState(false);
+  const [saveGroupName,     setSaveGroupName]     = useState("");
+  const [saveGroupTargetId, setSaveGroupTargetId] = useState("");
 
   const setup  = ward.setup || {};
   const sections   = setup.wardSections || [];
@@ -1638,6 +1646,49 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const tryPin = () => {
     if (isLeaderPin(pinInput, wardId)) { setIsLeader(true); setShowPin(false); setPinInput(""); showToast("Leader access granted"); }
     else { setPinError(true); setTimeout(()=>setPinError(false),1500); }
+  };
+
+  // ── Student Groups Repository (roster-only — Default wards assign students
+  // straight to a bed's assigned[]/shadows[] arrays, not via a pairing index, so
+  // loading a group here swaps the roster but existing bed assignments keep
+  // whatever names they already had; reassign beds manually afterward if needed) ──
+  const ensureGroupsRepoLoaded = async () => {
+    if (groupsRepoLoaded) return;
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      setGroupsRepo(parsed.groups || []);
+    } catch { setGroupsRepo([]); }
+    setGroupsRepoLoaded(true);
+  };
+
+  const applyLoadedGroup = (group) => {
+    const newStudents = (group.students||[]).map(s=>({...s}));
+    const clearedShadowHOs = (setupForm.shadowHOs||setup.shadowHOs||[]).map(h=>({...h,name:""}));
+    setSetupForm(f=>({...f, students:newStudents, shadowHOs:clearedShadowHOs}));
+    setLoadGroupConfirm(null); setLoadGroupPick("");
+    showToast(`Loaded "${group.name}" — review, then tap Save Changes`);
+  };
+
+  const saveCurrentAsGroup = async () => {
+    const name = saveGroupName.trim();
+    if (!name) { showToast("Enter a group name","error"); return; }
+    const groupStudents = (setupForm.students||setup.students||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      const existing = parsed.groups||[];
+      let newGroups;
+      if (saveGroupTargetId) {
+        newGroups = existing.map(g=>g.id===saveGroupTargetId ? { id:g.id, name, students:groupStudents, pairings:g.pairings||[] } : g);
+      } else {
+        newGroups = [...existing, { id:Date.now().toString(), name, students:groupStudents, pairings:[] }];
+      }
+      await db.upsert(GROUPS_REPO_KEY, { groups:newGroups });
+      setGroupsRepo(newGroups); setGroupsRepoLoaded(true);
+      showToast(saveGroupTargetId ? "Group updated" : "Saved to Groups repository");
+    } catch { showToast("Failed to save group","error"); }
+    setShowSaveGroup(false); setSaveGroupName(""); setSaveGroupTargetId("");
   };
 
   // ── Bed ops ────────────────────────────────────────────────────────────────
@@ -1927,6 +1978,63 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:4,paddingLeft:2}}>{WARD_TEMPLATES[setupForm.template||"default"]?.desc}</div>
         </div>
         <SetupForm form={setupForm} setForm={setSetupForm} onSubmit={handleSaveEdit} submitLabel="Save Changes" theme={theme} hideBedsField/>
+        {/* Student Group Repository */}
+        <div style={{marginTop:18,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+          <label style={labelStyle}>Student Group (Repository)</label>
+          <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students into this ward. Unlike Surgery, Default wards assign students straight to a bed, not via a shared pairing slot — so this only swaps the roster; existing bed assignments keep their current names until you manually reassign them. Shadow HO post names are cleared on load.</p>
+          {groupsRepo.length===0 ? (
+            <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No groups saved yet. Manage groups from the Home screen's "Groups" button, or save this ward's current roster below.</div>
+          ) : (
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <select value={loadGroupPick} onChange={e=>setLoadGroupPick(e.target.value)} style={{...iS,flex:1,padding:"9px 12px"}}>
+                <option value="">Select a group…</option>
+                {groupsRepo.map(g=><option key={g.id} value={g.id}>{g.name} ({(g.students||[]).length} students)</option>)}
+              </select>
+              <button onClick={()=>{
+                const g = groupsRepo.find(x=>x.id===loadGroupPick);
+                if (g) setLoadGroupConfirm(g);
+              }} disabled={!loadGroupPick} style={{background:loadGroupPick?theme:C.surfaceEl,border:"none",color:loadGroupPick?"#fff":C.textMuted,borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:loadGroupPick?"pointer":"not-allowed",fontFamily:SF,flexShrink:0}}>Load</button>
+            </div>
+          )}
+          {!showSaveGroup
+            ? <button onClick={()=>{setSaveGroupName(setupForm.wardName||"");setSaveGroupTargetId("");setShowSaveGroup(true);}} style={{...aMB,marginTop:0}}><Icon name="plus" size={12} color={C.textSub}/> Save Current Roster as Group</button>
+            : <div style={{marginTop:8}}>
+                {groupsRepo.length>0 && (
+                  <div style={{marginBottom:8}}>
+                    <select value={saveGroupTargetId} onChange={e=>{
+                      const id = e.target.value;
+                      setSaveGroupTargetId(id);
+                      const g = groupsRepo.find(x=>x.id===id);
+                      setSaveGroupName(g ? g.name : (setupForm.wardName||""));
+                    }} style={{...iS,width:"100%",padding:"9px 12px",boxSizing:"border-box"}}>
+                      <option value="">— Create new group —</option>
+                      {groupsRepo.map(g=><option key={g.id} value={g.id}>Update "{g.name}"</option>)}
+                    </select>
+                    <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:4}}>{saveGroupTargetId ? "This will overwrite that group's saved roster." : "Creates a brand-new group entry."}</div>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:8}}>
+                  <input value={saveGroupName} onChange={e=>setSaveGroupName(e.target.value)} placeholder="Group name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+                  <button onClick={()=>{setShowSaveGroup(false);setSaveGroupTargetId("");}} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                  <button onClick={saveCurrentAsGroup} style={{background:theme,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>{saveGroupTargetId?"Update":"Save"}</button>
+                </div>
+              </div>
+          }
+        </div>
+        {loadGroupConfirm && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+              <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
+              <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+                This replaces the student roster in the form above with {(loadGroupConfirm.students||[]).length} students from this group. Existing bed assignments are not touched — reassign beds manually if the old names are gone. Shadow HO post names will be cleared. Nothing is saved until you tap Save Changes.
+              </p>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                <button onClick={()=>applyLoadedGroup(loadGroupConfirm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Load</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
           <button onClick={()=>setShowReset(true)} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF}}>
             Reset Ward (New Rotation)
@@ -1985,6 +2093,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 specialBeds: (setup.specialBeds||[]).map(b=>({...b})),
                 customTags: (setup.customTags?.length ? setup.customTags : [{label:"Pre-op",color:"#f97316"},{label:"Post-op",color:"#0ea5e9"}]).map(t=>({...t})),
               });
+              ensureGroupsRepoLoaded();
             }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
               <Icon name="settings" size={14} color={C.textMuted}/>
             </button>}
@@ -3745,6 +3854,14 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
   const [shadowForm, setShadowForm] = useState(null);
   const [sectionFilter, setSectionFilter] = useState("all");
   const [setupForm,  setSetupForm]  = useState({});
+  // ── Student Groups Repository ────────────────────────────────────────────
+  const [groupsRepo,        setGroupsRepo]        = useState([]);
+  const [groupsRepoLoaded,  setGroupsRepoLoaded]  = useState(false);
+  const [loadGroupPick,     setLoadGroupPick]     = useState("");
+  const [loadGroupConfirm,  setLoadGroupConfirm]  = useState(null);
+  const [showSaveGroup,     setShowSaveGroup]     = useState(false);
+  const [saveGroupName,     setSaveGroupName]     = useState("");
+  const [saveGroupTargetId, setSaveGroupTargetId] = useState("");
 
   const setup  = ward.setup || {};
   const sections  = setup.wardSections || [];
@@ -3869,6 +3986,49 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
     setShadowEditing(false); showToast("Shadow HO posts updated");
   };
 
+  // ── Student Groups Repository (roster-only — Medicine assigns students
+  // straight to a patient's assigned[]/shadows[] arrays, not via a pairing
+  // index, so loading a group swaps the roster but existing patient
+  // assignments keep whatever names they already had) ──
+  const ensureGroupsRepoLoaded = async () => {
+    if (groupsRepoLoaded) return;
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      setGroupsRepo(parsed.groups || []);
+    } catch { setGroupsRepo([]); }
+    setGroupsRepoLoaded(true);
+  };
+
+  const applyLoadedGroup = (group) => {
+    const newStudents = (group.students||[]).map(s=>({...s}));
+    const clearedShadowHOs = (setupForm.shadowHOs||setup.shadowHOs||[]).map(h=>({...h,name:""}));
+    setSetupForm(f=>({...f, students:newStudents, shadowHOs:clearedShadowHOs}));
+    setLoadGroupConfirm(null); setLoadGroupPick("");
+    showToast(`Loaded "${group.name}" — review, then tap Save Changes`);
+  };
+
+  const saveCurrentAsGroup = async () => {
+    const name = saveGroupName.trim();
+    if (!name) { showToast("Enter a group name","error"); return; }
+    const groupStudents = (setupForm.students||students).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
+    try {
+      const row = await db.get(GROUPS_REPO_KEY);
+      const parsed = row ? JSON.parse(row.value) : { groups: [] };
+      const existing = parsed.groups||[];
+      let newGroups;
+      if (saveGroupTargetId) {
+        newGroups = existing.map(g=>g.id===saveGroupTargetId ? { id:g.id, name, students:groupStudents, pairings:g.pairings||[] } : g);
+      } else {
+        newGroups = [...existing, { id:Date.now().toString(), name, students:groupStudents, pairings:[] }];
+      }
+      await db.upsert(GROUPS_REPO_KEY, { groups:newGroups });
+      setGroupsRepo(newGroups); setGroupsRepoLoaded(true);
+      showToast(saveGroupTargetId ? "Group updated" : "Saved to Groups repository");
+    } catch { showToast("Failed to save group","error"); }
+    setShowSaveGroup(false); setSaveGroupName(""); setSaveGroupTargetId("");
+  };
+
   const sectionOrderIndex = (secName) => { const i = sections.findIndex(s=>s.name===secName); return i===-1?999:i; };
   const bedKeys = Object.keys(beds).sort((a,b)=>{
     const A = splitBedKey(a), B = splitBedKey(b);
@@ -3930,7 +4090,7 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
               :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{ setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", themeColor:setup.themeColor||"#007aff", students:(setup.students||[{name:"",group:""}]).map(s=>({...s})), consultants:(setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})), wardSections:(setup.wardSections||[]).map(s=>({...s})), shadowHOs:(setup.shadowHOs||[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}]).map(h=>({...h})), specialBeds:(setup.specialBeds||[]).map(b=>({...b})), customTags:(setup.customTags||[]).map(t=>({...t})) }); setEditMode(true); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{ setSetupForm({ wardName:setup.wardName||"", appointmentType:setup.appointmentType||"", themeColor:setup.themeColor||"#007aff", students:(setup.students||[{name:"",group:""}]).map(s=>({...s})), consultants:(setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})), wardSections:(setup.wardSections||[]).map(s=>({...s})), shadowHOs:(setup.shadowHOs||[{post:"Shadow HO 1",name:""},{post:"Shadow HO 2",name:""},{post:"Shadow HO 3",name:""}]).map(h=>({...h})), specialBeds:(setup.specialBeds||[]).map(b=>({...b})), customTags:(setup.customTags||[]).map(t=>({...t})) }); setEditMode(true); ensureGroupsRepoLoaded(); }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
           </div>
         </div>
       </div>
@@ -4505,6 +4665,49 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
                 <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setupForm.themeColor||"#007aff"})`}}/>
               </div>
             </div>
+            {/* Student Group Repository */}
+            <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+              <label style={labelStyle}>Student Group (Repository)</label>
+              <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students into this ward. Unlike Surgery, Medicine assigns students straight to a patient, not via a shared pairing slot — so this only swaps the roster; existing patient assignments keep their current names until you manually reassign them. Shadow HO post names are cleared on load.</p>
+              {groupsRepo.length===0 ? (
+                <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:10}}>No groups saved yet. Manage groups from the Home screen's "Groups" button, or save this ward's current roster below.</div>
+              ) : (
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <select value={loadGroupPick} onChange={e=>setLoadGroupPick(e.target.value)} style={{...iS,flex:1,padding:"9px 12px"}}>
+                    <option value="">Select a group…</option>
+                    {groupsRepo.map(g=><option key={g.id} value={g.id}>{g.name} ({(g.students||[]).length} students)</option>)}
+                  </select>
+                  <button onClick={()=>{
+                    const g = groupsRepo.find(x=>x.id===loadGroupPick);
+                    if (g) setLoadGroupConfirm(g);
+                  }} disabled={!loadGroupPick} style={{background:loadGroupPick?theme:C.surfaceEl,border:"none",color:loadGroupPick?"#fff":C.textMuted,borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:loadGroupPick?"pointer":"not-allowed",fontFamily:SF,flexShrink:0}}>Load</button>
+                </div>
+              )}
+              {!showSaveGroup
+                ? <button onClick={()=>{setSaveGroupName(setupForm.wardName||"");setSaveGroupTargetId("");setShowSaveGroup(true);}} style={{...aMB,marginTop:0}}><Icon name="plus" size={12} color={C.textSub}/> Save Current Roster as Group</button>
+                : <div style={{marginTop:8}}>
+                    {groupsRepo.length>0 && (
+                      <div style={{marginBottom:8}}>
+                        <select value={saveGroupTargetId} onChange={e=>{
+                          const id = e.target.value;
+                          setSaveGroupTargetId(id);
+                          const g = groupsRepo.find(x=>x.id===id);
+                          setSaveGroupName(g ? g.name : (setupForm.wardName||""));
+                        }} style={{...iS,width:"100%",padding:"9px 12px",boxSizing:"border-box"}}>
+                          <option value="">— Create new group —</option>
+                          {groupsRepo.map(g=><option key={g.id} value={g.id}>Update "{g.name}"</option>)}
+                        </select>
+                        <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:4}}>{saveGroupTargetId ? "This will overwrite that group's saved roster." : "Creates a brand-new group entry."}</div>
+                      </div>
+                    )}
+                    <div style={{display:"flex",gap:8}}>
+                      <input value={saveGroupName} onChange={e=>setSaveGroupName(e.target.value)} placeholder="Group name" style={{...iS,flex:1,padding:"9px 12px"}}/>
+                      <button onClick={()=>{setShowSaveGroup(false);setSaveGroupTargetId("");}} style={{background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+                      <button onClick={saveCurrentAsGroup} style={{background:theme,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>{saveGroupTargetId?"Update":"Save"}</button>
+                    </div>
+                  </div>
+              }
+            </div>
             <MedicineSetupFields form={setupForm} setForm={setSetupForm}/>
             <button onClick={async()=>{
               const students=(setupForm.students||[]).filter(s=>s.name?.trim()).map(s=>({name:s.name.trim(),group:s.group?.trim()||""}));
@@ -4540,6 +4743,22 @@ function MedicineWardView({ wardId, ward, onBack, saveWard, onDelete, showToast,
             <button onClick={()=>{setEditMode(false);setShowDelete(true);}} style={{width:"100%",background:`rgba(${hexToRgb(C.red)},0.07)`,border:`1px solid ${C.red}`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,fontWeight:600}}>Delete Ward Permanently</button>
           </div>
           <BrandingBar theme={theme}/>
+        </div>
+      )}
+
+      {/* Load-group confirmation */}
+      {loadGroupConfirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
+            <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
+            <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
+              This replaces the student roster in the form above with {(loadGroupConfirm.students||[]).length} students from this group. Existing patient assignments are not touched — reassign them manually if the old names are gone. Shadow HO post names will be cleared. Nothing is saved until you tap Save Changes.
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setLoadGroupConfirm(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={()=>applyLoadedGroup(loadGroupConfirm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Load</button>
+            </div>
+          </div>
         </div>
       )}
 
