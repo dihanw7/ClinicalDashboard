@@ -5338,6 +5338,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [ptEdit,            setPtEdit]            = useState({});
   const [showClearConfirm,  setShowClearConfirm]  = useState(false);
   const [sideConflict,      setSideConflict]      = useState(null); // {existingPtId, newSide, otherSide}
+  const [restoreTarget,     setRestoreTarget]     = useState(null); // {wk, id, pt, section, bedNo, side, isFloor}
   const [pairingOpen,       setPairingOpen]       = useState(false);
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
@@ -5429,6 +5430,53 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     }
     await save({...ward,patients:newPatients,archive});
     setSelectedPt(null); showToast("Patient archived");
+  };
+
+  const openRestore = (wk, id, pt) => {
+    const wasFloor = !!pt.isFloor || pt.section==="Floor";
+    setRestoreTarget({
+      wk, id, pt,
+      section: wasFloor ? "" : (pt.section||""),
+      bedNo:   wasFloor ? "" : (pt.bedNo||""),
+      side:    wasFloor ? "single" : (pt.side||"single"),
+      isFloor: wasFloor,
+    });
+  };
+
+  const restorePatientTo = async () => {
+    if (!restoreTarget) return;
+    const { wk, id, pt } = restoreTarget;
+    if (restoreTarget.bedNo && !restoreTarget.isFloor && !restoreTarget.side) { showToast("Please select a bed side (L or R)","error"); return; }
+    let bedNo   = restoreTarget.bedNo?.trim() || "";
+    let section = restoreTarget.section || "";
+    let side    = restoreTarget.side || "single";
+    const isFloor = !!restoreTarget.isFloor;
+    if (isFloor) {
+      const floorCount = patients.filter(p=>p.isFloor).length;
+      bedNo = `F${floorCount+1}`;
+      section = "Floor";
+      side = "single";
+    }
+    const { archivedAt, ...rest } = pt;
+    let newPatients = [...patients];
+    // If placing into an occupied bed side, bump a single-slot occupant to the other side (same as Add Patient)
+    if (!isFloor && bedNo && (side==="L"||side==="R")) {
+      const occupants = newPatients.filter(p=>p.bedNo===bedNo&&p.section===section);
+      const singleOcc = occupants.find(p=>p.side==="single"||!p.side);
+      if (singleOcc) {
+        const otherSide = side==="L"?"R":"L";
+        newPatients = newPatients.map(p=>p.id===singleOcc.id?{...p,side:otherSide}:p);
+      }
+    }
+    const restoredPt = { ...rest, bedNo, section, side, isFloor, isNew:true };
+    newPatients = [...newPatients, restoredPt];
+    const archive = { ...(ward.archive||{}) };
+    const weekArchive = { ...(archive[wk]||{}) };
+    delete weekArchive[id];
+    if (Object.keys(weekArchive).length===0) delete archive[wk]; else archive[wk] = weekArchive;
+    await save({ ...ward, patients:newPatients, archive });
+    setRestoreTarget(null);
+    showToast("Patient restored");
   };
 
   const addPatient = async () => {
@@ -5959,7 +6007,12 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.bht&&<span style={{fontSize:"0.68rem",color:C.textMuted,marginLeft:8,fontFamily:"monospace"}}>BHT {pt.bht}</span>}
                             {pt.bedNo&&<span style={{fontSize:"0.68rem",color:C.textMuted,marginLeft:8}}>Bed {pt.bedNo}{pt.side&&pt.side!=="single"?` ${pt.side}`:""}</span>}
                           </div>
-                          {isLeader&&!seniorMode&&<button onClick={async()=>{const archive={...(ward.archive||{})};const wkD={...archive[wk]};delete wkD[id];if(!Object.keys(wkD).length)delete archive[wk];else archive[wk]=wkD;await save({...ward,archive});showToast("Deleted");}} style={{fontSize:"0.72rem",color:C.red,background:"none",border:`1px solid ${C.red}`,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:SF}}>Delete</button>}
+                          {isLeader&&!seniorMode&&(
+                            <div style={{display:"flex",gap:6,flexShrink:0}}>
+                              <button onClick={()=>openRestore(wk,id,pt)} style={{fontSize:"0.72rem",color:theme,background:"none",border:`1px solid ${theme}`,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:SF}}>Restore</button>
+                              <button onClick={async()=>{const archive={...(ward.archive||{})};const wkD={...archive[wk]};delete wkD[id];if(!Object.keys(wkD).length)delete archive[wk];else archive[wk]=wkD;await save({...ward,archive});showToast("Deleted");}} style={{fontSize:"0.72rem",color:C.red,background:"none",border:`1px solid ${C.red}`,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:SF}}>Delete</button>
+                            </div>
+                          )}
                         </div>
                         {pt.diagnosis&&<div style={{fontSize:"0.75rem",color:C.textSub,fontStyle:"italic"}}>{pt.diagnosis}</div>}
                         {pt.pairingIdx!=null&&<div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:3}}>Pairing {pt.pairingIdx+1}</div>}
@@ -6194,6 +6247,115 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowAddPt(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={addPatient} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Add Patient</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Patient modal */}
+      {restoreTarget&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
+          <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+            <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Restore Patient</h3>
+            <p style={{margin:"0 0 16px",fontSize:"0.82rem",color:C.textSub}}>{restoreTarget.pt.patientName||restoreTarget.pt.bht||"Patient"} — choose where to restore them.</p>
+
+            <div style={{marginBottom:16}}>
+              <label style={labelStyle}>Section & Bed <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span></label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:8}}>
+                {sections.map(s=>{
+                  const isSel=restoreTarget.section===s.name;
+                  return <button key={s.name} onClick={()=>setRestoreTarget(rt=>({...rt,section:isSel?"":s.name,bedNo:"",side:"single",isFloor:false}))}
+                    style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:isSel?600:400,cursor:"pointer",fontFamily:SF,
+                      background:isSel?theme:C.surfaceEl,border:`1px solid ${isSel?theme:C.border}`,color:isSel?"#fff":C.textSub}}>{s.name}</button>;
+                })}
+                <button onClick={()=>setRestoreTarget(rt=>({...rt,section:rt.isFloor?rt.section:"",bedNo:"",side:"single",isFloor:!rt.isFloor}))}
+                  style={{padding:"5px 14px",borderRadius:20,fontSize:"0.78rem",fontWeight:restoreTarget.isFloor?600:400,cursor:"pointer",fontFamily:SF,
+                    background:restoreTarget.isFloor?C.textSub:C.surfaceEl,border:`1px solid ${restoreTarget.isFloor?C.textSub:C.border}`,color:restoreTarget.isFloor?"#fff":C.textSub}}>
+                  Floor
+                </button>
+              </div>
+              {restoreTarget.isFloor&&(
+                <div style={{padding:"8px 12px",background:"rgba(0,0,0,0.04)",border:`1px dashed ${C.borderMid}`,borderRadius:10,fontSize:"0.75rem",color:C.textSub}}>
+                  Will be assigned the next floor number (F1, F2, …) automatically.
+                </div>
+              )}
+              {!restoreTarget.isFloor&&restoreTarget.section&&(()=>{
+                const secSetup=sections.find(s=>s.name===restoreTarget.section);
+                let rangeBeds=[];
+                if(secSetup?.range){const parts=secSetup.range.split("-").map(s=>s.trim());if(parts.length===2&&!isNaN(parts[0])&&!isNaN(parts[1])){for(let n=Number(parts[0]);n<=Number(parts[1]);n++)rangeBeds.push(String(n));}}
+                const specBeds=(setup.specialBeds||[]).filter(b=>b.section===restoreTarget.section).map(b=>b.id);
+                const allBeds=[...rangeBeds,...specBeds];
+                const isFullyOccupied=(bed)=>{
+                  const others=patients.filter(p=>p.bedNo===bed&&p.section===restoreTarget.section);
+                  return others.some(p=>p.side==="L")&&others.some(p=>p.side==="R");
+                };
+                const hasAnyOccupant=(bed)=>patients.some(p=>p.bedNo===bed&&p.section===restoreTarget.section);
+                if(allBeds.length===0) return <div style={{fontSize:"0.75rem",color:C.textMuted,marginBottom:8}}>No bed range for this section — edit settings to add one.</div>;
+                return (
+                  <div>
+                    <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6}}>Select Bed</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                      {allBeds.map(bed=>{
+                        const isSel=restoreTarget.bedNo===bed;
+                        const full=isFullyOccupied(bed);
+                        const hasOccupant=hasAnyOccupant(bed);
+                        return <button key={bed} onClick={()=>!full&&setRestoreTarget(rt=>({...rt,bedNo:isSel?"":bed,side:isSel?"single":hasOccupant?"":"single"}))}
+                          style={{padding:"6px 12px",borderRadius:9,fontSize:"0.82rem",fontWeight:isSel?700:500,
+                            cursor:full&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                            background:isSel?theme:full?"rgba(0,0,0,0.04)":hasOccupant?"rgba(245,158,11,0.08)":C.surface,
+                            border:`1px solid ${isSel?theme:full?"rgba(0,0,0,0.08)":hasOccupant?"rgba(245,158,11,0.4)":C.border}`,
+                            color:isSel?"#fff":full?C.textMuted:hasOccupant?"rgb(161,104,0)":C.text,
+                            opacity:full&&!isSel?0.4:1,
+                            boxShadow:isSel?`0 2px 8px rgba(${rgb},0.3)`:"none"}}>{bed}</button>;
+                      })}
+                    </div>
+                    {restoreTarget.bedNo&&(()=>{
+                      const others=patients.filter(p=>p.bedNo===restoreTarget.bedNo&&p.section===restoreTarget.section);
+                      const singleOccupant=others.find(p=>p.side==="single"||!p.side);
+                      const lOccupant=others.find(p=>p.side==="L");
+                      const rOccupant=others.find(p=>p.side==="R");
+                      const lTaken=!!lOccupant;
+                      const rTaken=!!rOccupant;
+                      const hasMate=others.length>0;
+                      return (
+                        <div>
+                          <div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Bed Side</div>
+                          <div style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"8px 12px",marginBottom:10}}>
+                            <div style={{fontSize:"0.62rem",color:"rgb(161,104,0)",fontWeight:600,marginBottom:5,letterSpacing:"0.04em",textTransform:"uppercase"}}>Currently in this bed</div>
+                            {singleOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"0.62rem",background:"rgba(0,0,0,0.08)",borderRadius:4,padding:"1px 6px",color:C.textSub}}>Single</span>{singleOccupant.patientName||singleOccupant.bht||"Patient"}</div>}
+                            {lOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8,marginBottom:rOccupant?4:0}}><span style={{fontSize:"0.62rem",background:`rgba(${rgb},0.1)`,borderRadius:4,padding:"1px 6px",color:theme}}>L</span>{lOccupant.patientName||lOccupant.bht||"Patient"}</div>}
+                            {rOccupant&&<div style={{fontSize:"0.78rem",color:C.text,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"0.62rem",background:`rgba(${rgb},0.1)`,borderRadius:4,padding:"1px 6px",color:theme}}>R</span>{rOccupant.patientName||rOccupant.bht||"Patient"}</div>}
+                            {!hasMate&&<div style={{fontSize:"0.78rem",color:C.textMuted}}>Empty</div>}
+                          </div>
+                          <div style={{display:"flex",gap:6}}>
+                            {[{val:"single",label:"Single",taken:hasMate},{val:"L",label:"Left",taken:lTaken&&!singleOccupant},{val:"R",label:"Right",taken:rTaken&&!singleOccupant}].map(({val,label,taken})=>{
+                              const isSel=restoreTarget.side===val;
+                              return <button key={val} onClick={()=>{if(taken&&!isSel) return; setRestoreTarget(rt=>({...rt,side:val}));}}
+                                style={{flex:1,padding:"8px",borderRadius:10,fontSize:"0.76rem",fontWeight:isSel?600:400,
+                                  cursor:taken&&!isSel?"not-allowed":"pointer",fontFamily:SF,
+                                  background:isSel?theme:taken?"rgba(0,0,0,0.03)":C.surfaceEl,
+                                  border:`1px solid ${isSel?theme:taken?"rgba(0,0,0,0.08)":C.border}`,
+                                  color:isSel?"#fff":taken?C.textMuted:C.textSub,
+                                  opacity:taken&&!isSel?0.4:1}}>
+                                {label}{taken&&!isSel?" ✗":""}
+                              </button>;
+                            })}
+                          </div>
+                          {singleOccupant&&(restoreTarget.side==="L"||restoreTarget.side==="R")&&<div style={{marginTop:8,padding:"7px 10px",background:`rgba(${rgb},0.06)`,border:`1px solid rgba(${rgb},0.15)`,borderRadius:8,fontSize:"0.72rem",color:theme}}>
+                            Restored patient → <strong>{restoreTarget.side==="L"?"Left":"Right"}</strong> · Existing patient moves to <strong>{restoreTarget.side==="L"?"Right":"Left"}</strong> on restore.
+                          </div>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setRestoreTarget(null)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
+              <button onClick={restorePatientTo} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Restore Patient</button>
             </div>
           </div>
         </div>
