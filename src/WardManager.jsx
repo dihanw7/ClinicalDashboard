@@ -5256,12 +5256,14 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
                     <div style={{fontSize:"0.78rem",fontWeight:700,color:C.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
                     {pt.age&&<div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:1}}>{pt.age}</div>}
                     {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
-                    {(pt.tags||[]).length>0&&(
-                      <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
-                        {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
-                      </div>
-                    )}
-                    {pt.historyTaken&&<div style={{position:"absolute",top:7,right:7}}><svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
+                    <div style={{position:"absolute",top:8,right:8,display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end",maxWidth:"55%"}}>
+                      {pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      {(pt.tags||[]).length>0&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
+                          {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -5310,11 +5312,14 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                           <div style={{fontSize:"0.78rem",fontWeight:700,color:C2.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
                           {pt.age&&<div style={{fontSize:"0.6rem",color:C2.textSub,marginBottom:1}}>{pt.age}</div>}
                           {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C2.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
-                          {(pt.tags||[]).length>0&&(
-                            <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
-                              {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
-                            </div>
-                          )}
+                          <div style={{position:"absolute",top:8,right:8,display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end",maxWidth:"55%"}}>
+                            {pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            {(pt.tags||[]).length>0&&(
+                              <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
+                                {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -5888,9 +5893,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
-                            <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
-                              {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
-                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                            <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
+                              {(pt.historyTaken||pt.isNew)&&(
+                                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                                  {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                                  {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                                </div>
+                              )}
+                              {(pt.tags||[]).length>0&&(
+                                <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
+                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                                </div>
+                              )}
                             </div>
                             <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>Unassigned</div>
                             <div style={{fontSize:"1.25rem",fontWeight:700,color:C.textMuted,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>—</div>
@@ -5909,11 +5923,6 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               </div>
                             )}
                             {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
-                            {(pt.tags||[]).length>0&&(
-                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -5942,9 +5951,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}>
-                            <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
-                              {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
-                              {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                            <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
+                              {(pt.historyTaken||pt.isNew)&&(
+                                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                                  {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
+                                  {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                                </div>
+                              )}
+                              {(pt.tags||[]).length>0&&(
+                                <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
+                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                                </div>
+                              )}
                             </div>
                             {/* Section + bed number */}
                             <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>
@@ -5967,11 +5985,6 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               </div>
                             )}
                             {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
-                            {(pt.tags||[]).length>0&&(
-                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
-                              </div>
-                            )}
                           </div>
                         );
                       };
