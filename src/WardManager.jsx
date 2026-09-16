@@ -5222,7 +5222,7 @@ function MedStudentsTab({ beds, bedKeys, students, theme, rgb }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW
 // ══════════════════════════════════════════════════════════════════════════════
-function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt }) {
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{background:C.surface,border:`1px solid rgba(${rgb},0.18)`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C.shadow}}>
@@ -5255,7 +5255,12 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
                     {pt.bedNo&&<div style={{fontSize:"1.1rem",fontWeight:700,color:theme,lineHeight:1,marginBottom:3}}>{String(pt.bedNo).padStart(2,"0")}</div>}
                     <div style={{fontSize:"0.78rem",fontWeight:700,color:C.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
                     {pt.age&&<div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:1}}>{pt.age}</div>}
-                    {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C.text,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>}
+                    {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
+                    {(pt.tags||[]).length>0&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
+                        {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
+                      </div>
+                    )}
                     {pt.historyTaken&&<div style={{position:"absolute",top:7,right:7}}><svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
                   </div>
                 ))}
@@ -5267,7 +5272,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
   );
 }
 
-function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt }) {
+function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, customTags=[] }) {
   const [expandedHO, setExpandedHO] = useState(null);
   const activeHOs = shadowHOs.filter(h=>h.name);
   const C2 = C;
@@ -5304,7 +5309,12 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt }
                           {pt.bedNo&&<div style={{fontSize:"1.1rem",fontWeight:700,color:theme,lineHeight:1,marginBottom:3}}>{String(pt.bedNo).padStart(2,"0")}</div>}
                           <div style={{fontSize:"0.78rem",fontWeight:700,color:C2.text,marginBottom:2,wordBreak:"break-word"}}>{pt.patientName||"—"}</div>
                           {pt.age&&<div style={{fontSize:"0.6rem",color:C2.textSub,marginBottom:1}}>{pt.age}</div>}
-                          {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C2.text,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.diagnosis}</div>}
+                          {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C2.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
+                          {(pt.tags||[]).length>0&&(
+                            <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
+                              {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`}}>{t}</span>:null;})}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -5336,6 +5346,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [newPt,             setNewPt]             = useState({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null});
   const [selectedPt,        setSelectedPt]        = useState(null);
   const [ptEdit,            setPtEdit]            = useState({});
+  const [viewingPtId,       setViewingPtId]       = useState(null);
   const [showClearConfirm,  setShowClearConfirm]  = useState(false);
   const [sideConflict,      setSideConflict]      = useState(null); // {existingPtId, newSide, otherSide}
   const [restoreTarget,     setRestoreTarget]     = useState(null); // {wk, id, pt, section, bedNo, side, isFloor}
@@ -5391,6 +5402,23 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
 
   const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
+
+  // Builds the ptEdit form state from a patient record — shared by every tap
+  // point that opens the edit sheet, so the populated fields never drift.
+  const buildPtEdit = (pt) => ({
+    bht:pt.bht||"", patientName:pt.patientName||"",
+    ageYears:pt.age?.match(/(\d+)y/)?.[1]||"", ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",
+    bedNo:pt.bedNo||"", section:pt.section||"", side:pt.side||"single",
+    pairingIdx:pt.pairingIdx??null, consultant:pt.consultant||"", diagnosis:pt.diagnosis||"",
+    notes:pt.notes||"", historyTaken:!!pt.historyTaken, isNew:!!pt.isNew,
+    tags:pt.tags||[], shadowHO:pt.shadowHO||"",
+  });
+  // Tapping any patient tile opens the read-only View first (available to
+  // leaders and seniors alike). The View's own Edit icon is what drops a
+  // leader into the actual edit sheet via openEditFromView below.
+  const openView = (pt) => setViewingPtId(pt.id);
+  const openEditFromView = (pt) => { setPtEdit(buildPtEdit(pt)); setSelectedPt(pt.id); setViewingPtId(null); };
+  const viewPt = viewingPtId ? patients.find(p=>p.id===viewingPtId) : null;
 
   // Pick the shadow HO with fewest patients (ties broken randomly)
   const getSuggestedShadow = () => {
@@ -5851,9 +5879,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel=getPairingLabel(pt.pairingIdx);
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div key={pt.id} onClick={seniorMode?undefined:()=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:"",section:"",side:"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
-                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
-                            onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                          <div key={pt.id} onClick={()=>openView(pt)}
+                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
+                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
                               {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
@@ -5867,7 +5895,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             </div>
                             {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
-                            {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
+                            {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
@@ -5900,15 +5928,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       const ptR = bedPts.find(p=>p.side==="R");
                       const ptSingle = bedPts.filter(p=>!p.side||p.side==="single");
                       const isDual = ptL||ptR;
-                      const openPtEdit = (pt) => { setSelectedPt(pt.id); setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""}); };
 
                       const Tile = ({pt, sideLabel}) => {
                         const pLabel = getPairingLabel(pt.pairingIdx);
                         const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div onClick={seniorMode?undefined:()=>openPtEdit(pt)}
-                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:seniorMode?"default":"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
-                            onMouseEnter={e=>{if(!seniorMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}}
+                          <div onClick={()=>openView(pt)}
+                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
+                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",gap:4,alignItems:"center"}}>
                               {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
@@ -5926,7 +5953,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             </div>
                             {pt.bht&&<div style={{fontSize:"0.55rem",fontFamily:"monospace",color:C.textMuted,marginBottom:2}}>BHT {pt.bht}</div>}
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
-                            {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>{pt.diagnosis}</div>}
+                            {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
@@ -5965,7 +5992,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div>
             {/* Shadow HO section — expandable */}
             {shadowHOs.filter(h=>h.name).length>0&&(
-              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} onSelectPt={(pt)=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}/>
+              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} onSelectPt={openView}/>
             )}
             {pairings.length===0&&activeStudents.length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</p>
@@ -5976,8 +6003,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     return (
                       <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
-                        NameWithGroup={NameWithGroup}
-                        onSelectPt={(pt)=>{setSelectedPt(pt.id);setPtEdit({bht:pt.bht||"",patientName:pt.patientName||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",bedNo:pt.bedNo||"",section:pt.section||"",side:pt.side||"single",pairingIdx:pt.pairingIdx??null,consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,tags:pt.tags||[],shadowHO:pt.shadowHO||""});}}
+                        NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
+                        onSelectPt={openView}
                       />
                     );
                   })}
@@ -6360,6 +6387,103 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         </div>
       )}
+
+      {/* Patient view (read-only) — the default tap destination for every tile.
+          Leaders get an Edit icon that drops into the edit sheet below; seniors
+          never see that icon, so this is the only view they can reach. */}
+      {viewPt&&!selectedPt&&(()=>{
+        const pLabel = getPairingLabel(viewPt.pairingIdx);
+        const cObj = consultants.find(c=>(typeof c==="object"?c.name:c)===viewPt.consultant);
+        const cColor = cObj?.color;
+        const Row = ({label, children}) => (
+          <div style={{marginBottom:16}}>
+            <label style={labelStyle}>{label}</label>
+            <div style={{marginTop:5}}>{children}</div>
+          </div>
+        );
+        return (
+          <div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",fontFamily:SF}}>
+            <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+              <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,overflow:"hidden"}}>
+                  <button onClick={()=>setViewingPtId(null)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+                  <span style={{fontWeight:700,color:theme,fontSize:"1.1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewPt.patientName||viewPt.bht||"Patient"}</span>
+                </div>
+                {isLeader&&!seniorMode&&(
+                  <button onClick={()=>openEditFromView(viewPt)} style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.78rem",fontWeight:600,color:"#fff",background:theme,border:"none",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:SF,flexShrink:0}}>
+                    <Icon name="edit" size={12} color="#fff"/> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{maxWidth:560,margin:"0 auto",padding:"20px 18px 60px"}}>
+              {/* Headline card: bed/section, name, age, status */}
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:18,boxShadow:C.shadow}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                  <span style={{fontSize:"0.66rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700}}>
+                    {viewPt.isFloor?"Floor":(viewPt.section||"Unassigned")}{viewPt.side&&viewPt.side!=="single"?` · ${viewPt.side}`:""}
+                  </span>
+                  {viewPt.bedNo&&<span style={{fontSize:"0.95rem",fontWeight:700,color:theme}}>{String(viewPt.bedNo).padStart(2,"0")}</span>}
+                  {viewPt.historyTaken&&<span style={{display:"flex",alignItems:"center",gap:3,fontSize:"0.68rem",color:C.green,fontWeight:600}}><Icon name="history" size={11} color={C.green}/> Hx taken</span>}
+                  {viewPt.isNew&&<span style={{fontSize:"0.68rem",color:C.red,fontWeight:600}}>● New</span>}
+                </div>
+                <div style={{fontSize:"1.3rem",fontWeight:700,color:C.text,marginBottom:2,wordBreak:"break-word"}}>{viewPt.patientName||"—"}</div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:"0.8rem",color:C.textSub}}>
+                  {viewPt.age&&<span>{viewPt.age}</span>}
+                  {viewPt.bht&&<span style={{fontFamily:"monospace"}}>BHT {viewPt.bht}</span>}
+                </div>
+              </div>
+
+              {viewPt.consultant&&(
+                <Row label="Consultant">
+                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.9rem",color:cColor||C.text,fontWeight:500}}>
+                    {cColor&&<span style={{width:8,height:8,borderRadius:"50%",background:cColor,flexShrink:0}}/>}
+                    {viewPt.consultant}
+                  </div>
+                </Row>
+              )}
+
+              {viewPt.diagnosis&&(
+                <Row label="Diagnosis">
+                  <div style={{fontSize:"0.92rem",color:C.text,fontStyle:"italic",fontWeight:500,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{viewPt.diagnosis}</div>
+                </Row>
+              )}
+
+              {(viewPt.tags||[]).length>0&&(
+                <Row label="Tags">
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {(viewPt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.74rem",fontWeight:700,padding:"4px 10px",borderRadius:20,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`}}>{t}</span>:null;})}
+                  </div>
+                </Row>
+              )}
+
+              {pLabel&&(
+                <Row label="Owner">
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+                    <span style={{fontSize:"0.74rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:6,padding:"3px 8px",color:theme}}>{pLabel}</span>
+                    {(viewPt.members||[]).map(m=>(<NameWithGroup key={m} name={m} color={C.text} fontSize="0.85rem" fontWeight={500}/>))}
+                  </div>
+                </Row>
+              )}
+
+              {viewPt.shadowHO&&(
+                <Row label="Shadow HO">
+                  <span style={{fontSize:"0.85rem",color:C.textSub,fontStyle:"italic"}}>{viewPt.shadowHO}</span>
+                </Row>
+              )}
+
+              {/* Notes — scrollable so long entries don't blow out the page */}
+              <Row label="Notes">
+                {viewPt.notes
+                  ? <div style={{maxHeight:220,overflowY:"auto",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:"0.85rem",color:C.textSub,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{viewPt.notes}</div>
+                  : <div style={{fontSize:"0.82rem",color:C.textMuted,fontStyle:"italic"}}>No notes yet.</div>
+                }
+              </Row>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Patient edit sheet */}
       {selectedPt&&selPt&&(
