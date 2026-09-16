@@ -5418,6 +5418,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   // leader into the actual edit sheet via openEditFromView below.
   const openView = (pt) => setViewingPtId(pt.id);
   const openEditFromView = (pt) => { setPtEdit(buildPtEdit(pt)); setSelectedPt(pt.id); setViewingPtId(null); };
+  // Default tap behaviour: leaders go straight into the edit sheet (as before
+  // the View page existed); everyone else (seniors, logged-out) gets the
+  // read-only View. Leaders can still reach View if they were already on it
+  // when they unlocked leader access — that path uses openView directly.
+  const handleTileTap = (pt) => { if (isLeader&&!seniorMode) { setPtEdit(buildPtEdit(pt)); setSelectedPt(pt.id); } else { openView(pt); } };
   const viewPt = viewingPtId ? patients.find(p=>p.id===viewingPtId) : null;
 
   // Pick the shadow HO with fewest patients (ties broken randomly)
@@ -5879,7 +5884,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel=getPairingLabel(pt.pairingIdx);
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div key={pt.id} onClick={()=>openView(pt)}
+                          <div key={pt.id} onClick={()=>handleTileTap(pt)}
                             style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
@@ -5933,7 +5938,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel = getPairingLabel(pt.pairingIdx);
                         const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div onClick={()=>openView(pt)}
+                          <div onClick={()=>handleTileTap(pt)}
                             style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}>
@@ -5992,7 +5997,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div>
             {/* Shadow HO section — expandable */}
             {shadowHOs.filter(h=>h.name).length>0&&(
-              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} onSelectPt={openView}/>
+              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} onSelectPt={handleTileTap}/>
             )}
             {pairings.length===0&&activeStudents.length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</p>
@@ -6004,7 +6009,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
-                        onSelectPt={openView}
+                        onSelectPt={handleTileTap}
                       />
                     );
                   })}
@@ -6404,14 +6409,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         return (
           <div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",fontFamily:SF}}>
             <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-              <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,overflow:"hidden"}}>
+              <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,overflow:"hidden",minWidth:0,flex:1}}>
                   <button onClick={()=>setViewingPtId(null)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.textSub}/></button>
-                  <span style={{fontWeight:700,color:theme,fontSize:"1.1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewPt.patientName||viewPt.bht||"Patient"}</span>
+                  <span style={{fontWeight:700,color:theme,fontSize:"1.1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{viewPt.patientName||viewPt.bht||"Patient"}</span>
                 </div>
                 {isLeader&&!seniorMode&&(
-                  <button onClick={()=>openEditFromView(viewPt)} style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.78rem",fontWeight:600,color:"#fff",background:theme,border:"none",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:SF,flexShrink:0}}>
-                    <Icon name="edit" size={12} color="#fff"/> Edit
+                  <button onClick={()=>openEditFromView(viewPt)} title="Edit" style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow,flexShrink:0,padding:0}}>
+                    <Icon name="edit" size={14} color={theme}/>
                   </button>
                 )}
               </div>
