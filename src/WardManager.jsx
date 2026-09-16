@@ -5413,15 +5413,15 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     notes:pt.notes||"", historyTaken:!!pt.historyTaken, isNew:!!pt.isNew,
     tags:pt.tags||[], shadowHO:pt.shadowHO||"",
   });
-  // Tapping any patient tile opens the read-only View first (available to
-  // leaders and seniors alike). The View's own Edit icon is what drops a
-  // leader into the actual edit sheet via openEditFromView below.
+  // Tapping any patient tile opens the read-only View first for non-leaders.
+  // The View's own Edit icon is what drops the viewer into the actual edit
+  // sheet via openEditFromView below (available to anyone except seniors).
   const openView = (pt) => setViewingPtId(pt.id);
   const openEditFromView = (pt) => { setPtEdit(buildPtEdit(pt)); setSelectedPt(pt.id); setViewingPtId(null); };
   // Default tap behaviour: leaders go straight into the edit sheet (as before
-  // the View page existed); everyone else (seniors, logged-out) gets the
-  // read-only View. Leaders can still reach View if they were already on it
-  // when they unlocked leader access — that path uses openView directly.
+  // the View page existed). Everyone else — regular students and seniors —
+  // lands on the read-only View first; students get an Edit icon there to
+  // opt into the same edit sheet, while seniors never see that icon at all.
   const handleTileTap = (pt) => { if (isLeader&&!seniorMode) { setPtEdit(buildPtEdit(pt)); setSelectedPt(pt.id); } else { openView(pt); } };
   const viewPt = viewingPtId ? patients.find(p=>p.id===viewingPtId) : null;
 
@@ -6414,7 +6414,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   <button onClick={()=>setViewingPtId(null)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.textSub}/></button>
                   <span style={{fontWeight:700,color:theme,fontSize:"1.1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{viewPt.patientName||viewPt.bht||"Patient"}</span>
                 </div>
-                {isLeader&&!seniorMode&&(
+                {!seniorMode&&(
                   <button onClick={()=>openEditFromView(viewPt)} title="Edit" style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow,flexShrink:0,padding:0}}>
                     <Icon name="edit" size={14} color={theme}/>
                   </button>
