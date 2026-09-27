@@ -5366,6 +5366,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [pendingShadowForm, setPendingShadowForm] = useState(null);
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
   const [searchQuery,       setSearchQuery]       = useState("");
+  const [archiveSearch,     setArchiveSearch]     = useState("");
   const [groupsRepo,        setGroupsRepo]        = useState([]);
   const [groupsRepoLoaded,  setGroupsRepoLoaded]  = useState(false);
   const [loadGroupPick,     setLoadGroupPick]     = useState("");
@@ -6037,14 +6038,33 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         )}
 
-        {activeTab==="archive"&&(
+        {activeTab==="archive"&&(()=>{
+          const aq = archiveSearch.trim().toLowerCase();
+          const matches = pt => !aq || [pt.patientName, pt.bht, pt.bedNo, pt.diagnosis, pt.pairingIdx!=null?`pairing ${pt.pairingIdx+1}`:""]
+            .some(v=>String(v||"").toLowerCase().includes(aq));
+          const weeks = Object.entries(ward.archive||{}).sort(([a],[b])=>b.localeCompare(a))
+            .map(([wk,wkData])=>[wk,Object.entries(wkData).filter(([,pt])=>matches(pt))])
+            .filter(([,entries])=>entries.length>0);
+          const resultCount = weeks.reduce((n,[,e])=>n+e.length,0);
+          return (
           <div>
+            {Object.keys(ward.archive||{}).length>0&&(<>
+              <div style={{position:"relative",marginBottom:14}}>
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
+                  <circle cx="8.5" cy="8.5" r="5.5" stroke={C.textMuted} strokeWidth="1.6"/>
+                  <path d="M14 14l3 3" stroke={C.textMuted} strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+                <input type="text" value={archiveSearch} onChange={e=>setArchiveSearch(e.target.value)} placeholder="Search archive by name, BHT, bed or diagnosis…" style={{width:"100%",boxSizing:"border-box",padding:"9px 34px 9px 32px",fontSize:"0.82rem",fontFamily:SF,background:C.surface,border:`1px solid ${aq?theme:C.border}`,borderRadius:12,color:C.text,outline:"none",boxShadow:aq?`0 0 0 3px rgba(${rgb},0.12)`:C.shadow,transition:"border-color 0.15s,box-shadow 0.15s"}}/>
+                {aq&&(<button onClick={()=>setArchiveSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill={C.border}/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round"/></svg></button>)}
+              </div>
+              {aq&&(<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,paddingLeft:2}}>{resultCount===0?"No archived patients found":`${resultCount} result${resultCount!==1?"s":""} across all weeks`}</div>)}
+            </>)}
             {Object.keys(ward.archive||{}).length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No archived records yet.</p>
-              : Object.entries(ward.archive||{}).sort(([a],[b])=>b.localeCompare(a)).map(([wk,wkData])=>(
+              : weeks.map(([wk,entries])=>(
                   <div key={wk} style={{marginBottom:20}}>
                     <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>{wk}</div>
-                    {Object.entries(wkData).map(([id,pt])=>(
+                    {entries.map(([id,pt])=>(
                       <div key={id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:C.shadow}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                           <div>
@@ -6067,7 +6087,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 ))
             }
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Add Patient modal */}
