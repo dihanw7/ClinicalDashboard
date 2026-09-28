@@ -70,6 +70,15 @@ const C = {
   shadow:"0 1px 4px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06)",
   shadowMd:"0 4px 18px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
 };
+// Liquid Glass materials (Surgery ward). Glass is for floating controls; content cards stay solid.
+const LG = {
+  page:"#f2f2f7",
+  glass:{background:"rgba(255,255,255,0.55)",backdropFilter:"blur(24px) saturate(190%)",WebkitBackdropFilter:"blur(24px) saturate(190%)",border:"0.5px solid rgba(0,0,0,0.06)",boxShadow:"0 8px 28px rgba(30,40,80,0.12),0 1px 2px rgba(30,40,80,0.06),inset 0 1px 0 rgba(255,255,255,0.95)"},
+  bar:{background:"rgba(242,242,247,0.86)",backdropFilter:"blur(28px) saturate(180%)",WebkitBackdropFilter:"blur(28px) saturate(180%)"},
+  card:{background:"#ffffff",borderRadius:22,boxShadow:"0 1px 2px rgba(0,0,0,0.04),0 6px 20px rgba(30,40,80,0.06)"},
+  tileShadow:"0 1px 2px rgba(0,0,0,0.04),0 6px 18px rgba(30,40,80,0.07)",
+  tileShadowHover:"0 2px 4px rgba(0,0,0,0.05),0 14px 30px rgba(30,40,80,0.12)",
+};
 const SF = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif";
 const hexToRgb = h => { const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r?`${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}`:"0,122,255"; };
 
@@ -5367,6 +5376,17 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
   const [searchQuery,       setSearchQuery]       = useState("");
   const [archiveSearch,     setArchiveSearch]     = useState("");
+  // Sticky section-filter bar sits just below the glass header; track its height.
+  const [glassHeaderH,      setGlassHeaderH]      = useState(0);
+  const glassHeaderRO = useRef(null);
+  const glassHeaderRef = useCallback(el=>{
+    if (glassHeaderRO.current) { glassHeaderRO.current.disconnect(); glassHeaderRO.current=null; }
+    if (!el) return;
+    setGlassHeaderH(el.offsetHeight);
+    if (typeof ResizeObserver==="undefined") return;
+    glassHeaderRO.current = new ResizeObserver(()=>setGlassHeaderH(el.offsetHeight));
+    glassHeaderRO.current.observe(el);
+  },[]);
   const [groupsRepo,        setGroupsRepo]        = useState([]);
   const [groupsRepoLoaded,  setGroupsRepoLoaded]  = useState(false);
   const [loadGroupPick,     setLoadGroupPick]     = useState("");
@@ -5655,14 +5675,16 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const stats = { total:patients.length, histTaken:patients.filter(p=>p.historyTaken).length, isNew:patients.filter(p=>p.isNew).length };
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,position:"relative",isolation:"isolate"}}>
+      <div aria-hidden="true" style={{position:"absolute",top:0,left:0,right:0,height:420,zIndex:-1,pointerEvents:"none",background:`radial-gradient(70% 60% at 10% 0%,rgba(${rgb},0.20),transparent 70%),radial-gradient(60% 55% at 95% 8%,rgba(90,200,250,0.20),transparent 70%),radial-gradient(50% 45% at 55% 40%,rgba(175,82,222,0.08),transparent 70%)`}}/>
+      <div ref={glassHeaderRef} style={{position:"sticky",top:0,zIndex:50,...LG.bar}}>
+      <div style={{padding:"12px 16px 8px"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <button onClick={onBack} aria-label="Back" style={{...LG.glass,width:40,height:40,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.text}/></button>
             <div>
-              <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text}}>{setup.wardName}</div>
-              <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
+              <div style={{fontSize:"0.72rem",fontWeight:600,color:theme}}>{setup.wardName}</div>
+              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
               <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>Surgery</div>
             </div>
           </div>
@@ -5670,24 +5692,25 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {!seniorMode&&(isLeader
               ?<>
                 <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
-                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>Log out</button>
+                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{...LG.glass,display:"flex",alignItems:"center",gap:4,color:C.textSub,borderRadius:20,padding:"8px 12px",fontSize:"0.72rem",fontWeight:500,cursor:"pointer",fontFamily:SF}}>Log out</button>
               </>
-              :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
+              :<button onClick={()=>setShowPin(true)} style={{...LG.glass,display:"flex",alignItems:"center",gap:5,color:C.text,borderRadius:20,padding:"9px 14px",fontSize:"0.76rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
             )}
             {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,borderRadius:50,width:36,height:36,cursor:"pointer"}}><Icon name="settings" size={15} color={C.textSub}/></button>}
           </div>
         </div>
       </div>
 
-      <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"53px",zIndex:49,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",padding:"0 16px"}}>
+      <div style={{padding:"0 16px 10px"}}>
+        <div role="tablist" style={{...LG.glass,maxWidth:668,margin:"0 auto",display:"flex",gap:2,padding:4,borderRadius:999}}>
           {[{id:"ward",label:"Ward"},...(!seniorMode?[{id:"students",label:"Students"}]:[]),{id:"archive",label:"Archive"}].map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{padding:"11px 16px",fontSize:"0.8rem",fontWeight:500,fontFamily:SF,background:"none",border:"none",cursor:"pointer",color:activeTab===t.id?theme:C.textMuted,borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",marginBottom:"-1px",transition:"color 0.15s"}}>
+            <button key={t.id} role="tab" aria-selected={activeTab===t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,padding:"8px 0",fontSize:"0.8rem",fontWeight:600,fontFamily:SF,border:"none",borderRadius:999,cursor:"pointer",color:activeTab===t.id?theme:C.textSub,background:activeTab===t.id?"#fff":"transparent",boxShadow:activeTab===t.id?"0 2px 10px rgba(0,0,0,0.1)":"none",transition:"background 0.25s,color 0.25s,box-shadow 0.25s"}}>
               {t.label}
             </button>
           ))}
         </div>
+      </div>
       </div>
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 100px"}}>
@@ -5695,14 +5718,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         {activeTab==="ward" && <>
 
           {shadowHOs.length>0&&(
-            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+            <div style={{...LG.card,padding:"14px 16px",marginBottom:16}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                 <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
                 {isLeader&&!seniorMode&&<button onClick={startShadowEdit} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {shadowHOs.map((ho,i)=>(
-                  <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                  <div key={i} style={{flex:1,minWidth:100,background:LG.page,borderRadius:14,padding:"9px 12px"}}>
                     <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
                     <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
                   </div>
@@ -5712,7 +5735,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           )}
 
           {/* Pairings matrix */}
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:16,boxShadow:C.shadow,overflow:"hidden"}}>
+          <div style={{...LG.card,marginBottom:16,overflow:"hidden"}}>
             <div onClick={()=>setPairingOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none"}}>
               <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Pairings</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -5815,8 +5838,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       const activeMembers=members.filter(m=>!shadowHONames.has(m));
                       const hoMembers=members.filter(m=>shadowHONames.has(m));
                       return (
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:C.bg,border:`1px solid rgba(${rgb},0.15)`}}>
-                          <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:5,padding:"2px 7px",flexShrink:0}}>P{i+1}</span>
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:14,background:LG.page}}>
+                          <span style={{fontSize:"0.62rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.12)`,borderRadius:999,padding:"3px 8px",flexShrink:0}}>P{i+1}</span>
                           <div style={{flex:1}}>
                             <div style={{fontSize:"0.88rem",fontWeight:600,color:C.text,lineHeight:1.3}}>
                               {activeMembers.map((m,mi)=>(
@@ -5828,7 +5851,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             </div>
                             {hoMembers.length>0&&<div style={{fontSize:"0.62rem",color:C.textMuted,marginTop:2}}>{hoMembers.join(", ")} — Shadow HO</div>}
                           </div>
-                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surfaceEl,borderRadius:5,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{ptCount} pt</span>
+                          <span style={{fontSize:"0.65rem",color:C.textMuted,background:C.surface,borderRadius:999,padding:"2px 8px",flexShrink:0,whiteSpace:"nowrap"}}>{ptCount} pt</span>
                         </div>
                       );
                     })}
@@ -5841,7 +5864,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           {/* Stats */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
             {[{label:"Patients",val:stats.total,color:theme},{label:"Hx Taken",val:`${stats.histTaken}/${stats.total}`,color:C.green},{label:"New",val:stats.isNew,color:C.red}].map(s=>(
-              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+              <div key={s.label} style={{...LG.card,borderRadius:20,padding:"12px 10px",textAlign:"center"}}>
                 <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
                 <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
               </div>
@@ -5849,9 +5872,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
 
           {sections.length>0&&(
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            <div style={{...LG.glass,background:"rgba(255,255,255,0.78)",display:"flex",gap:2,padding:4,borderRadius:999,marginBottom:16,position:"sticky",top:glassHeaderH+8,zIndex:40,overflowX:"auto",scrollbarWidth:"none"}}>
               {["all",...sections.map(s=>s.name),...(patients.some(p=>p.isFloor)?["Floor"]:[])].map(sec=>(
-                <button key={sec} onClick={()=>setSectionFilter(sec)} style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===sec?600:400,cursor:"pointer",fontFamily:SF,background:sectionFilter===sec?theme:C.surface,border:`1px solid ${sectionFilter===sec?theme:C.border}`,color:sectionFilter===sec?"#fff":C.textSub}}>
+                <button key={sec} onClick={()=>setSectionFilter(sec)} style={{flex:"1 0 auto",padding:"8px 12px",borderRadius:999,fontSize:"0.76rem",fontWeight:sectionFilter===sec?600:500,cursor:"pointer",fontFamily:SF,whiteSpace:"nowrap",border:"none",background:sectionFilter===sec?theme:"transparent",color:sectionFilter===sec?"#fff":C.textSub,boxShadow:sectionFilter===sec?`0 3px 10px rgba(${rgb},0.35),inset 0 1px 0 rgba(255,255,255,0.35)`:"none",transition:"background 0.25s,color 0.25s"}}>
                   {sec==="all"?"All":sec}
                 </button>
               ))}
@@ -5864,14 +5887,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <circle cx="8.5" cy="8.5" r="5.5" stroke={C.textMuted} strokeWidth="1.6"/>
               <path d="M14 14l3 3" stroke={C.textMuted} strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
-            <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search patients by name or BHT…" style={{width:"100%",boxSizing:"border-box",padding:"9px 34px 9px 32px",fontSize:"0.82rem",fontFamily:SF,background:C.surface,border:`1px solid ${searchActive?theme:C.border}`,borderRadius:12,color:C.text,outline:"none",boxShadow:searchActive?`0 0 0 3px rgba(${rgb},0.12)`:C.shadow,transition:"border-color 0.15s,box-shadow 0.15s"}}/>
+            <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search patients by name or BHT…" style={{width:"100%",boxSizing:"border-box",padding:"11px 36px 11px 34px",fontSize:"0.85rem",fontFamily:SF,background:searchActive?C.surface:"rgba(118,118,128,0.12)",border:"none",borderRadius:999,color:C.text,outline:"none",boxShadow:searchActive?`0 0 0 3px rgba(${rgb},0.18)`:"none",transition:"background 0.15s,box-shadow 0.15s"}}/>
             {searchActive&&(<button onClick={()=>setSearchQuery("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill={C.border}/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke={C.textSub} strokeWidth="1.5" strokeLinecap="round"/></svg></button>)}
           </div>
           {searchActive&&(<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,paddingLeft:2}}>{filteredPatients.length===0?"No patients found":`${filteredPatients.length} result${filteredPatients.length!==1?"s":""} across all sections`}</div>)}
 
           {isLeader&&!seniorMode&&(
-            <button onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"11px",fontSize:"0.84rem",marginBottom:16,background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:12,cursor:"pointer",fontFamily:SF,fontWeight:500,boxShadow:C.shadow}}>
-              <Icon name="plus" size={14} color={theme}/> Add Patient
+            <button aria-label="Add patient" title="Add patient" onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{...LG.glass,position:"fixed",right:"max(16px, calc((100vw - 700px) / 2 + 16px))",bottom:"calc(64px + env(safe-area-inset-bottom, 0px))",zIndex:45,width:56,height:56,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+              <Icon name="plus" size={22} color={theme}/>
             </button>
           )}
 
@@ -5891,9 +5914,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
                           <div key={pt.id} onClick={()=>handleTileTap(pt)}
-                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
-                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
-                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.05)";}}>
+                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
+                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
+                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
                               {(pt.historyTaken||pt.isNew)&&(
                                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -5903,7 +5926,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               )}
                               {(pt.tags||[]).length>0&&(
                                 <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
-                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 6px",borderRadius:999,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
                                 </div>
                               )}
                             </div>
@@ -5919,11 +5942,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
-                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
+                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
-                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                           </div>
                         );
                       })}
@@ -5949,9 +5972,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
                           <div onClick={()=>handleTileTap(pt)}
-                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.25)`:`1px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:14,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)",transition:"transform 0.12s,box-shadow 0.12s",userSelect:"none"}}
-                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.11)";}}
-                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=filled?"0 6px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.05)":"0 2px 10px rgba(0,0,0,0.05)";}}>
+                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.3)`:`0.5px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
+                            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
+                            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
                               {(pt.historyTaken||pt.isNew)&&(
                                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -5961,13 +5984,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               )}
                               {(pt.tags||[]).length>0&&(
                                 <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
-                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
+                                  {(pt.tags||[]).map(t=>{const tag=(setup.customTags||[]).find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.5rem",fontWeight:700,padding:"1px 6px",borderRadius:999,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.3)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
                                 </div>
                               )}
                             </div>
                             {/* Section + bed number */}
                             <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>
-                              {pt.section}{sideLabel&&<span style={{marginLeft:4,background:`rgba(${rgb},0.1)`,color:theme,borderRadius:3,padding:"0 4px",fontWeight:700}}>{sideLabel}</span>}
+                              {pt.section}{sideLabel&&<span style={{marginLeft:4,background:`rgba(${rgb},0.1)`,color:theme,borderRadius:999,padding:"0 5px",fontWeight:700}}>{sideLabel}</span>}
                             </div>
                             <div style={{fontSize:"1.25rem",fontWeight:700,color:theme,lineHeight:1,letterSpacing:"-0.03em",marginBottom:4}}>{String(bedNo).padStart(2,"0")}</div>
                             {/* Name + age */}
@@ -5981,11 +6004,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
                             {pLabel&&(
                               <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:4,padding:"1px 5px",color:theme}}>{pLabel}</span>
-                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
+                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                               </div>
                             )}
-                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:4,padding:"1px 6px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                           </div>
                         );
                       };
