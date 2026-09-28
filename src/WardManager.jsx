@@ -5893,7 +5893,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           {searchActive&&(<div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,paddingLeft:2}}>{filteredPatients.length===0?"No patients found":`${filteredPatients.length} result${filteredPatients.length!==1?"s":""} across all sections`}</div>)}
 
           {isLeader&&!seniorMode&&(
-            <button aria-label="Add patient" title="Add patient" onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{...LG.glass,position:"fixed",right:"max(16px, calc((100vw - 700px) / 2 + 16px))",bottom:"calc(64px + env(safe-area-inset-bottom, 0px))",zIndex:45,width:56,height:56,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+            <button aria-label="Add patient" title="Add patient" onClick={()=>{setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:"",side:"single",pairingIdx:null,isFloor:false,shadowHO:""});setShowAddPt(true);}} style={{...LG.glass,position:"fixed",right:16,bottom:64,zIndex:45,width:56,height:56,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
               <Icon name="plus" size={22} color={theme}/>
             </button>
           )}
