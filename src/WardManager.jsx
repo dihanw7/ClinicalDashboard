@@ -5235,8 +5235,39 @@ function MedStudentsTab({ beds, bedKeys, students, theme, rgb }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW
 // ══════════════════════════════════════════════════════════════════════════════
-function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[] }) {
+// Small glass section filter used inside expanded student/Shadow HO cards.
+// Each card keeps its own selection. Hidden when the card's patients span < 2 sections.
+const ptSectionKey = pt => pt.section || "Unassigned";
+const sortPtsBySection = (pts, sectionOrder=[]) => {
+  const rank = k => { const i = sectionOrder.indexOf(k); return i===-1 ? (k==="Unassigned"?9999:9998) : i; };
+  const bedNum = b => { const n = parseFloat(b); return isNaN(n) ? Infinity : n; };
+  return [...pts].sort((a,b)=>rank(ptSectionKey(a))-rank(ptSectionKey(b)) || bedNum(a.bedNo)-bedNum(b.bedNo) || String(a.bedNo||"").localeCompare(String(b.bedNo||"")) || (a.side||"").localeCompare(b.side||""));
+};
+function MiniSectionFilter({ pts, sectionOrder=[], value, onChange, theme, rgb }) {
+  const keys = [...new Set(sortPtsBySection(pts, sectionOrder).map(ptSectionKey))];
+  if (keys.length<2) return null;
+  return (
+    <div role="group" aria-label="Filter by section" style={{...LG.glass,background:"rgba(255,255,255,0.7)",display:"inline-flex",gap:2,padding:3,borderRadius:999,marginBottom:10,maxWidth:"100%",overflowX:"auto",scrollbarWidth:"none"}}>
+      {["all",...keys].map(k=>{
+        const on = value===k;
+        const n = k==="all" ? pts.length : pts.filter(p=>ptSectionKey(p)===k).length;
+        return (
+          <button key={k} aria-pressed={on} onClick={e=>{e.stopPropagation();onChange(k);}}
+            style={{flex:"0 0 auto",display:"inline-flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:999,border:"none",cursor:"pointer",fontFamily:SF,fontSize:"0.68rem",fontWeight:on?600:500,whiteSpace:"nowrap",
+              background:on?theme:"transparent",color:on?"#fff":C.textSub,boxShadow:on?`0 2px 8px rgba(${rgb},0.3),inset 0 1px 0 rgba(255,255,255,0.35)`:"none",transition:"background 0.2s,color 0.2s"}}>
+            {k==="all"?"All":k}
+            <span style={{fontSize:"0.58rem",fontWeight:700,fontVariantNumeric:"tabular-nums",opacity:on?0.85:0.55}}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[] }) {
   const [open, setOpen] = useState(false);
+  const [secFilter, setSecFilter] = useState("all");
+  const shownPts = sortPtsBySection(pPts, sectionOrder).filter(p=>secFilter==="all"||ptSectionKey(p)===secFilter);
   return (
     <div style={{background:C.surface,border:`1px solid rgba(${rgb},0.18)`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C.shadow}}>
       <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",userSelect:"none"}}>
@@ -5258,8 +5289,10 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
         <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 12px 12px"}}>
           {pPts.length===0
             ? <div style={{fontSize:"0.75rem",color:C.textMuted,padding:"6px 0"}}>No patients assigned</div>
-            : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
-                {pPts.map(pt=>(
+            : <>
+              <MiniSectionFilter pts={pPts} sectionOrder={sectionOrder} value={secFilter} onChange={setSecFilter} theme={theme} rgb={rgb}/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                {shownPts.map(pt=>(
                   <div key={pt.id} onClick={()=>onSelectPt(pt)}
                     style={{background:C.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                     onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
@@ -5280,6 +5313,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
                   </div>
                 ))}
               </div>
+            </>
           }
         </div>
       )}
@@ -5287,8 +5321,9 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
   );
 }
 
-function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, customTags=[] }) {
+function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, customTags=[], sectionOrder=[] }) {
   const [expandedHO, setExpandedHO] = useState(null);
+  const [hoSecFilter, setHoSecFilter] = useState({}); // per-HO section filter
   const activeHOs = shadowHOs.filter(h=>h.name);
   const C2 = C;
   return (
@@ -5297,6 +5332,8 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
       {activeHOs.map(ho=>{
         const hoPts = patients.filter(p=>p.shadowHO===ho.name);
         const isOpen = expandedHO===ho.name;
+        const hoFilter = hoSecFilter[ho.name]||"all";
+        const shownPts = sortPtsBySection(hoPts, sectionOrder).filter(p=>hoFilter==="all"||ptSectionKey(p)===hoFilter);
         return (
           <div key={ho.name} style={{background:C2.surface,border:`1px solid ${C2.border}`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C2.shadow}}>
             <div onClick={()=>setExpandedHO(isOpen?null:ho.name)}
@@ -5314,8 +5351,10 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
               <div style={{borderTop:`1px solid ${C2.border}`,padding:"10px 12px 12px"}}>
                 {hoPts.length===0
                   ? <div style={{fontSize:"0.75rem",color:C2.textMuted,padding:"6px 0"}}>No patients assigned</div>
-                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
-                      {hoPts.map(pt=>(
+                  : <>
+                    <MiniSectionFilter pts={hoPts} sectionOrder={sectionOrder} value={hoFilter} onChange={k=>setHoSecFilter(f=>({...f,[ho.name]:k}))} theme={theme} rgb={rgb}/>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
+                      {shownPts.map(pt=>(
                         <div key={pt.id} onClick={()=>onSelectPt(pt)}
                           style={{background:C2.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
@@ -5336,6 +5375,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                         </div>
                       ))}
                     </div>
+                  </>
                 }
               </div>
             )}
@@ -6038,7 +6078,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div>
             {/* Shadow HO section — expandable */}
             {shadowHOs.filter(h=>h.name).length>0&&(
-              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} onSelectPt={handleTileTap}/>
+              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} sectionOrder={sectionNames} onSelectPt={handleTileTap}/>
             )}
             {pairings.length===0&&activeStudents.length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</p>
@@ -6047,7 +6087,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     const members=(pair.members||[]).filter(Boolean);
                     const pPts=patients.filter(p=>p.pairingIdx===pi);
                     return (
-                      <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts}
+                      <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts} sectionOrder={sectionNames}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
                         onSelectPt={handleTileTap}
