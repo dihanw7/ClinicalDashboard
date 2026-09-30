@@ -5242,11 +5242,12 @@ const ptAddedAt = pt => {
   return /^\d{13}$/.test(String(pt.id||"")) ? Number(pt.id) : null;
 };
 const ADDED_MONTHS = ["Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"];
-// e.g. "Sept 09 · 14:05" (24-hour, device's local time)
+// e.g. "Sept 09 · 2:05 PM" (12-hour, device's local time)
 const addedLabel = pt => {
   const t = ptAddedAt(pt); if (t==null) return "";
   const d = new Date(t), p2 = n => String(n).padStart(2,"0");
-  return `${ADDED_MONTHS[d.getMonth()]} ${p2(d.getDate())} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const h = d.getHours(), h12 = h%12 || 12;
+  return `${ADDED_MONTHS[d.getMonth()]} ${p2(d.getDate())} · ${h12}:${p2(d.getMinutes())} ${h<12?"AM":"PM"}`;
 };
 
 // Small glass section filter used inside expanded student/Shadow HO cards.
