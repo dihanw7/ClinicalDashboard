@@ -5235,6 +5235,17 @@ function MedStudentsTab({ beds, bedKeys, students, theme, rgb }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // SURGERY WARD VIEW
 // ══════════════════════════════════════════════════════════════════════════════
+// When a Surgery patient was added: `addedAt` (ms) for new records, else the
+// Date.now() timestamp that older records used as their id.
+const ptAddedAt = pt => {
+  if (pt.addedAt) { const t = typeof pt.addedAt==="number" ? pt.addedAt : Date.parse(pt.addedAt); if (!isNaN(t)) return t; }
+  return /^\d{13}$/.test(String(pt.id||"")) ? Number(pt.id) : null;
+};
+const addedLabel = pt => {
+  const t = ptAddedAt(pt); if (t==null) return "";
+  const d = new Date(t); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+};
+
 // Small glass section filter used inside expanded student/Shadow HO cards.
 // Each card keeps its own selection. Hidden when the card's patients span < 2 sections.
 const ptSectionKey = pt => pt.section || "Unassigned";
@@ -5984,13 +5995,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
-                            {pLabel&&(
-                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
-                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                              <div style={{flex:1,minWidth:0}}>
+                              {pLabel&&(
+                                <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                                  <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
+                                  {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                                </div>
+                              )}
+                              {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
-                            )}
-                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleDateString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0}}>{addedLabel(pt)}</span>}
+                            </div>
                           </div>
                         );
                       })}
@@ -6046,13 +6062,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
-                            {pLabel&&(
-                              <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
-                                <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
-                                {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                              <div style={{flex:1,minWidth:0}}>
+                              {pLabel&&(
+                                <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
+                                  <span style={{fontSize:"0.52rem",fontWeight:700,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.25)`,borderRadius:999,padding:"1px 6px",color:theme}}>{pLabel}</span>
+                                  {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
+                                </div>
+                              )}
+                              {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
-                            )}
-                            {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleDateString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0}}>{addedLabel(pt)}</span>}
+                            </div>
                           </div>
                         );
                       };
