@@ -5241,9 +5241,12 @@ const ptAddedAt = pt => {
   if (pt.addedAt) { const t = typeof pt.addedAt==="number" ? pt.addedAt : Date.parse(pt.addedAt); if (!isNaN(t)) return t; }
   return /^\d{13}$/.test(String(pt.id||"")) ? Number(pt.id) : null;
 };
+const ADDED_MONTHS = ["Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"];
+// e.g. "Sept 09 · 14:05" (24-hour, device's local time)
 const addedLabel = pt => {
   const t = ptAddedAt(pt); if (t==null) return "";
-  const d = new Date(t); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+  const d = new Date(t), p2 = n => String(n).padStart(2,"0");
+  return `${ADDED_MONTHS[d.getMonth()]} ${p2(d.getDate())} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 };
 
 // Small glass section filter used inside expanded student/Shadow HO cards.
@@ -6005,7 +6008,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               )}
                               {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
-                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleDateString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0}}>{addedLabel(pt)}</span>}
+                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0,whiteSpace:"nowrap"}}>{addedLabel(pt)}</span>}
                             </div>
                           </div>
                         );
@@ -6072,7 +6075,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                               )}
                               {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
-                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleDateString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0}}>{addedLabel(pt)}</span>}
+                              {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0,whiteSpace:"nowrap"}}>{addedLabel(pt)}</span>}
                             </div>
                           </div>
                         );
