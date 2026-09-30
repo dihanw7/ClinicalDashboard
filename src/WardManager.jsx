@@ -5309,7 +5309,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
                 {shownPts.map(pt=>(
                   <div key={pt.id} onClick={()=>onSelectPt(pt)}
-                    style={{background:C.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
+                    style={{background:C.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                     onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
                     onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
                     <div style={{fontSize:"0.55rem",color:C.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section||"Unassigned"}{pt.side&&pt.side!=="single"?` · ${pt.side}`:""}</div>
@@ -5325,6 +5325,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
                         </div>
                       )}
                     </div>
+                    {addedLabel(pt)&&<div title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{marginTop:"auto",paddingTop:6,textAlign:"right",fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,whiteSpace:"nowrap"}}>{addedLabel(pt)}</div>}
                   </div>
                 ))}
               </div>
@@ -5371,7 +5372,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
                       {shownPts.map(pt=>(
                         <div key={pt.id} onClick={()=>onSelectPt(pt)}
-                          style={{background:C2.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
+                          style={{background:C2.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
                           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
                           <div style={{fontSize:"0.55rem",color:C2.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",fontWeight:600,marginBottom:1}}>{pt.section||"Unassigned"}{pt.side&&pt.side!=="single"?` · ${pt.side}`:""}</div>
@@ -5387,6 +5388,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                               </div>
                             )}
                           </div>
+                          {addedLabel(pt)&&<div title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{marginTop:"auto",paddingTop:6,textAlign:"right",fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,whiteSpace:"nowrap"}}>{addedLabel(pt)}</div>}
                         </div>
                       ))}
                     </div>
@@ -5973,7 +5975,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
                           <div key={pt.id} onClick={()=>handleTileTap(pt)}
-                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
+                            style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
@@ -5999,7 +6001,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
-                            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                            <div style={{display:"flex",alignItems:"flex-end",gap:6,marginTop:"auto"}}>
                               <div style={{flex:1,minWidth:0}}>
                               {pLabel&&(
                                 <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
@@ -6036,7 +6038,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
                           <div onClick={()=>handleTileTap(pt)}
-                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.3)`:`0.5px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
+                            style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.3)`:`0.5px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
@@ -6066,7 +6068,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             {pt.consultant&&(()=>{const cObj=consultants.find(c=>(typeof c==="object"?c.name:c)===pt.consultant);const cColor=cObj?.color;return<div style={{fontSize:"0.58rem",color:cColor||C.textSub,display:"flex",alignItems:"center",gap:3,overflow:"hidden",marginBottom:1}}>{cColor&&<span style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pt.consultant}</span></div>;})()} 
                             {pt.diagnosis&&<div style={{fontSize:"0.62rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                             {pt.notes&&<div style={{fontSize:"0.58rem",color:C.textMuted,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",marginBottom:3}}>{pt.notes}</div>}
-                            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                            <div style={{display:"flex",alignItems:"flex-end",gap:6,marginTop:"auto"}}>
                               <div style={{flex:1,minWidth:0}}>
                               {pLabel&&(
                                 <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:3}}>
