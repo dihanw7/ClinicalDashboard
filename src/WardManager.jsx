@@ -539,17 +539,18 @@ function WardCard({ ward, onOpen }) {
   ];
   const linkBtn = (kind, label) => (
     <button onClick={()=>copyLink(kind)} aria-label={`Copy ${label.toLowerCase()}`}
-      style={{display:"flex",alignItems:"center",gap:5,background:copied===kind?`rgba(${rgb},0.12)`:LG.page,border:"none",borderRadius:999,padding:"6px 11px",color:copied===kind?theme:C.textSub,fontSize:"0.7rem",fontWeight:500,cursor:"pointer",fontFamily:SF,transition:"background 0.2s,color 0.2s"}}>
+      style={{display:"inline-flex",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 0",color:copied===kind?C.green:theme,fontSize:"0.72rem",fontWeight:500,cursor:"pointer",fontFamily:SF,whiteSpace:"nowrap"}}>
       {copied===kind
-        ? <Icon name="check" size={11} color={theme}/>
-        : <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+        ? <Icon name="check" size={11} color={C.green}/>
+        : <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
       {copied===kind?"Copied":label}
     </button>
   );
 
+
   return (
     <div onClick={onOpen}
-      style={{...LG.card,padding:"16px 18px 14px",cursor:"pointer",transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s"}}
+      style={{...LG.card,padding:"14px 16px 10px",cursor:"pointer",transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
       onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.card.boxShadow;}}>
       {/* Title block — mirrors the ward screen header. It's the card's keyboard
@@ -567,21 +568,20 @@ function WardCard({ ward, onOpen }) {
         </span>
       </button>
 
-      {/* Stats */}
-      <div style={{display:"flex",gap:8,marginTop:12}}>
-        {stats.map(st=>(
-          <div key={st.label} style={{display:"flex",alignItems:"center",gap:6,flex:1,background:LG.page,borderRadius:14,padding:"8px 12px"}}>
-            <Icon name={st.icon} size={12} color={st.color}/>
-            <span style={{fontSize:"0.82rem",fontWeight:700,color:st.color,fontVariantNumeric:"tabular-nums"}}>{st.val}</span>
-            <span style={{fontSize:"0.66rem",color:C.textMuted}}>{st.label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Share links */}
-      <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
-        {linkBtn("student","Student link")}
-        {linkBtn("senior","Read-only link")}
+      {/* Footer: stats on the left, share links on the right — one quiet line */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",columnGap:16,rowGap:4,marginTop:12,paddingTop:10,borderTop:`0.5px solid rgba(60,60,67,0.15)`}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          {stats.map(st=>(
+            <span key={st.label} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:"0.72rem",color:C.textMuted,whiteSpace:"nowrap"}}>
+              <Icon name={st.icon} size={11} color={st.color}/>
+              <span style={{fontWeight:700,color:st.color,fontVariantNumeric:"tabular-nums"}}>{st.val}</span>{st.label}
+            </span>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:14}} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+          {linkBtn("student","Student link")}
+          {linkBtn("senior","Read-only")}
+        </div>
       </div>
     </div>
   );
