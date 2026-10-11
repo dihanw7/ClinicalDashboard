@@ -106,6 +106,7 @@ const Icon = ({ name, size=14, color="currentColor" }) => {
     plus:     <svg style={s} viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke={color} strokeWidth="1.8" strokeLinecap="round"/></svg>,
     settings: <svg style={s} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.2" stroke={color} strokeWidth="1.4"/><path d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.85.85M11.75 11.75l.85.85M3.4 12.6l.85-.85M11.75 4.25l.85-.85" stroke={color} strokeWidth="1.3" strokeLinecap="round"/></svg>,
     key:      <svg style={s} viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3" stroke={color} strokeWidth="1.5"/><path d="M8.5 9.5l5 5M11 12l1.5-1.5" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>,
+    groups:   <svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-6 6.5-6s5.9 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.3c1.7.9 2.8 2.9 3 5.7"/></svg>,
     gear:     <svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
     login:    <svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>,
     logout:   <svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>,
@@ -432,35 +433,41 @@ export default function App() {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      {/* Header */}
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"14px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div>
-            <div style={{display:"flex",alignItems:"baseline",gap:0}}>
-              <span style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.04em"}}>Clinical</span>
-              <span style={{fontSize:"1rem",fontWeight:300,color:"#007aff",letterSpacing:"-0.02em"}}>Dashboard</span>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,paddingBottom:60,position:"relative",isolation:"isolate"}}>
+      <div aria-hidden="true" style={{position:"absolute",top:0,left:0,right:0,height:420,zIndex:-1,pointerEvents:"none",background:"radial-gradient(70% 60% at 10% 0%,rgba(0,122,255,0.20),transparent 70%),radial-gradient(60% 55% at 95% 8%,rgba(90,200,250,0.20),transparent 70%),radial-gradient(50% 45% at 55% 40%,rgba(175,82,222,0.08),transparent 70%)"}}/>
+      {/* Glass header — same treatment as the ward screens */}
+      <div style={{position:"sticky",top:0,zIndex:50,...LG.bar}}>
+        <div style={{maxWidth:700,margin:"0 auto",padding:"14px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{minWidth:0}}>
+            <div style={{display:"flex",alignItems:"baseline"}}>
+              <span style={{fontSize:"1.45rem",fontWeight:700,color:C.text,letterSpacing:"-0.035em"}}>Clinical</span>
+              <span style={{fontSize:"1.45rem",fontWeight:300,color:"#007aff",letterSpacing:"-0.02em"}}>Dashboard</span>
             </div>
-            <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1}}>{seniorMode ? "Senior view — read only" : "All active wards"}</div>
+            <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{seniorMode ? "Senior view · read only" : "All active wards"}</div>
           </div>
-          {!seniorMode && <div style={{display:"flex",gap:8}}>
+          {!seniorMode && <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <GroupsButton onOpenGroups={()=>setScreen("groups")}/>
             <AdminButton onCreateWard={()=>setScreen("create")}/>
           </div>}
-          {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
+          {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.1)",borderRadius:999,padding:"5px 11px"}}>READ ONLY</span>}
         </div>
       </div>
 
-      <div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px 80px"}}>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"18px 16px 80px"}}>
         {wards.length===0
-          ? <div style={{textAlign:"center",padding:"80px 20px",color:C.textMuted}}>
-              <div style={{marginBottom:12}}><Icon name="ward" size={32} color={C.border}/></div>
-              <div style={{fontSize:"0.9rem"}}>No wards set up yet.</div>
-              <div style={{fontSize:"0.8rem",marginTop:4}}>Use the admin button to create the first ward.</div>
+          ? <div style={{...LG.card,textAlign:"center",padding:"48px 20px",color:C.textMuted}}>
+              <div style={{marginBottom:12}}><Icon name="ward" size={32} color={C.borderMid}/></div>
+              <div style={{fontSize:"0.95rem",fontWeight:600,color:C.text}}>No wards set up yet</div>
+              <div style={{fontSize:"0.8rem",marginTop:4}}>Tap the + button to create the first ward.</div>
             </div>
-          : <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              {[...wards].sort((a,b)=>getWardPatientCount(b)-getWardPatientCount(a)).map(ward => <WardCard key={ward.id} ward={ward} onOpen={()=>{ setActiveWardId(ward.id); setScreen("ward"); pollRef.current=false; }}/>)}
-            </div>
+          : <>
+              <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,margin:"0 2px 10px",display:"flex",justifyContent:"space-between"}}>
+                <span>Wards</span><span style={{fontVariantNumeric:"tabular-nums"}}>{wards.length}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {[...wards].sort((a,b)=>getWardPatientCount(b)-getWardPatientCount(a)).map(ward => <WardCard key={ward.id} ward={ward} onOpen={()=>{ setActiveWardId(ward.id); setScreen("ward"); pollRef.current=false; }}/>)}
+              </div>
+            </>
         }
       </div>
       <BrandingBar theme="#007aff"/>
@@ -515,50 +522,66 @@ function WardCard({ ward, onOpen }) {
   const paedHist = ptHist;
   const paedTotal = patients.filter(p=>p.name||p.patientName).length;
 
-  return (
-    <div onClick={onOpen} style={{background:C.surface,border:`1px solid rgba(0,0,0,0.08)`,borderRadius:18,padding:"18px 18px 14px",cursor:"pointer",boxShadow:"0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)",transition:"transform 0.12s, box-shadow 0.12s",userSelect:"none"}}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px rgba(0,0,0,0.1)";}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)";}}>
-      {/* Top row */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
-        <div>
-          <div style={{fontSize:"1.15rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em",lineHeight:1}}>{setup.wardName||"Unnamed Ward"}</div>
-          <div style={{fontSize:"0.78rem",color:C.textSub,marginTop:3,fontWeight:400}}>{setup.appointmentType||""}</div>
-        </div>
-        <div style={{background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:8,padding:"4px 10px"}}>
-          <span style={{fontSize:"0.7rem",fontWeight:600,color:theme}}>{patientCount} patients</span>
-        </div>
-      </div>
+  const tmplLabel = (WARD_TEMPLATES[setup.template||"default"]||WARD_TEMPLATES.default).label.replace(/\s*\(.*\)$/,"");
+  const [copied, setCopied] = useState(""); // "student" | "senior" — inline confirmation instead of an alert
+  const copyLink = (kind) => {
+    const u = `${window.location.origin}${window.location.pathname}?ward=${ward.id}${kind==="senior"?"&view=senior":""}`;
+    const done = () => { setCopied(kind); setTimeout(()=>setCopied(c=>c===kind?"":c),1600); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(u).then(done).catch(()=>window.prompt("Copy this link:",u));
+    else window.prompt("Copy this link:",u);
+  };
+  const stats = (isPaed||isSurgery||isPsych||isMedicine) ? [
+    { icon:"newdot",  color:C.red,   label:"New",      val:ptNew },
+    { icon:"history", color:C.green, label:"Hx taken", val:`${ptHist}/${patientCount}` },
+  ] : [
+    { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
+    { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
+  ];
+  const linkBtn = (kind, label) => (
+    <button onClick={()=>copyLink(kind)} aria-label={`Copy ${label.toLowerCase()}`}
+      style={{display:"flex",alignItems:"center",gap:5,background:copied===kind?`rgba(${rgb},0.12)`:LG.page,border:"none",borderRadius:999,padding:"6px 11px",color:copied===kind?theme:C.textSub,fontSize:"0.7rem",fontWeight:500,cursor:"pointer",fontFamily:SF,transition:"background 0.2s,color 0.2s"}}>
+      {copied===kind
+        ? <Icon name="check" size={11} color={theme}/>
+        : <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+      {copied===kind?"Copied":label}
+    </button>
+  );
 
-      {/* Stats row */}
-      <div style={{display:"flex",gap:8,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-        {((isPaed||isSurgery||isPsych||isMedicine) ? [
-          { icon:"newdot",  color:C.red,   label:"New",      val:ptNew },
-          { icon:"history", color:C.green, label:"Hx taken", val:`${ptHist}/${patientCount}` },
-        ] : [
-          { icon:"newdot",  color:C.red,   label:"New",      val:newCount },
-          { icon:"history", color:C.green, label:"Hx taken", val:`${histCount}/${assigned}` },
-        ]).map(s=>(
-          <div key={s.label} style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-            <Icon name={s.icon} size={12} color={s.color}/>
-            <span style={{fontSize:"0.72rem",fontWeight:600,color:s.color}}>{s.val}</span>
-            <span style={{fontSize:"0.65rem",color:C.textMuted}}>{s.label}</span>
+  return (
+    <div onClick={onOpen}
+      style={{...LG.card,padding:"16px 18px 14px",cursor:"pointer",transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s"}}
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.card.boxShadow;}}>
+      {/* Title block — mirrors the ward screen header. It's the card's keyboard
+          target: its click bubbles to the card's onClick. */}
+      <button type="button" aria-label={`Open ${setup.wardName||"ward"}${setup.appointmentType?`, ${setup.appointmentType}`:""}`}
+        style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,width:"100%",background:"none",border:"none",padding:0,margin:0,textAlign:"left",font:"inherit",color:"inherit",cursor:"pointer",borderRadius:8,outlineColor:theme}}>
+        <span style={{display:"block",minWidth:0}}>
+          <span style={{display:"block",fontSize:"0.72rem",fontWeight:600,color:theme,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.wardName||"Unnamed Ward"}</span>
+          <span style={{display:"block",fontSize:"1.2rem",fontWeight:600,color:C.text,letterSpacing:"-0.02em",lineHeight:1.2,marginTop:1,textWrap:"balance"}}>{setup.appointmentType||setup.wardName||"Ward"}</span>
+          <span style={{display:"block",fontSize:"0.6rem",color:C.textMuted,marginTop:2,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{tmplLabel}</span>
+        </span>
+        <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          <span style={{fontSize:"0.72rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.12)`,borderRadius:999,padding:"4px 10px",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{patientCount} {patientCount===1?"patient":"patients"}</span>
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" stroke={C.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </span>
+      </button>
+
+      {/* Stats */}
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        {stats.map(st=>(
+          <div key={st.label} style={{display:"flex",alignItems:"center",gap:6,flex:1,background:LG.page,borderRadius:14,padding:"8px 12px"}}>
+            <Icon name={st.icon} size={12} color={st.color}/>
+            <span style={{fontSize:"0.82rem",fontWeight:700,color:st.color,fontVariantNumeric:"tabular-nums"}}>{st.val}</span>
+            <span style={{fontSize:"0.66rem",color:C.textMuted}}>{st.label}</span>
           </div>
         ))}
       </div>
 
       {/* Share links */}
-      <div style={{display:"flex",gap:12,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
-        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}`;navigator.clipboard?.writeText(u).then(()=>alert("Student link copied!")).catch(()=>alert(u));}}
-          style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-          Student link
-        </button>
-        <button onClick={()=>{const u=`${window.location.origin}${window.location.pathname}?ward=${ward.id}&view=senior`;navigator.clipboard?.writeText(u).then(()=>alert("Read-only link copied!")).catch(()=>alert(u));}}
-          style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.textMuted,fontSize:"0.7rem",cursor:"pointer",fontFamily:SF,padding:0}}>
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M9 4.5l1.5-1.5a2.121 2.121 0 013 3L12 7.5M7 11.5l-1.5 1.5a2.121 2.121 0 01-3-3L4 8.5" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-          Read-only link
-        </button>
+      <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+        {linkBtn("student","Student link")}
+        {linkBtn("senior","Read-only link")}
       </div>
     </div>
   );
@@ -577,8 +600,8 @@ function AdminButton({ onCreateWard }) {
 
   return (
     <>
-      <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-        <Icon name="plus" size={12} color={C.textSub}/> New Ward
+      <button onClick={()=>setOpen(true)} title="New ward" aria-label="New ward" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0}}>
+        <Icon name="plus" size={18} color="#007aff"/>
       </button>
       {open && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
@@ -614,8 +637,8 @@ function GroupsButton({ onOpenGroups }) {
 
   return (
     <>
-      <button onClick={()=>setOpen(true)} style={{display:"flex",alignItems:"center",gap:6,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"6px 14px",fontSize:"0.75rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-        <Icon name="user" size={12} color={C.textSub}/> Groups
+      <button onClick={()=>setOpen(true)} title="Student groups" aria-label="Student groups" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0}}>
+        <Icon name="groups" size={18} color={C.textSub}/>
       </button>
       {open && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
