@@ -4450,7 +4450,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
 
   const addPatient = async () => {
-    if (!newPt.patientName.trim()&&!newPt.bht.trim()) { showToast("Enter a name or BHT","error"); return; }
+    const hasBed = !!newPt.isFloor || !!(newPt.section&&newPt.bedNo);
+    if (!newPt.patientName.trim()&&!newPt.bht.trim()&&!(isMed&&hasBed)) { showToast(isMed?"Choose a bed, or enter a name or BHT":"Enter a name or BHT","error"); return; }
     if (newPt.bedNo&&!newPt.isFloor&&!newPt.side&&!isMed) { showToast("Please select a bed side (L or R)","error"); return; }
     const ageStr=[newPt.ageYears&&`${newPt.ageYears}y`,newPt.ageMonths&&`${newPt.ageMonths}m`].filter(Boolean).join(" ");
     const pairingIdx = newPt.pairingIdx!=null ? newPt.pairingIdx : null;
@@ -4581,6 +4582,20 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     bedMap[sec][bed].push(pt);
   });
   const orderedSections = [...new Set([...sectionNames,...Object.keys(bedMap)])].filter(s=>bedMap[s]);
+
+  // Add-patient name/BHT/age fields. Surgery asks for them first; Medicine
+  // leads with bed + students (a bed alone is enough) and lists these after.
+  const addPtNameFields = (
+    <>
+      {isMed&&<div style={{fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,margin:"4px 0 8px"}}>Patient details <span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}>(optional)</span></div>}
+            <div style={{marginBottom:12}}><label style={labelStyle}>BHT</label><input value={newPt.bht} onChange={e=>setNewPt(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/></div>
+            <div style={{marginBottom:12}}><label style={labelStyle}>Patient Name</label><input value={newPt.patientName} onChange={e=>setNewPt(p=>({...p,patientName:e.target.value}))} placeholder="Name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              <div><label style={labelStyle}>Age (years)</label><input type="number" value={newPt.ageYears} onChange={e=>setNewPt(p=>({...p,ageYears:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
+              <div><label style={labelStyle}>Age (months)</label><input type="number" value={newPt.ageMonths} onChange={e=>setNewPt(p=>({...p,ageMonths:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
+            </div>
+    </>
+  );
 
   const selPt = selectedPt ? patients.find(p=>p.id===selectedPt) : null;
   const stats = { total:patients.length, histTaken:patients.filter(p=>p.historyTaken).length, isNew:patients.filter(p=>p.isNew).length };
@@ -5064,17 +5079,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
 
-            {/* BHT + Name */}
-            <div style={{marginBottom:12}}><label style={labelStyle}>BHT</label><input value={newPt.bht} onChange={e=>setNewPt(p=>({...p,bht:e.target.value}))} placeholder="e.g. 123456" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4,fontFamily:"monospace"}}/></div>
-            <div style={{marginBottom:12}}><label style={labelStyle}>Patient Name</label><input value={newPt.patientName} onChange={e=>setNewPt(p=>({...p,patientName:e.target.value}))} placeholder="Name" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-              <div><label style={labelStyle}>Age (years)</label><input type="number" value={newPt.ageYears} onChange={e=>setNewPt(p=>({...p,ageYears:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-              <div><label style={labelStyle}>Age (months)</label><input type="number" value={newPt.ageMonths} onChange={e=>setNewPt(p=>({...p,ageMonths:e.target.value}))} placeholder="0" style={{...iS,width:"100%",boxSizing:"border-box",marginTop:4}}/></div>
-            </div>
+            {!isMed&&addPtNameFields}
 
             {/* Section & Bed — optional */}
             <div style={{marginBottom:16}}>
-              <label style={labelStyle}>Section & Bed <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span></label>
+              <label style={labelStyle}>{isMed?"Bed":"Section & Bed"} {!isMed&&<span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span>}</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:8}}>
                 {sections.map(s=>{
                   const isSel=newPt.section===s.name;
@@ -5220,6 +5229,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               }
             </div>}
 
+            {isMed&&addPtNameFields}
+
             {/* Shadow HO Allocator */}
             {shadowHOs.filter(h=>h.name).length>0&&(
               <div style={{marginBottom:16}}>
@@ -5294,7 +5305,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <p style={{margin:"0 0 16px",fontSize:"0.82rem",color:C.textSub}}>{restoreTarget.pt.patientName||restoreTarget.pt.bht||"Patient"} — choose where to restore them.</p>
 
             <div style={{marginBottom:16}}>
-              <label style={labelStyle}>Section & Bed <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span></label>
+              <label style={labelStyle}>{isMed?"Bed":"Section & Bed"} {!isMed&&<span style={{fontWeight:400,color:C.textMuted,fontSize:"0.72rem"}}>(optional)</span>}</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6,marginBottom:8}}>
                 {sections.map(s=>{
                   const isSel=restoreTarget.section===s.name;
