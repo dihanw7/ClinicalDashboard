@@ -2,13 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>ClinicalDashboard</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      body { -webkit-font-smoothing: antialiased; background: #f5f5f7; }
+      body { -webkit-font-smoothing: antialiased; background: #f2f2f7; -webkit-text-size-adjust: 100%; }
+      * { -webkit-tap-highlight-color: transparent; }
+
+      /* Press feedback: react the instant a finger lands, not on release. */
+      button, .lg-press { transition: transform 120ms ease-out; }
+      button:not(:disabled):active, .lg-press:active { transform: scale(0.97); }
+      div[style*="cursor: pointer"]:active { transform: scale(0.985); }
+      .lg-tile:active { transform: scale(0.97) !important; }
+
+      /* Grow the tap area of small round buttons to at least 44px. */
+      .lg-hit { position: relative; }
+      .lg-hit::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; }
+
+      /* Pinch-zoom is allowed, so stop iOS from auto-zooming into small inputs. */
+      @supports (-webkit-touch-callout: none) {
+        input, select, textarea { font-size: 16px !important; }
+      }
+
+      /* Gentle pulse for "New" (overrides the per-screen definitions). */
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+        button:active, .lg-press:active, .lg-tile:active, div[style*="cursor: pointer"]:active { transform: none !important; }
+      }
     </style>
   </head>
   <body>

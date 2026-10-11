@@ -30,7 +30,7 @@ const setStoredLeaderPin   = (pin) => { try { localStorage.setItem(LEADER_PIN_KE
 const clearStoredLeaderPin = () => { try { localStorage.removeItem(LEADER_PIN_KEY); } catch(e) {} };
 
 const WARD_TEMPLATES = {
-  default:  { label:"Default (Bed-based)",  desc:"Assign students to numbered beds. Used for Gynaecology, Medicine, Obstetrics." },
+  default:  { label:"Default (Bed-based)",  desc:"Assign students to numbered beds. Used for Gynaecology and Obstetrics." },
   medicine: { label:"Medicine",              desc:"Same as Surgery, but beds can hold several patients and students are assigned individually to each patient." },
   surgery:  { label:"Surgery",              desc:"Bed-based with named ward sections (e.g. Elective, Emergency, HDU), Shadow HO banner, and shadow assigned from active Shadow HOs." },
   paed:     { label:"Paediatrics",          desc:"Assign by admission order with patient name/age. Two student groups, ward sections, Shadow HO banner." },
@@ -70,14 +70,25 @@ const C = {
   shadow:"0 1px 4px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06)",
   shadowMd:"0 4px 18px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
 };
-// Liquid Glass materials (Surgery ward). Glass is for floating controls; content cards stay solid.
+// Liquid Glass materials. Glass is for floating controls; content cards stay solid.
+// They adapt to the phone's accessibility settings: Reduce Transparency swaps
+// glass for solid surfaces, Increase Contrast adds defined borders.
+const mqMatch = q => { try { return typeof window!=="undefined" && !!window.matchMedia && window.matchMedia(q).matches; } catch { return false; } };
+const LG_SOLID    = mqMatch("(prefers-reduced-transparency: reduce)");
+const LG_CONTRAST = mqMatch("(prefers-contrast: more)");
+const LG_EDGE     = LG_CONTRAST ? "1px solid rgba(0,0,0,0.45)" : "0.5px solid rgba(0,0,0,0.06)";
 const LG = {
   page:"#f2f2f7",
-  glass:{background:"rgba(255,255,255,0.55)",backdropFilter:"blur(24px) saturate(190%)",WebkitBackdropFilter:"blur(24px) saturate(190%)",border:"0.5px solid rgba(0,0,0,0.06)",boxShadow:"0 8px 28px rgba(30,40,80,0.12),0 1px 2px rgba(30,40,80,0.06),inset 0 1px 0 rgba(255,255,255,0.95)"},
-  bar:{background:"rgba(242,242,247,0.86)",backdropFilter:"blur(28px) saturate(180%)",WebkitBackdropFilter:"blur(28px) saturate(180%)"},
-  card:{background:"#ffffff",borderRadius:22,boxShadow:"0 1px 2px rgba(0,0,0,0.04),0 6px 20px rgba(30,40,80,0.06)"},
+  glass: LG_SOLID
+    ? {background:"#ffffff",border:LG_EDGE,boxShadow:"0 2px 10px rgba(30,40,80,0.10)"}
+    : {background:"rgba(255,255,255,0.55)",backdropFilter:"blur(24px) saturate(190%)",WebkitBackdropFilter:"blur(24px) saturate(190%)",border:LG_EDGE,boxShadow:"0 8px 28px rgba(30,40,80,0.12),0 1px 2px rgba(30,40,80,0.06),inset 0 1px 0 rgba(255,255,255,0.95)"},
+  bar: LG_SOLID
+    ? {background:"#f2f2f7",...(LG_CONTRAST?{borderBottom:LG_EDGE}:{})}
+    : {background:"rgba(242,242,247,0.86)",backdropFilter:"blur(28px) saturate(180%)",WebkitBackdropFilter:"blur(28px) saturate(180%)",...(LG_CONTRAST?{borderBottom:LG_EDGE}:{})},
+  card:{background:"#ffffff",borderRadius:22,boxShadow:"0 1px 2px rgba(0,0,0,0.04),0 6px 20px rgba(30,40,80,0.06)",...(LG_CONTRAST?{border:LG_EDGE}:{})},
   tileShadow:"0 1px 2px rgba(0,0,0,0.04),0 6px 18px rgba(30,40,80,0.07)",
   tileShadowHover:"0 2px 4px rgba(0,0,0,0.05),0 14px 30px rgba(30,40,80,0.12)",
+  scrim:"rgba(0,0,0,0.28)",
 };
 const SF = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif";
 const hexToRgb = h => { const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r?`${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}`:"0,122,255"; };
@@ -129,7 +140,7 @@ const Icon = ({ name, size=14, color="currentColor" }) => {
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 const labelStyle = { fontSize:"0.68rem", color:C.textSub, letterSpacing:"0.04em", textTransform:"uppercase", display:"block", fontWeight:600, fontFamily:SF };
-const iS = { background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"11px 14px", fontSize:"0.88rem", outline:"none", fontFamily:SF, boxShadow:C.shadow };
+const iS = { background:C.surface, border:LG_CONTRAST?LG_EDGE:"1px solid rgba(60,60,67,0.18)", borderRadius:12, color:C.text, padding:"11px 14px", fontSize:"0.88rem", outline:"none", fontFamily:SF };
 const rB = { background:C.surfaceEl, border:`1px solid ${C.border}`, color:C.textMuted, borderRadius:8, padding:"0 12px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", height:42 };
 const aMB = { marginTop:10, background:"none", border:`1px dashed ${C.border}`, color:C.textSub, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontSize:"0.78rem", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:SF };
 const accentBtn = (t,rgb) => ({ background:t, border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:600, fontFamily:SF, boxShadow:`0 4px 14px rgba(${rgb},0.3)` });
@@ -477,6 +488,55 @@ export default function App() {
   );
 }
 
+// ── Shared Liquid Glass chrome (ward headers) ─────────────────────────────────
+function GlassAmbient({ rgb="0,122,255" }) {
+  return <div aria-hidden="true" style={{position:"absolute",top:0,left:0,right:0,height:420,zIndex:-1,pointerEvents:"none",background:`radial-gradient(70% 60% at 10% 0%,rgba(${rgb},0.20),transparent 70%),radial-gradient(60% 55% at 95% 8%,rgba(90,200,250,0.20),transparent 70%),radial-gradient(50% 45% at 55% 40%,rgba(175,82,222,0.08),transparent 70%)`}}/>;
+}
+function GlassIconButton({ icon, label, onClick, color=C.textSub, size=16, dim=40 }) {
+  return (
+    <button onClick={onClick} title={label} aria-label={label} className="lg-hit"
+      style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",width:dim,height:dim,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0}}>
+      <Icon name={icon} size={size} color={color}/>
+    </button>
+  );
+}
+function LeaderBadge({ theme, rgb }) {
+  return <span role="img" aria-label="Leader" title="Leader mode" style={{display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:"50%",background:theme,boxShadow:`0 3px 10px rgba(${rgb},0.35),inset 0 1px 0 rgba(255,255,255,0.35)`,flexShrink:0}}><Icon name="leader" size={17} color="#fff"/></span>;
+}
+function ReadOnlyBadge() {
+  return <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.1)",borderRadius:999,padding:"5px 11px"}}>READ ONLY</span>;
+}
+// Sticky glass header: round back button, ward name / title / template caption,
+// action buttons on the right and a segmented tab control underneath.
+function GlassWardHeader({ onBack, wardName, title, caption, theme, rgb, actions, tabs, activeTab, onTab }) {
+  return (
+    <div style={{position:"sticky",top:0,zIndex:50,...LG.bar}}>
+      <div style={{padding:"12px 16px 8px"}}>
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
+            <div style={{minWidth:0}}>
+              {wardName&&<div style={{fontSize:"0.72rem",fontWeight:600,color:theme,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{wardName}</div>}
+              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</div>
+              {caption&&<div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{caption}</div>}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>{actions}</div>
+        </div>
+      </div>
+      {tabs&&(
+        <div style={{padding:"0 16px 10px"}}>
+          <div role="tablist" style={{...LG.glass,maxWidth:668,margin:"0 auto",display:"flex",gap:2,padding:4,borderRadius:999}}>
+            {tabs.map(t=>(
+              <button key={t.id} role="tab" aria-selected={activeTab===t.id} onClick={()=>onTab(t.id)} style={{flex:1,padding:"8px 0",fontSize:"0.8rem",fontWeight:600,fontFamily:SF,border:"none",borderRadius:999,cursor:"pointer",color:activeTab===t.id?theme:C.textSub,background:activeTab===t.id?"#fff":"transparent",boxShadow:activeTab===t.id?"0 2px 10px rgba(0,0,0,0.1)":"none",transition:"background 0.25s,color 0.25s,box-shadow 0.25s"}}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Patient count helper (used for homepage sort) ─────────────────────────────
 function getWardPatientCount(ward) {
   const setup = ward.setup || {};
@@ -604,7 +664,7 @@ function AdminButton({ onCreateWard }) {
         <Icon name="plus" size={18} color="#007aff"/>
       </button>
       {open && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
               <Icon name="key" size={16} color="#007aff"/>
@@ -641,7 +701,7 @@ function GroupsButton({ onOpenGroups }) {
         <Icon name="groups" size={18} color={C.textSub}/>
       </button>
       {open && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
               <Icon name="key" size={16} color="#007aff"/>
@@ -739,10 +799,10 @@ function GroupsRepoScreen({ onBack, showToast }) {
     const pairings = form.pairings||[];
     const validNames = students.map(s=>s.name?.trim()).filter(Boolean);
     return (
-      <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
-        <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
+      <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF}}>
+        <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0,zIndex:50}}>
           <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>{setEditingId(null);setForm(null);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <GlassIconButton icon="back" label="Back" onClick={()=>{setEditingId(null);setForm(null);}} color={C.text} size={18}/>
             <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>{editingId==="__new__"?"New Group":"Edit Group"}</span>
           </div>
         </div>
@@ -831,11 +891,11 @@ function GroupsRepoScreen({ onBack, showToast }) {
 
   // ── List view ──
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"14px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,paddingBottom:60}}>
+      <div style={{...LG.bar,padding:"14px 18px",position:"sticky",top:0,zIndex:50}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
             <div>
               <div style={{fontSize:"1rem",fontWeight:700,color:C.text}}>Student Groups</div>
               <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1}}>Shared repository — loadable into any ward</div>
@@ -854,7 +914,7 @@ function GroupsRepoScreen({ onBack, showToast }) {
             </div>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {groups.map(g=>(
-                <div key={g.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div key={g.id} style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div>
                     <div style={{fontSize:"0.92rem",fontWeight:600,color:C.text}}>{g.name}</div>
                     <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:2}}>{(g.students||[]).length} students · {(g.pairings||[]).length} pairs</div>
@@ -869,7 +929,7 @@ function GroupsRepoScreen({ onBack, showToast }) {
         }
       </div>
       {showDelete && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Group?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>This only removes it from the repository — wards that already loaded it keep their current roster.</p>
@@ -973,10 +1033,10 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
   const remConsultant = (i) => setForm(f=>({...f,consultants:f.consultants.filter((_,idx)=>idx!==i)}));
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",zIndex:50}}>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,paddingBottom:60}}>
+      <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0,zIndex:50}}>
         <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+          <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
           <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Create New Ward</span>
         </div>
       </div>
@@ -1018,7 +1078,7 @@ function CreateWardScreen({ wards, onSave, showToast, onBack, onCreated }) {
 
         <div style={{marginBottom:22}}>
           <label style={labelStyle}>Accent Colour</label>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px",boxShadow:C.shadow}}>
             <input type="color" value={form.themeColor} onChange={e=>setForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0,background:"none"}}/>
             <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${form.themeColor})`}}/>
             <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{form.themeColor}</span>
@@ -1484,7 +1544,7 @@ function BedViewPanel({ bedNum, bed, sec, setup, theme, rgb, seniorMode, onClose
   const hasAssigned = bed.assigned?.length > 0;
   const hasShadow   = bed.shadows?.length  > 0;
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.22)",zIndex:150,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}
+    <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:150,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{width:"100%",maxHeight:"82vh",display:"flex",flexDirection:"column",background:C.surface,borderRadius:"22px 22px 0 0",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
 
@@ -2003,10 +2063,10 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   // ── Setup view ─────────────────────────────────────────────────────────────
   if (!setup.wardName) return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,paddingBottom:60}}>
+      <div style={{...LG.bar,padding:"12px 18px"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+          <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
           <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Ward Setup</span>
         </div>
       </div>
@@ -2032,11 +2092,11 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   // ── Edit settings overlay ──────────────────────────────────────────────────
   if (editMode) return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+    <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,paddingBottom:60}}>
+      <div style={{...LG.bar,padding:"12px 18px"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+            <GlassIconButton icon="back" label="Back" onClick={()=>setEditMode(false)} color={C.text} size={18}/>
             <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Settings</span>
           </div>
         </div>
@@ -2054,7 +2114,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         </div>
         <SetupForm form={setupForm} setForm={setSetupForm} onSubmit={handleSaveEdit} submitLabel="Save Changes" theme={theme} hideBedsField/>
         {/* Student Group Repository */}
-        <div style={{marginTop:18,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+        <div style={{marginTop:18,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow}}>
           <label style={labelStyle}>Student Group (Repository)</label>
           <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students into this ward. Unlike Surgery, Default wards assign students straight to a bed, not via a shared pairing slot — so this only swaps the roster; existing bed assignments keep their current names until you manually reassign them. Shadow HO post names are cleared on load.</p>
           {groupsRepo.length===0 ? (
@@ -2097,7 +2157,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           }
         </div>
         {/* Randomize & Assign Fairly — run after Save Changes, once the new roster is live */}
-        <div style={{marginTop:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+        <div style={{marginTop:14,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow}}>
           <label style={labelStyle}>Bed Assignments</label>
           <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Clears every bed's current owner & shadow, then redistributes the current roster (Save Changes first if you just loaded a new group) as evenly and randomly as possible. Shadow HOs are skipped. Diagnosis, notes, and history are left untouched.</p>
           <button onClick={()=>setRandomizeConfirm(true)} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",color:"#007aff",borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
@@ -2105,7 +2165,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </button>
         </div>
         {loadGroupConfirm && (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
               <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
               <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
@@ -2119,7 +2179,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         )}
         {randomizeConfirm && (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+          <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
             <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
               <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700,fontSize:"1rem"}}>Randomize All Bed Assignments?</h3>
               <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
@@ -2147,41 +2207,18 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
   // ── Main ward view ─────────────────────────────────────────────────────────
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,"--accent":theme,"--accent-rgb":rgb}}>
-      {/* Header */}
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",color:C.textSub,padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
-            <div>
-              <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text,letterSpacing:"-0.01em"}}>{setup.wardName}</div>
-              <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
-              <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:2,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{WARD_TEMPLATES[setup.template||"default"]?.label||"Default"}</div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {!seniorMode && (isLeader
-              ? <>
-                  <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20,letterSpacing:"0.04em"}}>LEADER</span>
-                  <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out"
-                    style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-                    Log out
-                  </button>
-                </>
-              : <button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>
-                  <Icon name="key" size={12} color={C.textSub}/> Login
-                </button>
-            )}
-            {seniorMode && <span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader && !seniorMode && !cleanupMode && <button onClick={()=>{setCleanupMode(true);setCleanupSelected([]);}} title="House-cleaning: select beds to clear & delete"
-              style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
-              <Icon name="trash" size={14} color={C.textMuted}/>
-            </button>}
-            {isLeader && !seniorMode && cleanupMode && <button onClick={exitCleanupMode}
-              style={{display:"flex",alignItems:"center",gap:5,background:C.red,border:"none",color:"#fff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>
-              <Icon name="close" size={11} color="#fff"/> Exit Clean-Up
-            </button>}
-            {isLeader && !seniorMode && !cleanupMode && <button onClick={()=>{
+    <div style={{minHeight:"100vh",background:LG.page,position:"relative",isolation:"isolate",fontFamily:SF,"--accent":theme,"--accent-rgb":rgb}}>
+      <GlassAmbient rgb={rgb}/>
+      <GlassWardHeader onBack={onBack} wardName={setup.wardName} title={setup.appointmentType||setup.wardName} caption={(WARD_TEMPLATES[setup.template||"default"]?.label||"Default").replace(/\s*\(.*\)$/,"")} theme={theme} rgb={rgb}
+        tabs={[{id:"ward",label:"Ward"},...(!seniorMode?[{id:"students",label:"Students"}]:[]),{id:"archive",label:"Archive"}]} activeTab={activeTab} onTab={setActiveTab}
+        actions={<>
+          {!seniorMode&&(isLeader
+            ?<><LeaderBadge theme={theme} rgb={rgb}/><GlassIconButton icon="logout" label="Log out" onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}}/></>
+            :<GlassIconButton icon="login" label="Leader login" color={C.text} onClick={()=>setShowPin(true)}/>)}
+          {seniorMode&&<ReadOnlyBadge/>}
+          {isLeader&&!seniorMode&&!cleanupMode&&<GlassIconButton icon="trash" label="House-cleaning: select beds to clear & delete" onClick={()=>{setCleanupMode(true);setCleanupSelected([]);}}/>}
+          {isLeader&&!seniorMode&&cleanupMode&&<button onClick={exitCleanupMode} style={{display:"flex",alignItems:"center",gap:5,background:C.red,border:"none",color:"#fff",borderRadius:999,padding:"0 14px",height:40,fontSize:"0.75rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}><Icon name="close" size={11} color="#fff"/> Exit Clean-Up</button>}
+          {isLeader&&!seniorMode&&!cleanupMode&&<GlassIconButton icon="gear" label="Edit ward" onClick={()=>{
               setEditMode(true);
               setSetupForm({
                 wardName: setup.wardName||"",
@@ -2197,36 +2234,21 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 customTags: (setup.customTags?.length ? setup.customTags : [{label:"Pre-op",color:"#f97316"},{label:"Post-op",color:"#0ea5e9"}]).map(t=>({...t})),
               });
               ensureGroupsRepoLoaded();
-            }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}>
-              <Icon name="settings" size={14} color={C.textMuted}/>
-            </button>}
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"57px",zIndex:49,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",padding:"0 16px"}}>
-          {[{id:"ward",label:"Ward"},...(!seniorMode?[{id:"students",label:"Students"}]:[]),{id:"archive",label:"Archive"}].map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{padding:"11px 16px",fontSize:"0.8rem",fontWeight:500,fontFamily:SF,background:"none",border:"none",cursor:"pointer",color:activeTab===t.id?theme:C.textMuted,borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",marginBottom:"-1px",transition:"color 0.15s",letterSpacing:"-0.01em"}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+            }}/>}
+        </>}/>
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px 100px"}}>
         {activeTab==="ward" && <>
           {/* Shadow HO Banner */}
           {shadowHOs.length>0 && (
-            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+            <div style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                 <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · {setup.rotationDays||7}-day rotation</span>
                 {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {shadowHOs.map((ho,i)=>(
-                  <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                  <div key={i} style={{flex:1,minWidth:100,background:LG.page,border:"none",borderRadius:14,padding:"9px 12px"}}>
                     <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
                     <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
                   </div>
@@ -2241,7 +2263,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               { label:"Histories Taken",icon:"history", color:C.green, value:`${stats.historyTaken}/${stats.totalAssigned}` },
               { label:"Floor",          icon:"floor",   color:theme,   value:String(stats.floor) },
             ].map(s=>(
-              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)"}}>
+              <div key={s.label} style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)"}}>
                 <div style={{display:"flex",justifyContent:"center",marginBottom:5}}><Icon name={s.icon} size={14} color={s.color}/></div>
                 <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.value}</div>
                 <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
@@ -2346,12 +2368,12 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
           {/* Section filter pills — deduplicated by name */}
           {sections.length>0 && (
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            <div style={{...LG.glass,background:"rgba(255,255,255,0.78)",display:"flex",gap:2,padding:4,borderRadius:999,marginBottom:16,overflowX:"auto",scrollbarWidth:"none"}}>
               {["all",...[...new Set(sections.map(s=>s.name))],...(stats.floor>0?["floor"]:[])].map(sec=>(
                 <button key={sec} onClick={()=>setSectionFilter(sec)}
-                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===sec?600:400,cursor:"pointer",fontFamily:SF,
-                    background:sectionFilter===sec?theme:C.surface,
-                    border:`1px solid ${sectionFilter===sec?theme:C.border}`,
+                  style={{flex:"1 0 auto",whiteSpace:"nowrap",padding:"8px 12px",borderRadius:999,fontSize:"0.76rem",fontWeight:sectionFilter===sec?600:500,cursor:"pointer",fontFamily:SF,transition:"background 0.25s,color 0.25s",
+                    background:sectionFilter===sec?theme:"transparent",
+                    border:"none",
                     color:sectionFilter===sec?"#fff":C.textSub}}>
                   {sec==="all"?"All Beds":sec==="floor"?"Floor":sec}
                 </button>
@@ -2454,7 +2476,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Bed sheet */}
       {!seniorMode && view==="bed" && selectedBed && selBed && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);setShowClearConfirm(false);setShowChangeBed(false);}}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setView("home");setSelectedBed(null);setShowClearConfirm(false);setShowChangeBed(false);}}}>
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 22px"}}/>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
@@ -2675,7 +2697,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Shadow HO edit modal */}
       {shadowEditing && shadowForm && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShadowEditing(false)}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShadowEditing(false)}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"60vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 14px",color:C.text,fontWeight:600}}>Update Shadow HO Posts</h3>
@@ -2699,7 +2721,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Pin modal */}
       {showPin && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><Icon name="key" size={16} color={theme}/><h3 style={{margin:0,color:C.text,fontSize:"1.1rem",fontWeight:600}}>Leader Access</h3></div>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.84rem"}}>Enter your group leader PIN.</p>
@@ -2715,7 +2737,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Reset confirm */}
       {showReset && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600}}>Start New Rotation?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.84rem"}}>Clears all patient data. Cannot be undone.</p>
@@ -2728,7 +2750,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       )}
 
       {showDelete && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
             <p style={{margin:"0 0 4px",color:C.text,fontSize:"0.88rem",fontWeight:500}}>{setup.wardName}</p>
@@ -2743,7 +2765,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Add Patient modal — name/BHT + action buttons */}
       {showAddPatient && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}}
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}}
           onClick={e=>{ if(e.target===e.currentTarget){ if(addPtSubView){setAddPtSubView(null);}else{setShowAddPatient(false);} } }}>
 
           {/* ── Main sheet ── */}
@@ -3044,7 +3066,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Assign unassigned patient — bed + floor picker sheet */}
       {assigningPatient && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}} onClick={e=>e.target===e.currentTarget&&setAssigningPatient(null)}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(5px)"}} onClick={e=>e.target===e.currentTarget&&setAssigningPatient(null)}>
           <div style={{width:"100%",maxHeight:"82vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 48px",boxShadow:"0 -4px 40px rgba(0,0,0,0.13)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
 
@@ -3155,7 +3177,7 @@ function DefaultWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* House-cleaning delete confirmation */}
       {showCleanupConfirm && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete {cleanupSelected.length} bed{cleanupSelected.length>1?"s":""}?</h3>
             <p style={{margin:"0 0 12px",color:C.textSub,fontSize:"0.82rem"}}>All patient data for the selected bed{cleanupSelected.length>1?"s":""} will be cleared and the bed slot{cleanupSelected.length>1?"s":""} permanently removed from the ward.</p>
@@ -3239,7 +3261,7 @@ function SetupForm({ form, setForm, onSubmit, submitLabel, theme, hideBedsField 
       </div>
       <div style={{marginBottom:24}}>
         <label style={labelStyle}>Accent Colour</label>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px",boxShadow:C.shadow}}>
           <input type="color" value={form.themeColor} onChange={e=>setForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0,background:"none"}}/>
           <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${form.themeColor})`}}/>
           <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{form.themeColor}</span>
@@ -3850,7 +3872,7 @@ function AssignModal({ bedNum, students, currentAssigned, currentShadows, shadow
   };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"82vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.1)"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
         <h3 style={{margin:"0 0 4px",color:C.text,fontSize:"1.05rem",fontWeight:600}}>Assign Students — Bed {bedNum}</h3>
@@ -4065,7 +4087,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
               <MiniSectionFilter pts={pPts} sectionOrder={sectionOrder} value={secFilter} onChange={setSecFilter} theme={theme} rgb={rgb}/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
                 {shownPts.map(pt=>(
-                  <div key={pt.id} onClick={()=>onSelectPt(pt)}
+                  <div key={pt.id} className="lg-tile" onClick={()=>onSelectPt(pt)}
                     style={{background:C.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                     onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
                     onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
@@ -4128,7 +4150,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                     <MiniSectionFilter pts={hoPts} sectionOrder={sectionOrder} value={hoFilter} onChange={k=>setHoSecFilter(f=>({...f,[ho.name]:k}))} theme={theme} rgb={rgb}/>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:10}}>
                       {shownPts.map(pt=>(
-                        <div key={pt.id} onClick={()=>onSelectPt(pt)}
+                        <div key={pt.id} className="lg-tile" onClick={()=>onSelectPt(pt)}
                           style={{background:C2.surfaceEl,border:pt.historyTaken?`1px solid rgba(52,199,89,0.25)`:`1px solid rgba(0,0,0,0.08)`,borderRadius:12,padding:"10px 10px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",transition:"transform 0.12s"}}
                           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
                           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}>
@@ -4570,7 +4592,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       <div style={{padding:"12px 16px 8px"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} aria-label="Back" style={{...LG.glass,width:40,height:40,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.text}/></button>
+            <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
             <div>
               <div style={{fontSize:"0.72rem",fontWeight:600,color:theme}}>{setup.wardName}</div>
               <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
@@ -4580,13 +4602,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {!seniorMode&&(isLeader
               ?<>
-                <span role="img" aria-label="Leader" title="Leader mode" style={{display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36,borderRadius:"50%",background:theme,boxShadow:`0 3px 10px rgba(${rgb},0.35),inset 0 1px 0 rgba(255,255,255,0.35)`,flexShrink:0}}><Icon name="leader" size={17} color="#fff"/></span>
-                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" aria-label="Log out" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0}}><Icon name="logout" size={16} color={C.textSub}/></button>
+                <LeaderBadge theme={theme} rgb={rgb}/>
+                <GlassIconButton icon="logout" label="Log out" onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}}/>
               </>
-              :<button onClick={()=>setShowPin(true)} title="Leader login" aria-label="Leader login" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0}}><Icon name="login" size={16} color={C.text}/></button>
+              :<GlassIconButton icon="login" label="Leader login" color={C.text} onClick={()=>setShowPin(true)}/>
             )}
-            {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} title="Edit ward" aria-label="Edit ward" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,borderRadius:"50%",width:36,height:36,padding:0,cursor:"pointer",flexShrink:0}}><Icon name="gear" size={17} color={C.textSub}/></button>}
+            {seniorMode&&<ReadOnlyBadge/>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} title="Edit ward" aria-label="Edit ward" className="lg-hit" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,borderRadius:"50%",width:40,height:40,padding:0,cursor:"pointer",flexShrink:0}}><Icon name="gear" size={17} color={C.textSub}/></button>}
           </div>
         </div>
       </div>
@@ -4802,7 +4824,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel=getPairingLabel(pt.pairingIdx);
                         const filled=pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div key={pt.id} onClick={()=>handleTileTap(pt)}
+                          <div key={pt.id} className="lg-tile" onClick={()=>handleTileTap(pt)}
                             style={{background:C.surface,border:`1px dashed ${C.borderMid}`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
@@ -4870,7 +4892,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         const pLabel = getPairingLabel(pt.pairingIdx);
                         const filled = pt.diagnosis||pt.consultant||pt.patientName;
                         return (
-                          <div onClick={()=>handleTileTap(pt)}
+                          <div className="lg-tile" onClick={()=>handleTileTap(pt)}
                             style={{background:C.surface,border:pt.historyTaken?`1px solid rgba(${hexToRgb(C.green)},0.3)`:`0.5px solid rgba(0,0,0,${filled?0.1:0.07})`,borderRadius:18,padding:"12px 11px",cursor:"pointer",position:"relative",display:"flex",flexDirection:"column",boxShadow:LG.tileShadow,transition:"transform 0.25s cubic-bezier(.3,1.5,.5,1),box-shadow 0.2s",userSelect:"none"}}
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
@@ -4971,7 +4993,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     );
                   })}
                   {activeStudents.filter(s=>!pairings.some(p=>(p.members||[]).includes(s.name))).map(s=>(
-                    <div key={s.name} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",marginBottom:8,boxShadow:C.shadow}}>
+                    <div key={s.name} style={{background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px",marginBottom:8,boxShadow:C.shadow}}>
                       <span style={{fontWeight:600,color:C.text,fontSize:"0.88rem"}}>{s.name}</span>
                       <span style={{fontSize:"0.68rem",color:C.textMuted,marginLeft:8}}>Not in any pairing</span>
                     </div>
@@ -5008,7 +5030,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   <div key={wk} style={{marginBottom:20}}>
                     <div style={{fontSize:"0.65rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>{wk}</div>
                     {entries.map(([id,pt])=>(
-                      <div key={id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:C.shadow}}>
+                      <div key={id} style={{background:C.surface,border:LG_EDGE,borderRadius:16,padding:"12px 14px",marginBottom:8,boxShadow:C.shadow}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                           <div>
                             <span style={{fontWeight:600,color:C.text,fontSize:"0.9rem"}}>{pt.patientName||"Patient"}</span>
@@ -5037,7 +5059,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Add Patient modal */}
       {showAddPt&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
@@ -5265,7 +5287,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Restore Patient modal */}
       {restoreTarget&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Restore Patient</h3>
@@ -5387,24 +5409,22 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         );
         return (
-          <div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",fontFamily:SF}}>
-            <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+          <div style={{position:"fixed",inset:0,background:LG.page,zIndex:100,overflowY:"auto",fontFamily:SF}}>
+            <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0}}>
               <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,overflow:"hidden",minWidth:0,flex:1}}>
-                  <button onClick={()=>setViewingPtId(null)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0,flexShrink:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+                <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
+                  <GlassIconButton icon="back" label="Back" onClick={()=>setViewingPtId(null)} color={C.text} size={18}/>
                   <span style={{fontWeight:700,color:theme,fontSize:"1.1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{viewPt.patientName||viewPt.bht||"Patient"}</span>
                 </div>
                 {!seniorMode&&(
-                  <button onClick={()=>openEditFromView(viewPt)} title="Edit" style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:theme,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow,flexShrink:0,padding:0}}>
-                    <Icon name="edit" size={14} color={theme}/>
-                  </button>
+                  <GlassIconButton icon="edit" label="Edit patient" color={theme} onClick={()=>openEditFromView(viewPt)}/>
                 )}
               </div>
             </div>
 
             <div style={{maxWidth:560,margin:"0 auto",padding:"20px 18px 60px"}}>
               {/* Headline card: bed/section, name, age, status */}
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:18,boxShadow:C.shadow}}>
+              <div style={{background:C.surface,border:LG_EDGE,borderRadius:16,padding:"16px 18px",marginBottom:18,boxShadow:C.shadow}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
                   <span style={{fontSize:"0.66rem",color:C.textMuted,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700}}>
                     {viewPt.isFloor?"Floor":(viewPt.section||"Unassigned")}{viewPt.side&&viewPt.side!=="single"?` · ${viewPt.side}`:""}
@@ -5480,14 +5500,14 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Patient edit sheet */}
       {selectedPt&&selPt&&(
-        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:100,overflowY:"auto",fontFamily:SF}}>
-          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.page,zIndex:100,overflowY:"auto",fontFamily:SF}}>
+          <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0}}>
             <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <button onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);setSideConflict(null);}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+                <GlassIconButton icon="back" label="Back" onClick={()=>{setSelectedPt(null);setShowClearConfirm(false);setSideConflict(null);}} color={C.text} size={18}/>
                 <span style={{fontWeight:700,color:theme,fontSize:"1.1rem"}}>{selPt.patientName||selPt.bht||"Patient"}</span>
               </div>
-              {!seniorMode&&<button onClick={()=>archivePatient(selectedPt)} style={{fontSize:"0.72rem",color:C.textSub,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:SF}}>Archive</button>}
+              {!seniorMode&&<button onClick={()=>archivePatient(selectedPt)} style={{...LG.glass,fontSize:"0.78rem",fontWeight:600,color:C.textSub,borderRadius:999,padding:"0 16px",height:40,cursor:"pointer",fontFamily:SF}}>Archive</button>}
             </div>
           </div>
           <div style={{maxWidth:560,margin:"0 auto",padding:"20px 18px 100px"}}>
@@ -5849,7 +5869,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Pairing switch confirmation */}
       {switchConfirm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Switch Pairing?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
@@ -5869,7 +5889,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Shadow HO step 1 */}
       {shadowEditing&&shadowForm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShadowEditing(false)}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&setShadowEditing(false)}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"70vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Update Shadow HO Posts</h3>
@@ -5893,7 +5913,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Shadow HO step 2 */}
       {shadowReplaceStep&&pendingShadowForm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:310,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:310,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Pairing Replacement</h3>
@@ -5956,7 +5976,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* PIN */}
       {showPin&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}} onClick={e=>e.target===e.currentTarget&&setShowPin(false)}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}} onClick={e=>e.target===e.currentTarget&&setShowPin(false)}>
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 14px",color:C.text,fontWeight:600}}>Leader Login</h3>
@@ -5972,7 +5992,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Reset */}
       {showReset&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600}}>Start New Rotation?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.84rem"}}>Clears all patients. Cannot be undone.</p>
@@ -5986,7 +6006,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Delete */}
       {showDelete&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>Permanently removes this ward and all data.</p>
@@ -6000,10 +6020,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Edit settings */}
       {editMode&&(
-        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
-          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.page,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0}}>
             <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-              <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+              <GlassIconButton icon="back" label="Back" onClick={()=>setEditMode(false)} color={C.text} size={18}/>
               <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
             </div>
           </div>
@@ -6012,13 +6032,13 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={setupForm.appointmentType||""} onChange={e=>setSetupForm(f=>({...f,appointmentType:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
             <div style={{marginBottom:22}}>
               <label style={labelStyle}>Accent Colour</label>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px"}}>
                 <input type="color" value={setupForm.themeColor||"#007aff"} onChange={e=>setSetupForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
                 <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${setupForm.themeColor||"#007aff"})`}}/>
               </div>
             </div>
             {/* Student Group Repository — swap the whole roster/pairs in one go */}
-            <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+            <div style={{marginBottom:22,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow}}>
               <label style={labelStyle}>Student Group (Repository)</label>
               <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Load a saved group's students & pairs into this ward. Existing patients keep their bed and pairing slot, and will automatically show the new group's students. Shadow HO post names are cleared on load — reassign them fresh afterward via the normal Shadow HO flow. Handy when handing this ward off to a new batch (e.g. swapping Male/Female Surgery groups).</p>
               {groupsRepo.length===0 ? (
@@ -6061,7 +6081,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               }
             </div>
             {isMed&&(
-              <div style={{marginBottom:22,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow}}>
+              <div style={{marginBottom:22,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow}}>
                 <label style={labelStyle}>Student Assignments</label>
                 <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 10px"}}>Replaces every patient's assigned students with one student each from the saved roster, spread as evenly as possible. Save Changes first if you just edited the roster. Shadow HOs aren't changed.</p>
                 <button onClick={()=>setMedRandomizeConfirm(true)} style={{display:"flex",alignItems:"center",gap:6,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.2)`,color:theme,borderRadius:10,padding:"9px 16px",fontSize:"0.8rem",fontWeight:600,cursor:"pointer",fontFamily:SF}}>Randomize &amp; Assign Fairly</button>
@@ -6096,7 +6116,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       )}
 
       {medRandomizeConfirm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:310,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:310,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700,fontSize:"1rem"}}>Reassign all students?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>Every patient gets one student from the roster at random, balanced as evenly as possible. Current assignments are replaced and this can't be undone. Diagnosis, notes and history stay as they are.</p>
@@ -6110,7 +6130,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
       {/* Load-group confirmation */}
       {loadGroupConfirm && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"24px 22px",width:"100%",maxWidth:340,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.text,fontWeight:600,fontSize:"1rem"}}>Load "{loadGroupConfirm.name}"?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem",lineHeight:1.5}}>
@@ -6295,28 +6315,16 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
   const openPt = (pt) => { setSelectedPt(pt.id); setPtEdit({name:pt.name||"",ageYears:pt.age?.match(/(\d+)y/)?.[1]||"",ageMonths:pt.age?.match(/(\d+)m/)?.[1]||"",consultant:pt.consultant||"",diagnosis:pt.diagnosis||"",notes:pt.notes||"",historyTaken:!!pt.historyTaken,isNew:!!pt.isNew,section:pt.section||"",bedNo:pt.bedNo||"",opStatus:pt.opStatus||""}); };
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF}}>
-      {/* Header */}
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
-            <div>
-              <div style={{fontSize:"0.72rem",fontWeight:600,color:C.text}}>{setup.wardName}</div>
-              <div style={{fontSize:"1.2rem",color:C.textSub,marginTop:-4,fontWeight:400,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
-              <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>Paediatrics</div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {!seniorMode&&(isLeader
-              ?<>
-                <span style={{background:theme,color:"#fff",fontSize:"0.62rem",fontWeight:600,padding:"4px 10px",borderRadius:20}}>LEADER</span>
-                <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out" style={{display:"flex",alignItems:"center",gap:4,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:20,padding:"5px 10px",fontSize:"0.68rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}>Log out</button>
-              </>
-              :<button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:20,padding:"5px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,boxShadow:C.shadow}}><Icon name="key" size={12} color={C.textSub}/> Login</button>
-            )}
-            {seniorMode&&<span style={{fontSize:"0.62rem",fontWeight:600,color:"#007aff",background:"rgba(0,122,255,0.08)",border:"1px solid rgba(0,122,255,0.2)",borderRadius:20,padding:"4px 10px"}}>READ ONLY</span>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{
+    <div style={{minHeight:"100vh",background:LG.page,position:"relative",isolation:"isolate",fontFamily:SF}}>
+      <GlassAmbient rgb={rgb}/>
+      <GlassWardHeader onBack={onBack} wardName={setup.wardName} title={setup.appointmentType||setup.wardName} caption="Paediatrics" theme={theme} rgb={rgb}
+        tabs={[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}]} activeTab={activeTab} onTab={setActiveTab}
+        actions={<>
+          {!seniorMode&&(isLeader
+            ?<><LeaderBadge theme={theme} rgb={rgb}/><GlassIconButton icon="logout" label="Log out" onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}}/></>
+            :<GlassIconButton icon="login" label="Leader login" color={C.text} onClick={()=>setShowPin(true)}/>)}
+          {seniorMode&&<ReadOnlyBadge/>}
+          {isLeader&&!seniorMode&&<GlassIconButton icon="gear" label="Edit ward" onClick={()=>{
               setEditForm({
                 wardName: setup.wardName||"",
                 appointmentType: setup.appointmentType||"",
@@ -6327,38 +6335,21 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
                 consultants: (setup.consultants||[{name:"",color:"#6366f1"}]).map(c=>({...c})),
               });
               setEditMode(true);
-            }} style={{display:"flex",alignItems:"center",justifyContent:"center",background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:50,width:32,height:32,cursor:"pointer",boxShadow:C.shadow}}><Icon name="settings" size={14} color={C.textMuted}/></button>}
-          </div>
-        </div>
-      </div>
-
-      {/* Tab bar */}
-      <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(245,245,247,0.88)",position:"sticky",top:"53px",zIndex:49,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",padding:"0 16px"}}>
-          {[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}].map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{padding:"11px 16px",fontSize:"0.8rem",fontWeight:500,fontFamily:SF,background:"none",border:"none",cursor:"pointer",
-                color:activeTab===t.id?theme:C.textMuted,
-                borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",
-                marginBottom:"-1px",transition:"color 0.15s",letterSpacing:"-0.01em"}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+            }}/>}
+        </>}/>
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 100px"}}>
         {activeTab==="ward" && <>
 
           {/* Shadow HO Banner */}
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+          <div style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
               <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Shadow HO Posts · 3-day rotation</span>
               {isLeader&&!seniorMode&&<button onClick={()=>{setShadowForm(shadowHOs.map(h=>({...h})));setShadowEditing(true);}} style={{background:"none",border:"none",color:theme,fontSize:"0.72rem",cursor:"pointer",fontFamily:SF,fontWeight:500}}>Edit</button>}
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {shadowHOs.map((ho,i)=>(
-                <div key={i} style={{flex:1,minWidth:100,background:C.surfaceEl,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
+                <div key={i} style={{flex:1,minWidth:100,background:LG.page,border:"none",borderRadius:14,padding:"9px 12px"}}>
                   <div style={{fontSize:"0.6rem",color:C.textMuted,fontWeight:500,marginBottom:2}}>{ho.post}</div>
                   <div style={{fontSize:"0.82rem",fontWeight:600,color:ho.name?C.text:C.textMuted}}>{ho.name||"Unassigned"}</div>
                 </div>
@@ -6371,7 +6362,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             const shadowHONames = new Set((shadowHOs||[]).map(h=>h.name).filter(Boolean));
             const absentCount = absentStudents.length;
             return (
-              <div style={{background:C.surface,border:`1px solid ${absentCount>0?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+              <div style={{background:C.surface,border:absentCount>0?`1px solid rgba(${hexToRgb(C.red)},0.3)`:LG_EDGE,borderRadius:20,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setAbsentExpanded(e=>!e)}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:"0.65rem",fontWeight:600,color:absentCount>0?C.red:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Absent Students</span>
@@ -6453,7 +6444,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
               {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
               {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
             ].map(s=>(
-              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+              <div key={s.label} style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
                 <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
                 <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
               </div>
@@ -6462,16 +6453,16 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
           {/* Section filter pills */}
           {sections.length>0 && (
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            <div style={{...LG.glass,background:"rgba(255,255,255,0.78)",display:"flex",gap:2,padding:4,borderRadius:999,marginBottom:16,overflowX:"auto",scrollbarWidth:"none"}}>
               {[
                 {id:"all",      label:"All"},
                 ...sections.map(s=>({id:s.name, label:s.name})),
                 {id:"unassigned", label:`Unassigned${unassignedPatients.length>0?" ("+unassignedPatients.length+")":""}`},
               ].map(f=>(
                 <button key={f.id} onClick={()=>setSectionFilter(f.id)}
-                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===f.id?600:400,cursor:"pointer",fontFamily:SF,
-                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.surface,
-                    border:`1px solid ${sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.border}`,
+                  style={{flex:"1 0 auto",whiteSpace:"nowrap",padding:"8px 12px",borderRadius:999,fontSize:"0.76rem",fontWeight:sectionFilter===f.id?600:500,cursor:"pointer",fontFamily:SF,transition:"background 0.25s,color 0.25s",
+                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):"transparent",
+                    border:"none",
                     color:sectionFilter===f.id?"#fff":C.textSub}}>
                   {f.label}
                 </button>
@@ -6556,7 +6547,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Patient detail sheet */}
       {selectedPt&&selPt&&!seniorMode&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
@@ -6685,7 +6676,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
       {showAddPt&&(()=>{
         const preview = newPt.autoAssign ? computeAutoAssign(patients) : null;
         return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:"20px 20px 0 0",padding:"10px 22px 44px",width:"100%",boxShadow:C.shadowMd,maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
@@ -6802,7 +6793,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Shadow HO edit */}
       {shadowEditing&&shadowForm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:20,padding:"26px 22px",width:"100%",maxWidth:380,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
             <h3 style={{margin:"0 0 14px",color:C.text,fontWeight:600}}>Shadow HO Posts</h3>
             {shadowForm.map((ho,i)=>(
@@ -6829,7 +6820,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* PIN modal */}
       {showPin&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><Icon name="key" size={16} color={theme}/><h3 style={{margin:0,color:C.text,fontWeight:600}}>Leader Access</h3></div>
             <input type="password" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="PIN"
@@ -6845,7 +6836,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Delete confirm */}
       {showDelete&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>Permanently removes this ward and all patient data.</p>
@@ -6859,10 +6850,10 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
 
       {/* Edit settings */}
       {editMode&&(
-        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
-          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.page,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0}}>
             <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-              <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+              <GlassIconButton icon="back" label="Back" onClick={()=>setEditMode(false)} color={C.text} size={18}/>
               <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
             </div>
           </div>
@@ -6872,7 +6863,7 @@ function PaedWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, sen
             <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={editForm.appointmentType} onChange={e=>setEditForm(f=>({...f,appointmentType:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
             <div style={{marginBottom:22}}>
               <label style={labelStyle}>Accent Colour</label>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px",boxShadow:C.shadow}}>
                 <input type="color" value={editForm.themeColor} onChange={e=>setEditForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
                 <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${editForm.themeColor})`}}/>
                 <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{editForm.themeColor}</span>
@@ -7378,7 +7369,7 @@ function PaedAssignModal({ patient, groups, allStudents, theme, rgb, onConfirm, 
   );
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
         <h3 style={{margin:"0 0 4px",color:C.text,fontWeight:600}}>Assign — {patient?.name}</h3>
@@ -7952,29 +7943,16 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
   const getPairingLabel = (idx) => idx!=null && pairings[idx] ? `P${idx+1}` : null;
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:SF,paddingBottom:60}}>
-      {/* Header */}
-      <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={20} color={C.textSub}/></button>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:"1rem",fontWeight:700,color:C.text,letterSpacing:"-0.03em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.wardName||"Psychiatry Ward"}</div>
-            <div style={{fontSize:"0.68rem",color:C.textMuted,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.appointmentType||""}</div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {!seniorMode&&!isLeader&&(
-              <button onClick={()=>setShowPin(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
-                <Icon name="key" size={11} color={C.textSub}/> Leader
-              </button>
-            )}
-            {isLeader&&!seniorMode&&(
-              <button onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}} title="Log out"
-                style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,color:C.textMuted,borderRadius:10,padding:"6px 12px",fontSize:"0.72rem",cursor:"pointer",fontFamily:SF}}>
-                Log out
-              </button>
-            )}
-            {isLeader&&!seniorMode&&(
-              <button onClick={()=>{
+    <div style={{minHeight:"100vh",background:LG.page,position:"relative",isolation:"isolate",fontFamily:SF,paddingBottom:60}}>
+      <GlassAmbient rgb={rgb}/>
+      <GlassWardHeader onBack={onBack} wardName={setup.appointmentType?setup.wardName:""} title={setup.appointmentType||setup.wardName||"Psychiatry Ward"} caption="Psychiatry" theme={theme} rgb={rgb}
+        tabs={[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}]} activeTab={activeTab} onTab={setActiveTab}
+        actions={<>
+          {!seniorMode&&(isLeader
+            ?<><LeaderBadge theme={theme} rgb={rgb}/><GlassIconButton icon="logout" label="Log out" onClick={()=>{clearStoredLeaderPin();setIsLeader(false);showToast("Logged out");}}/></>
+            :<GlassIconButton icon="login" label="Leader login" color={C.text} onClick={()=>setShowPin(true)}/>)}
+          {seniorMode&&<ReadOnlyBadge/>}
+          {isLeader&&!seniorMode&&<GlassIconButton icon="gear" label="Edit ward" onClick={()=>{
                 setEditForm({
                   wardName:setup.wardName||"",
                   appointmentType:setup.appointmentType||"",
@@ -7986,30 +7964,14 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
                   customTags:(setup.customTags||[]).map(t=>({...t})),
                 });
                 setEditMode(true);
-              }} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"6px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:"0.72rem",fontFamily:SF}}>
-                <Icon name="settings" size={11} color={C.textSub}/> Settings
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Tabs */}
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",gap:0,borderTop:`1px solid ${C.border}`,marginTop:10}}>
-          {[{id:"ward",label:"Ward"},{id:"students",label:"Students"},{id:"archive",label:"Archive"}].map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{flex:1,padding:"10px 0",fontSize:"0.8rem",fontWeight:activeTab===t.id?600:400,background:"none",border:"none",cursor:"pointer",fontFamily:SF,
-                color:activeTab===t.id?theme:C.textMuted,
-                borderBottom:activeTab===t.id?`2px solid ${theme}`:"2px solid transparent",transition:"color 0.15s"}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              }}/>}
+        </>}/>
 
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 80px"}}>
         {activeTab==="ward" && <>
 
           {/* Pairings panel */}
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:16,boxShadow:C.shadow,overflow:"hidden"}}>
+          <div style={{background:C.surface,border:LG_EDGE,borderRadius:20,marginBottom:16,boxShadow:C.shadow,overflow:"hidden"}}>
             <div onClick={()=>setPairingOpen(o=>!o)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none"}}>
               <span style={{fontSize:"0.65rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Pairings</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -8149,7 +8111,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
           {(() => {
             const absentCount = absentStudents.length;
             return (
-              <div style={{background:C.surface,border:`1px solid ${absentCount>0?`rgba(${hexToRgb(C.red)},0.3)`:C.border}`,borderRadius:14,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
+              <div style={{background:C.surface,border:absentCount>0?`1px solid rgba(${hexToRgb(C.red)},0.3)`:LG_EDGE,borderRadius:20,padding:"12px 16px",marginBottom:16,boxShadow:C.shadow}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setAbsentExpanded(e=>!e)}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:"0.65rem",fontWeight:600,color:absentCount>0?C.red:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase"}}>Absent Students</span>
@@ -8225,7 +8187,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
               {label:"Histories", val:`${patients.filter(p=>p.historyTaken).length}/${patients.filter(p=>p.name).length}`, color:C.green},
               {label:"New",       val:patients.filter(p=>p.isNew).length, color:C.red},
             ].map(s=>(
-              <div key={s.label} style={{background:C.surface,border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
+              <div key={s.label} style={{background:C.surface,border:LG_EDGE,borderRadius:20,padding:"12px 10px",textAlign:"center",boxShadow:"0 4px 14px rgba(0,0,0,0.07)"}}>
                 <div style={{fontSize:"1.4rem",fontWeight:700,color:s.color,letterSpacing:"-0.04em"}}>{s.val}</div>
                 <div style={{fontSize:"0.6rem",color:C.textSub,marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>{s.label}</div>
               </div>
@@ -8234,16 +8196,16 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
           {/* Section filter pills */}
           {sections.length>0 && (
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            <div style={{...LG.glass,background:"rgba(255,255,255,0.78)",display:"flex",gap:2,padding:4,borderRadius:999,marginBottom:16,overflowX:"auto",scrollbarWidth:"none"}}>
               {[
                 {id:"all",label:"All"},
                 ...sections.map(s=>({id:s.name,label:s.name})),
                 {id:"unassigned",label:`Unassigned${unassignedPatients.length>0?" ("+unassignedPatients.length+")":""}`},
               ].map(f=>(
                 <button key={f.id} onClick={()=>setSectionFilter(f.id)}
-                  style={{padding:"5px 12px",borderRadius:20,fontSize:"0.74rem",fontWeight:sectionFilter===f.id?600:400,cursor:"pointer",fontFamily:SF,
-                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.surface,
-                    border:`1px solid ${sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):C.border}`,
+                  style={{flex:"1 0 auto",whiteSpace:"nowrap",padding:"8px 12px",borderRadius:999,fontSize:"0.76rem",fontWeight:sectionFilter===f.id?600:500,cursor:"pointer",fontFamily:SF,transition:"background 0.25s,color 0.25s",
+                    background:sectionFilter===f.id?(f.id==="unassigned"?C.textSub:theme):"transparent",
+                    border:"none",
                     color:sectionFilter===f.id?"#fff":C.textSub}}>
                   {f.label}
                 </button>
@@ -8317,7 +8279,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
       {/* Patient detail sheet */}
       {selectedPt&&selPt&&!seniorMode&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:100,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget){setSelectedPt(null);setShowClearConfirm(false);}}}>
           <div style={{width:"100%",maxHeight:"88vh",overflowY:"auto",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
@@ -8470,7 +8432,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
       {showAddPt&&isLeader&&!seniorMode&&(()=>{
         const preview = newPt.autoAssign ? computeAutoAssign(patients) : null;
         return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:"20px 20px 0 0",padding:"10px 22px 44px",width:"100%",boxShadow:C.shadowMd,maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 20px"}}/>
             <h3 style={{margin:"0 0 16px",color:C.text,fontWeight:600}}>Add Patient</h3>
@@ -8565,7 +8527,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
       {/* PIN modal */}
       {showPin&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.2)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd,border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
               <Icon name="key" size={16} color={theme}/>
@@ -8585,7 +8547,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
       {/* Delete confirm */}
       {showDelete&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(6px)"}}>
           <div style={{background:C.surface,border:`1px solid ${C.red}`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:320,boxShadow:C.shadowMd}}>
             <h3 style={{margin:"0 0 8px",color:C.red,fontWeight:700}}>Delete Ward?</h3>
             <p style={{margin:"0 0 18px",color:C.textSub,fontSize:"0.82rem"}}>Permanently removes this ward and all data.</p>
@@ -8599,10 +8561,10 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
 
       {/* Edit settings */}
       {editMode&&(
-        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",fontFamily:SF}}>
-          <div style={{background:"rgba(245,245,247,0.88)",borderBottom:`1px solid ${C.border}`,padding:"12px 18px",position:"sticky",top:0,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+        <div style={{position:"fixed",inset:0,background:LG.page,zIndex:200,overflowY:"auto",fontFamily:SF}}>
+          <div style={{...LG.bar,padding:"12px 18px",position:"sticky",top:0}}>
             <div style={{maxWidth:560,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
-              <button onClick={()=>setEditMode(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}><Icon name="back" size={18} color={C.textSub}/></button>
+              <GlassIconButton icon="back" label="Back" onClick={()=>setEditMode(false)} color={C.text} size={18}/>
               <span style={{fontSize:"0.9rem",fontWeight:600,color:C.text}}>Edit Ward Settings</span>
             </div>
           </div>
@@ -8611,7 +8573,7 @@ function PsychWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, se
             <div style={{marginBottom:18}}><label style={labelStyle}>Rotation</label><input value={editForm.appointmentType||""} onChange={e=>setEditForm(f=>({...f,appointmentType:e.target.value}))} style={{...iS,width:"100%",boxSizing:"border-box",marginTop:6}}/></div>
             <div style={{marginBottom:22}}>
               <label style={labelStyle}>Accent Colour</label>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",boxShadow:C.shadow}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:8,background:C.surface,border:LG_EDGE,borderRadius:16,padding:"10px 14px",boxShadow:C.shadow}}>
                 <input type="color" value={editForm.themeColor||theme} onChange={e=>setEditForm(f=>({...f,themeColor:e.target.value}))} style={{width:40,height:40,border:"none",borderRadius:8,cursor:"pointer",padding:0}}/>
                 <div style={{flex:1,height:8,borderRadius:4,background:`linear-gradient(90deg,${C.surfaceEl},${editForm.themeColor||theme})`}}/>
                 <span style={{fontSize:"0.75rem",color:C.textMuted,fontFamily:"monospace"}}>{editForm.themeColor||theme}</span>
