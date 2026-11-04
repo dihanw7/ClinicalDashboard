@@ -4328,9 +4328,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                         background:sel?theme:"transparent",border:sel?"none":"1.5px solid rgba(60,60,67,0.25)"}}>
                         {sel&&<Icon name="check" size={7} color="#fff"/>}
                       </span>
-                      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",gap:3}}>
+                      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",gap:1}}>
                         <span style={{fontSize:"0.76rem",fontWeight:600,color:sel?theme:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name.split(" ")[0]}</span>
-                        {s.group&&<span style={{fontSize:"0.6rem",fontWeight:600,color:C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{s.group}</span>}
+                        {s.group&&<sup style={{fontSize:"0.5rem",fontWeight:700,color:C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0,alignSelf:"flex-start",lineHeight:1,marginTop:1}}>{s.group}</sup>}
                       </span>
                       <span style={{fontSize:"0.8rem",fontWeight:700,color:n>0?(sel?theme:C.text):C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{n}</span>
                     </span>
