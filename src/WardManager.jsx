@@ -4282,6 +4282,22 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
   const medSlotLabel = (pt, i, n) => pt.slot || (n>1 ? String(i+1) : "");
   const assignedCount = (name, excludeId) => patients.filter(p=>p.id!==excludeId&&(p.assigned||[]).includes(name)).length;
+  // Section shorthand for the student picker: first letter of each section
+  // (A = Acute, C = Chronic…), lengthened only when two sections would clash.
+  const ptSection = (p) => p.isFloor ? "Floor" : (p.section || "Unassigned");
+  const sectionAbbrevs = (() => {
+    const names = [...new Set([...sections.map(x=>x.name), ...patients.map(ptSection)])];
+    const out = {};
+    names.forEach(n=>{
+      let len = 1, ab = n.slice(0,1).toUpperCase();
+      while (Object.values(out).includes(ab) && len < n.length) { len++; ab = n.slice(0,1).toUpperCase()+n.slice(1,len); }
+      out[n] = ab;
+    });
+    return { order:names, ab:out };
+  })();
+  const sectionCountsFor = (name, excludeId) => sectionAbbrevs.order
+    .map(sec=>({ sec, ab:sectionAbbrevs.ab[sec], n:patients.filter(p=>p.id!==excludeId&&ptSection(p)===sec&&(p.assigned||[]).includes(name)).length }))
+    .filter(x=>x.n>0);
   // Student picker: tap students to assign them to this patient (Medicine).
   const MedStudentPicker = ({ value=[], onChange, excludeId }) => {
     const roster = [...activeStudents, ...students.filter(s=>value.includes(s.name)&&!activeStudents.includes(s))]
@@ -4289,20 +4305,30 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     return (
       <div style={{marginBottom:16}}>
         <label style={labelStyle}>Assign Students</label>
+        {roster.length>0&&patients.some(p=>(p.assigned||[]).length>0)&&(
+          <div style={{fontSize:"0.66rem",color:C.textMuted,marginTop:4,lineHeight:1.5}}>
+            Patients per section: {sectionAbbrevs.order.filter(sec=>patients.some(p=>ptSection(p)===sec)).map(sec=>`${sectionAbbrevs.ab[sec]} ${sec}`).join(" · ")}
+          </div>
+        )}
         {roster.length===0
           ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:6}}>No students configured yet.</div>
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(76px,1fr))",gap:6,marginTop:8}}>
               {roster.map(s=>{
                 const sel = value.includes(s.name);
                 const n = assignedCount(s.name, excludeId);
+                const bySec = sectionCountsFor(s.name, excludeId);
                 return (
                   <button key={s.name} type="button" aria-pressed={sel} onClick={()=>onChange(sel?value.filter(x=>x!==s.name):[...value,s.name])}
+                    title={n>0?`${s.name}: ${bySec.map(x=>`${x.n} ${x.sec}`).join(", ")}`:`${s.name}: no patients yet`}
                     style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"8px 4px",borderRadius:12,cursor:"pointer",fontFamily:SF,
                       background:sel?`rgba(${rgb},0.12)`:C.surfaceEl,border:`1px solid ${sel?theme:C.border}`,transition:"all 0.1s"}}>
                     {sel&&<span style={{position:"absolute",top:4,right:4,width:13,height:13,borderRadius:"50%",background:theme,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={7} color="#fff"/></span>}
                     <span style={{fontSize:"0.72rem",fontWeight:600,color:sel?theme:C.text,lineHeight:1.2,wordBreak:"break-word"}}>{s.name.split(" ")[0]}</span>
                     {s.group&&<span style={{fontSize:"0.54rem",fontWeight:700,fontFamily:"monospace",color:sel?theme:C.textMuted}}>{s.group}</span>}
                     <span style={{fontSize:"0.54rem",fontWeight:600,color:n>0?C.textSub:C.textMuted}}>{n>0?`${n} pt`:"—"}</span>
+                    {bySec.length>0&&<span style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:3,marginTop:1}}>
+                      {bySec.map(x=><span key={x.sec} style={{fontSize:"0.56rem",fontWeight:700,fontVariantNumeric:"tabular-nums",color:sel?theme:C.textSub,background:sel?"rgba(255,255,255,0.7)":"rgba(118,118,128,0.12)",borderRadius:999,padding:"1px 5px"}}>{x.ab}{x.n}</span>)}
+                    </span>}
                   </button>
                 );
               })}
