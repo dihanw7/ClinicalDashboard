@@ -4312,7 +4312,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         )}
         {roster.length===0
           ? <div style={{fontSize:"0.75rem",color:C.textMuted,marginTop:6}}>No students configured yet.</div>
-          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:8,marginTop:10}}>
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(108px,1fr))",gap:6,marginTop:8}}>
               {roster.map(s=>{
                 const sel = value.includes(s.name);
                 const n = assignedCount(s.name, excludeId);
@@ -4320,25 +4320,25 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 return (
                   <button key={s.name} type="button" aria-pressed={sel} onClick={()=>onChange(sel?value.filter(x=>x!==s.name):[...value,s.name])}
                     title={n>0?`${s.name}: ${bySec.map(x=>`${x.n} ${x.sec}`).join(", ")}`:`${s.name}: no patients yet`}
-                    style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:6,padding:"10px 12px",borderRadius:14,cursor:"pointer",fontFamily:SF,textAlign:"left",minWidth:0,
+                    style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:2,padding:"6px 8px",borderRadius:10,cursor:"pointer",fontFamily:SF,textAlign:"left",minWidth:0,
                       background:sel?`rgba(${rgb},0.10)`:C.surface,border:sel?`1.5px solid ${theme}`:"1.5px solid rgba(60,60,67,0.12)",boxShadow:sel?"none":"0 1px 2px rgba(0,0,0,0.04)",transition:"background 0.15s,border-color 0.15s"}}>
                     {/* Name + group, total on the right */}
-                    <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                      <span aria-hidden="true" style={{width:18,height:18,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                    <span style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                      <span aria-hidden="true" style={{width:13,height:13,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
                         background:sel?theme:"transparent",border:sel?"none":"1.5px solid rgba(60,60,67,0.25)"}}>
-                        {sel&&<Icon name="check" size={9} color="#fff"/>}
+                        {sel&&<Icon name="check" size={7} color="#fff"/>}
                       </span>
-                      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",gap:4}}>
-                        <span style={{fontSize:"0.86rem",fontWeight:600,color:sel?theme:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name.split(" ")[0]}</span>
-                        {s.group&&<span style={{fontSize:"0.66rem",fontWeight:600,color:C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{s.group}</span>}
+                      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",gap:3}}>
+                        <span style={{fontSize:"0.76rem",fontWeight:600,color:sel?theme:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name.split(" ")[0]}</span>
+                        {s.group&&<span style={{fontSize:"0.6rem",fontWeight:600,color:C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{s.group}</span>}
                       </span>
-                      <span style={{fontSize:"0.95rem",fontWeight:700,color:n>0?(sel?theme:C.text):C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{n}</span>
+                      <span style={{fontSize:"0.8rem",fontWeight:700,color:n>0?(sel?theme:C.text):C.textMuted,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{n}</span>
                     </span>
                     {/* Per-section breakdown */}
-                    <span style={{fontSize:"0.7rem",color:C.textMuted,fontVariantNumeric:"tabular-nums",paddingLeft:26,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    <span style={{fontSize:"0.62rem",color:C.textMuted,fontVariantNumeric:"tabular-nums",paddingLeft:18,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                       {bySec.length>0
                         ? bySec.map((x,i)=><span key={x.sec}>{i>0&&<span style={{opacity:0.5}}> · </span>}<span style={{fontWeight:600,color:sel?theme:C.textSub}}>{x.ab}</span> {x.n}</span>)
-                        : "No patients"}
+                        : "None"}
                     </span>
                   </button>
                 );
