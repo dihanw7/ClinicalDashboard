@@ -513,11 +513,11 @@ function GlassWardHeader({ onBack, wardName, title, caption, theme, rgb, actions
     <div style={{position:"sticky",top:0,zIndex:50,...LG.bar}}>
       <div style={{padding:"12px 16px 8px"}}>
         <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
             <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
             <div style={{minWidth:0}}>
               {wardName&&<div style={{fontSize:"0.72rem",fontWeight:600,color:theme,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{wardName}</div>}
-              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</div>
+              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15,overflowWrap:"anywhere",textWrap:"balance"}}>{title}</div>
               {caption&&<div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{caption}</div>}
             </div>
           </div>
@@ -4642,16 +4642,16 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       <div aria-hidden="true" style={{position:"absolute",top:0,left:0,right:0,height:420,zIndex:-1,pointerEvents:"none",background:`radial-gradient(70% 60% at 10% 0%,rgba(${rgb},0.20),transparent 70%),radial-gradient(60% 55% at 95% 8%,rgba(90,200,250,0.20),transparent 70%),radial-gradient(50% 45% at 55% 40%,rgba(175,82,222,0.08),transparent 70%)`}}/>
       <div ref={glassHeaderRef} style={{position:"sticky",top:0,zIndex:50,...LG.bar}}>
       <div style={{padding:"12px 16px 8px"}}>
-        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{maxWidth:700,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
             <GlassIconButton icon="back" label="Back" onClick={onBack} color={C.text} size={18}/>
-            <div>
-              <div style={{fontSize:"0.72rem",fontWeight:600,color:theme}}>{setup.wardName}</div>
-              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15}}>{setup.appointmentType}</div>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:"0.72rem",fontWeight:600,color:theme,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{setup.wardName}</div>
+              <div style={{fontSize:"1.2rem",color:C.text,marginTop:-2,fontWeight:600,letterSpacing:"-0.02em",lineHeight:1.15,overflowWrap:"anywhere",textWrap:"balance"}}>{setup.appointmentType}</div>
               <div style={{fontSize:"0.6rem",color:C.textMuted,marginTop:1,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{isMed?"Medicine":"Surgery"}</div>
             </div>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {!seniorMode&&(isLeader
               ?<>
                 <LeaderBadge theme={theme} rgb={rgb}/>
