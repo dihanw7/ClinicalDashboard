@@ -4208,6 +4208,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [sideConflict,      setSideConflict]      = useState(null); // {existingPtId, newSide, otherSide}
   const [restoreTarget,     setRestoreTarget]     = useState(null); // {wk, id, pt, section, bedNo, side, isFloor}
   const [pairingOpen,       setPairingOpen]       = useState(false);
+  const [unassignedOpen,    setUnassignedOpen]    = useState(true); // Medicine: "no students yet" banner
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
   const [shadowAutoAlloc,   setShadowAutoAlloc]   = useState(true); // auto shadow allocation on by default
@@ -4679,6 +4680,43 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       <div style={{maxWidth:700,margin:"0 auto",padding:"16px 16px 100px"}}>
 
         {activeTab==="ward" && <>
+
+          {/* Medicine: leader banner for patients with no students assigned */}
+          {isMed&&isLeader&&!seniorMode&&(()=>{
+            const secRank = (p) => { const i = sections.findIndex(x=>x.name===p.section); return p.isFloor ? 998 : i===-1 ? 999 : i; };
+            const bedNum = (b) => { const n = parseFloat(b); return isNaN(n) ? Infinity : n; };
+            const noStudents = patients.filter(p=>(p.assigned||[]).length===0)
+              .sort((a,b)=>secRank(a)-secRank(b) || bedNum(a.bedNo)-bedNum(b.bedNo) || String(a.bedNo||"").localeCompare(String(b.bedNo||"")));
+            if (noStudents.length===0) return null;
+            const amber = "rgb(161,104,0)";
+            return (
+              <div role="status" style={{background:"rgba(255,149,0,0.10)",border:"1px solid rgba(255,149,0,0.28)",borderRadius:18,marginBottom:16,overflow:"hidden"}}>
+                <button type="button" onClick={()=>setUnassignedOpen(o=>!o)} aria-expanded={unassignedOpen}
+                  style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:"none",border:"none",padding:"12px 14px",cursor:"pointer",fontFamily:SF,textAlign:"left"}}>
+                  <span aria-hidden="true" style={{width:26,height:26,borderRadius:"50%",background:"rgba(255,149,0,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name="user" size={13} color={amber}/>
+                  </span>
+                  <span style={{flex:1,minWidth:0}}>
+                    <span style={{display:"block",fontSize:"0.86rem",fontWeight:600,color:C.text}}>{noStudents.length} {noStudents.length===1?"patient has":"patients have"} no students</span>
+                    <span style={{display:"block",fontSize:"0.7rem",color:amber,marginTop:1}}>Tap a patient to assign students</span>
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{transition:"transform 0.2s",transform:unassignedOpen?"rotate(180deg)":"none",flexShrink:0}}><path d="M3 5l4 4 4-4" stroke={amber} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                {unassignedOpen&&(
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 14px 12px"}}>
+                    {noStudents.map(pt=>(
+                      <button key={pt.id} type="button" onClick={()=>handleTileTap(pt)}
+                        style={{display:"inline-flex",alignItems:"baseline",gap:5,background:C.surface,border:"1px solid rgba(255,149,0,0.3)",borderRadius:999,padding:"6px 11px",cursor:"pointer",fontFamily:SF,maxWidth:"100%"}}>
+                        <span style={{fontSize:"0.62rem",fontWeight:600,color:C.textMuted,letterSpacing:"0.04em",textTransform:"uppercase"}}>{pt.isFloor?"Floor":(pt.section||"No bed")}</span>
+                        {pt.bedNo&&<span style={{fontSize:"0.8rem",fontWeight:700,color:theme,fontVariantNumeric:"tabular-nums"}}>{pt.isFloor?pt.bedNo:String(pt.bedNo).padStart(2,"0")}</span>}
+                        {pt.patientName&&<span style={{fontSize:"0.74rem",color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>{pt.patientName}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {shadowHOs.length>0&&(
             <div style={{...LG.card,padding:"14px 16px",marginBottom:16}}>
