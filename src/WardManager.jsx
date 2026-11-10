@@ -4681,7 +4681,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
         {activeTab==="ward" && <>
 
-          {/* Medicine: leader banner for patients with no students assigned */}
+          {/* Medicine: leader banner for patients with no owner (assigned students).
+              A Shadow HO doesn't count — shadow-only patients still show here. */}
           {isMed&&isLeader&&!seniorMode&&(()=>{
             const secRank = (p) => { const i = sections.findIndex(x=>x.name===p.section); return p.isFloor ? 998 : i===-1 ? 999 : i; };
             const bedNum = (b) => { const n = parseFloat(b); return isNaN(n) ? Infinity : n; };
@@ -4697,8 +4698,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     <Icon name="user" size={13} color={amber}/>
                   </span>
                   <span style={{flex:1,minWidth:0}}>
-                    <span style={{display:"block",fontSize:"0.86rem",fontWeight:600,color:C.text}}>{noStudents.length} {noStudents.length===1?"patient has":"patients have"} no students</span>
-                    <span style={{display:"block",fontSize:"0.7rem",color:amber,marginTop:1}}>Tap a patient to assign students</span>
+                    <span style={{display:"block",fontSize:"0.86rem",fontWeight:600,color:C.text}}>{noStudents.length} {noStudents.length===1?"patient has":"patients have"} no owner</span>
+                    <span style={{display:"block",fontSize:"0.7rem",color:amber,marginTop:1}}>Shadows don't count · tap to assign an owner</span>
                   </span>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{transition:"transform 0.2s",transform:unassignedOpen?"rotate(180deg)":"none",flexShrink:0}}><path d="M3 5l4 4 4-4" stroke={amber} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
