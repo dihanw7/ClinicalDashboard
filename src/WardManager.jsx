@@ -4231,6 +4231,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [shadowReplaceStep, setShadowReplaceStep] = useState(false);
   const [pendingShadowForm, setPendingShadowForm] = useState(null);
   const [shadowReplaceSelection, setShadowReplaceSelection] = useState({});
+  const [medHandover,       setMedHandover]       = useState(null); // Medicine: shadow HO handover step
   const [searchQuery,       setSearchQuery]       = useState("");
   const [archiveSearch,     setArchiveSearch]     = useState("");
   // Sticky section-filter bar sits just below the glass header; track its height.
@@ -4528,6 +4529,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const startShadowEdit = () => { setShadowForm(shadowHOs.map(h=>({...h}))); setShadowEditing(true); };
 
   const submitShadowNames = (newForm) => {
+    if (isMed) { openMedHandover(newForm); return; }
     const newNames = newForm.map(h=>h.name).filter(Boolean);
     // Outgoing = leaving shadow duty, returning to active — need a pairing slot
     const outgoingNames = shadowHOs.map(h=>h.name).filter(n=>n&&!newNames.includes(n));
@@ -4536,6 +4538,71 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     if (!isMed&&outgoingNames.length>0&&incomingNew.length>0) {
       setPendingShadowForm(newForm); setShadowReplaceSelection({}); setShadowReplaceStep(true); setShadowEditing(false);
     } else { applyShadowUpdate(newForm,{}); }
+  };
+
+  // ── Medicine: Shadow HO handover ──
+  // A new shadow replaces an outgoing one: they inherit every patient the old
+  // shadow was shadowing, and the patients the new shadow owned as a student pass
+  // to the returning shadow (or someone else / nobody). Extra posts and shadows
+  // that nobody replaces are sorted out on a quick tap-to-assign list.
+  const openMedHandover = (newForm) => {
+    const newNames = newForm.map(h=>h.name).filter(Boolean);
+    const oldNames = shadowHOs.map(h=>h.name).filter(Boolean);
+    const incoming = newNames.filter(n=>!oldNames.includes(n));
+    const outgoing = oldNames.filter(n=>!newNames.includes(n));
+    if (incoming.length===0 && !outgoing.some(o=>patients.some(p=>p.shadowHO===o))) { applyShadowUpdate(newForm,{}); return; }
+    const replace = {};
+    incoming.forEach(y=>{ const x = shadowHOs[newForm.findIndex(h=>h.name===y)]?.name; if (x&&outgoing.includes(x)&&!Object.values(replace).includes(x)) replace[y]=x; });
+    incoming.forEach(y=>{ if (!replace[y]) { const x = outgoing.find(o=>!Object.values(replace).includes(o)); replace[y] = x||""; } });
+    const ownerTo = {};
+    incoming.forEach(y=>{ ownerTo[y] = replace[y] && students.some(st=>st.name===replace[y]) ? replace[y] : ""; });
+    setMedHandover({ form:newForm, incoming, outgoing, replace, ownerTo, manual:{} });
+    setShadowEditing(false);
+  };
+  // The shadow each patient would end up with under the current handover choices.
+  const handoverShadow = (h, p) => {
+    if (h.manual[p.id]!==undefined) return h.manual[p.id];
+    const newNames = h.form.map(x=>x.name).filter(Boolean);
+    const by = Object.entries(h.replace).find(([,x])=>x&&x===p.shadowHO);
+    if (by) return by[0];
+    if (h.outgoing.includes(p.shadowHO)) return "";
+    return newNames.includes(p.shadowHO) ? p.shadowHO : (p.shadowHO||"");
+  };
+  // Even out shadow loads with as few moves as possible (unassigned first).
+  const balanceHandover = () => {
+    setMedHandover(h=>{
+      const names = h.form.map(x=>x.name).filter(Boolean);
+      if (names.length===0) return h;
+      const manual = {...h.manual};
+      const cur = p => manual[p.id]!==undefined ? manual[p.id] : handoverShadow(h,p);
+      const counts = () => Object.fromEntries(names.map(n=>[n,patients.filter(p=>cur(p)===n).length]));
+      const minName = c => names.reduce((a,b)=>c[b]<c[a]?b:a);
+      const maxName = c => names.reduce((a,b)=>c[b]>c[a]?b:a);
+      patients.filter(p=>!names.includes(cur(p))).forEach(p=>{ manual[p.id] = minName(counts()); });
+      for (let guard=0; guard<patients.length; guard++) {
+        const c = counts(), hi = maxName(c), lo = minName(c);
+        if (c[hi]-c[lo] <= 1) break;
+        const mover = [...patients].reverse().find(p=>cur(p)===hi);
+        if (!mover) break;
+        manual[mover.id] = lo;
+      }
+      return {...h, manual};
+    });
+  };
+  const applyMedHandover = async () => {
+    const h = medHandover; if (!h) return;
+    const newPatients = patients.map(p=>{
+      let assigned = [...(p.assigned||[])];
+      h.incoming.forEach(y=>{
+        if (!assigned.includes(y)) return;
+        assigned = assigned.filter(n=>n!==y);
+        const to = h.ownerTo[y];
+        if (to && !assigned.includes(to)) assigned.push(to);
+      });
+      return {...p, shadowHO:handoverShadow(h,p), assigned};
+    });
+    await save({...ward, patients:newPatients, setup:{...setup, shadowHOs:h.form}});
+    setMedHandover(null); showToast("Shadow HOs handed over");
   };
 
   const applyShadowUpdate = async (newForm, replaceMap) => {
@@ -6002,7 +6069,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"70vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.12)"}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
             <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Update Shadow HO Posts</h3>
-            <p style={{margin:"0 0 14px",fontSize:"0.75rem",color:C.textMuted}}>Pairings auto-update on next step.</p>
+            <p style={{margin:"0 0 14px",fontSize:"0.75rem",color:C.textMuted}}>{isMed?"Next, you'll hand each outgoing shadow's patients to the new shadows.":"Pairings auto-update on next step."}</p>
             {shadowForm.map((ho,i)=>(
               <div key={i} style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
                 <span style={{fontSize:"0.78rem",color:C.textSub,width:100,flexShrink:0,fontWeight:500}}>{ho.post}</span>
@@ -6010,8 +6077,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   <option value="">— Unassigned —</option>
                   {students.filter(s=>s.name).map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
                 </select>
+                {isMed&&shadowForm.length>1&&<button type="button" aria-label={`Remove ${ho.post}`} onClick={()=>setShadowForm(f=>f.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",padding:6,flexShrink:0}}><Icon name="close" size={12} color={C.textMuted}/></button>}
               </div>
             ))}
+            {isMed&&<button type="button" onClick={()=>setShadowForm(f=>[...f,{post:`Shadow HO ${f.length+1}`,name:""}])} style={{...aMB,marginTop:0,marginBottom:12}}><Icon name="plus" size={12} color={C.textSub}/> Add Post</button>}
             <div style={{display:"flex",gap:10,marginTop:6}}>
               <button onClick={()=>setShadowEditing(false)} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Cancel</button>
               <button onClick={()=>submitShadowNames(shadowForm)} style={{flex:1,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Next</button>
@@ -6019,6 +6088,97 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           </div>
         </div>
       )}
+
+      {/* Medicine: Shadow HO handover */}
+      {medHandover&&(()=>{
+        const h = medHandover;
+        const newNames = h.form.map(x=>x.name).filter(Boolean);
+        const first = n => (n||"").split(" ")[0];
+        const sup = n => { const g=getGroup(n); return g?<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:1}}>{g}</sup>:null; };
+        const orphans = patients.filter(p=>h.outgoing.includes(p.shadowHO)&&!Object.values(h.replace).includes(p.shadowHO));
+        const extras = h.incoming.filter(y=>!h.replace[y]);
+        const showList = orphans.length>0||extras.length>0;
+        const listPts = (extras.length>0 ? patients : orphans).slice().sort((a,b)=>{
+          const need = p => handoverShadow(h,p)==="" ? 0 : 1;
+          return need(a)-need(b) || (a.section||"").localeCompare(b.section||"") || (parseFloat(a.bedNo)||0)-(parseFloat(b.bedNo)||0);
+        });
+        const roster = students.filter(st=>st.name&&!newNames.includes(st.name));
+        const counts = Object.fromEntries(newNames.map(n=>[n,patients.filter(p=>handoverShadow(h,p)===n).length]));
+        const unshadowed = patients.filter(p=>handoverShadow(h,p)==="").length;
+        const setH = fn => setMedHandover(cur=>({...cur,...fn(cur)}));
+        const rowLbl = {fontSize:"0.62rem",color:C.textMuted,letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:600,marginBottom:6};
+        return (
+          <div style={{position:"fixed",inset:0,background:LG.scrim,zIndex:310,display:"flex",alignItems:"flex-end",backdropFilter:"blur(6px)"}}>
+            <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)"}}>
+              <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
+              <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Shadow Handover</h3>
+              <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted,lineHeight:1.5}}>Each new shadow takes over the patients of the shadow they replace. The patients they owned as a student go to whoever you choose, normally the shadow returning to the roster.</p>
+
+              {h.incoming.map(y=>{
+                const x = h.replace[y];
+                const nShadow = x ? patients.filter(p=>p.shadowHO===x).length : 0;
+                const nOwned = patients.filter(p=>(p.assigned||[]).includes(y)).length;
+                return (
+                  <div key={y} style={{background:LG.page,borderRadius:16,padding:"12px 14px",marginBottom:10}}>
+                    <div style={{fontSize:"0.92rem",fontWeight:600,color:C.text,marginBottom:10}}>{first(y)}{sup(y)} <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.78rem"}}>is the new shadow</span></div>
+                    <div style={rowLbl}>Replaces</div>
+                    <select value={x} onChange={e=>{const val=e.target.value;setH(cur=>{const replace={...cur.replace};Object.keys(replace).forEach(k=>{if(k!==y&&replace[k]===val&&val)replace[k]="";});replace[y]=val;const ownerTo={...cur.ownerTo,[y]:val&&students.some(st=>st.name===val)?val:cur.ownerTo[y]};return {replace,ownerTo,manual:{}};});}} style={{...iS,width:"100%",padding:"9px 12px",marginBottom:6}}>
+                      <option value="">Nobody (new post)</option>
+                      {h.outgoing.map(o=><option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <div style={{fontSize:"0.72rem",color:x?theme:C.textMuted,marginBottom:nOwned>0?12:0}}>{x?`Takes over ${first(x)}'s ${nShadow} shadow patient${nShadow===1?"":"s"}`:"Assign their patients in the list below"}</div>
+                    {nOwned>0&&<>
+                      <div style={rowLbl}>{nOwned===1?"Their 1 owned patient goes to":`Their ${nOwned} owned patients go to`}</div>
+                      <select value={h.ownerTo[y]||""} onChange={e=>{const val=e.target.value;setH(cur=>({ownerTo:{...cur.ownerTo,[y]:val}}));}} style={{...iS,width:"100%",padding:"9px 12px"}}>
+                        <option value="">Nobody (leave without an owner)</option>
+                        {roster.map(st=><option key={st.name} value={st.name}>{st.name}{st.name===x?" (returning shadow)":""}</option>)}
+                      </select>
+                    </>}
+                  </div>
+                );
+              })}
+
+              {showList&&(
+                <div style={{marginTop:14}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:6}}>
+                    <div style={{fontSize:"0.78rem",fontWeight:600,color:C.text}}>{extras.length>0?"Give the new posts some patients":`${orphans.length} patient${orphans.length===1?"":"s"} need a new shadow`}</div>
+                    <button type="button" onClick={balanceHandover} style={{background:`rgba(${rgb},0.1)`,border:"none",color:theme,borderRadius:999,padding:"6px 12px",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:SF,flexShrink:0}}>Spread evenly</button>
+                  </div>
+                  <div style={{fontSize:"0.7rem",color:C.textMuted,marginBottom:10,fontVariantNumeric:"tabular-nums"}}>
+                    {newNames.map((n,i)=><span key={n}>{i>0&&" · "}<strong style={{color:C.textSub,fontWeight:600}}>{first(n)}</strong> {counts[n]}</span>)}
+                    {unshadowed>0&&<span style={{color:C.red}}> · {unshadowed} without a shadow</span>}
+                  </div>
+                  {listPts.map(p=>{
+                    const curS = handoverShadow(h,p);
+                    return (
+                      <div key={p.id} style={{padding:"8px 0",borderTop:"0.5px solid rgba(60,60,67,0.15)"}}>
+                        <div style={{fontSize:"0.76rem",color:C.text,marginBottom:6,display:"flex",gap:6,alignItems:"baseline"}}>
+                          <span style={{fontSize:"0.6rem",fontWeight:600,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.04em"}}>{p.isFloor?"Floor":(p.section||"No bed")}</span>
+                          {p.bedNo&&<strong style={{color:theme}}>{p.isFloor?p.bedNo:String(p.bedNo).padStart(2,"0")}</strong>}
+                          <span>{p.patientName||""}</span>
+                          {curS===""&&<span style={{marginLeft:"auto",fontSize:"0.62rem",fontWeight:700,color:C.red}}>needs shadow</span>}
+                        </div>
+                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                          {newNames.map(n=>{
+                            const on = curS===n;
+                            return <button key={n} type="button" onClick={()=>setH(cur=>({manual:{...cur.manual,[p.id]:n}}))}
+                              style={{padding:"5px 10px",borderRadius:999,fontSize:"0.72rem",fontWeight:on?600:500,cursor:"pointer",fontFamily:SF,border:"none",background:on?theme:"rgba(118,118,128,0.12)",color:on?"#fff":C.textSub}}>{first(n)}</button>;
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{display:"flex",gap:10,marginTop:18}}>
+                <button onClick={()=>{setMedHandover(null);setShadowEditing(true);}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Back</button>
+                <button onClick={applyMedHandover} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save Handover</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Shadow HO step 2 */}
       {shadowReplaceStep&&pendingShadowForm&&(
