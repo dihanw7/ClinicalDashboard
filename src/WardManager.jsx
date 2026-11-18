@@ -4560,7 +4560,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     incoming.forEach(y=>{ if (!replace[y]) { const x = outgoing.find(o=>!Object.values(replace).includes(o)); replace[y] = x||""; } });
     const ownerTo = {};
     incoming.forEach(y=>{ ownerTo[y] = replace[y] && students.some(st=>st.name===replace[y]) ? replace[y] : ""; });
-    setMedHandover({ form:newForm, incoming, outgoing, replace, ownerTo, manual:{} });
+    setMedHandover({ form:newForm, incoming, outgoing, replace, ownerTo, manual:{}, auto:true });
     setShadowEditing(false);
   };
   // The shadow each patient would end up with under the current handover choices.
@@ -4596,6 +4596,11 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
   const applyMedHandover = async () => {
     const h = medHandover; if (!h) return;
+    if (h.auto===false) {
+      // No handover: only the posts change; every patient keeps its owners and shadow.
+      await save({...ward, setup:{...setup, shadowHOs:h.form}});
+      setMedHandover(null); showToast("Shadow HOs updated — patients unchanged"); return;
+    }
     const newPatients = patients.map(p=>{
       let assigned = [...(p.assigned||[])];
       h.incoming.forEach(y=>{
@@ -6102,7 +6107,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         const sup = n => { const g=getGroup(n); return g?<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:1}}>{g}</sup>:null; };
         const orphans = patients.filter(p=>h.outgoing.includes(p.shadowHO)&&!Object.values(h.replace).includes(p.shadowHO));
         const extras = h.incoming.filter(y=>!h.replace[y]);
-        const showList = shadowsOn&&(orphans.length>0||extras.length>0);
+        const showList = h.auto!==false&&shadowsOn&&(orphans.length>0||extras.length>0);
         const listPts = (extras.length>0 ? patients : orphans).slice().sort((a,b)=>{
           const need = p => handoverShadow(h,p)==="" ? 0 : 1;
           return need(a)-need(b) || (a.section||"").localeCompare(b.section||"") || (parseFloat(a.bedNo)||0)-(parseFloat(b.bedNo)||0);
@@ -6119,7 +6124,18 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Shadow Handover</h3>
               <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted,lineHeight:1.5}}>{shadowsOn?"Each new shadow takes over the patients of the shadow they replace. The patients they owned as a student go to whoever you choose, normally the shadow returning to the roster.":"Shadow assignments are off for this ward, so only owners change: the patients each new shadow owned go to whoever you choose, normally the shadow returning to the roster."}</p>
 
-              {h.incoming.filter(y=>shadowsOn||patients.some(p=>(p.assigned||[]).includes(y))).map(y=>{
+              <div style={{display:"flex",alignItems:"center",gap:12,background:LG.page,borderRadius:16,padding:"12px 14px",marginBottom:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:"0.88rem",fontWeight:600,color:C.text}}>Hand over patients</div>
+                  <div style={{fontSize:"0.72rem",color:C.textMuted,marginTop:2,lineHeight:1.4}}>{h.auto!==false?"Patients move to the new shadows as set below.":"Off: only the Shadow HO names change. New shadows keep their owner pills and no patients move."}</div>
+                </div>
+                <button type="button" role="switch" aria-checked={h.auto!==false} aria-label="Hand over patients" onClick={()=>setH(cur=>({auto:cur.auto===false}))}
+                  style={{width:51,height:31,borderRadius:16,border:"none",padding:0,cursor:"pointer",background:h.auto!==false?C.green:"rgba(120,120,128,0.32)",position:"relative",flexShrink:0,transition:"background 0.2s"}}>
+                  <span style={{position:"absolute",top:2,left:h.auto!==false?22:2,width:27,height:27,borderRadius:"50%",background:"#fff",boxShadow:"0 2px 6px rgba(0,0,0,0.2)",transition:"left 0.2s"}}/>
+                </button>
+              </div>
+
+              {h.auto!==false&&h.incoming.filter(y=>shadowsOn||patients.some(p=>(p.assigned||[]).includes(y))).map(y=>{
                 const x = h.replace[y];
                 const nShadow = x ? patients.filter(p=>p.shadowHO===x).length : 0;
                 const nOwned = patients.filter(p=>(p.assigned||[]).includes(y)).length;
@@ -6180,7 +6196,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
 
               <div style={{display:"flex",gap:10,marginTop:18}}>
                 <button onClick={()=>{setMedHandover(null);setShadowEditing(true);}} style={{flex:1,background:C.surfaceEl,border:`1px solid ${C.border}`,color:C.textSub,borderRadius:10,padding:"11px",cursor:"pointer",fontFamily:SF}}>Back</button>
-                <button onClick={applyMedHandover} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>Save Handover</button>
+                <button onClick={applyMedHandover} style={{flex:2,background:theme,border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontWeight:600,fontFamily:SF}}>{h.auto!==false?"Save Handover":"Save Names Only"}</button>
               </div>
             </div>
           </div>
