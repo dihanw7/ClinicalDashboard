@@ -4058,7 +4058,7 @@ function MiniSectionFilter({ pts, sectionOrder=[], value, onChange, theme, rgb }
   );
 }
 
-function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge }) {
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge, sectionCounts }) {
   const [open, setOpen] = useState(false);
   const [secFilter, setSecFilter] = useState("all");
   const shownPts = sortPtsBySection(pPts, sectionOrder).filter(p=>secFilter==="all"||ptSectionKey(p)===secFilter);
@@ -4066,13 +4066,21 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
     <div style={{background:C.surface,border:`1px solid rgba(${rgb},0.18)`,borderRadius:14,marginBottom:10,overflow:"hidden",boxShadow:C.shadow}}>
       <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",userSelect:"none"}}>
         {badge!==null&&<span style={{fontSize:"0.68rem",fontWeight:700,color:theme,background:`rgba(${rgb},0.1)`,border:`1px solid rgba(${rgb},0.2)`,borderRadius:6,padding:"2px 9px",flexShrink:0}}>{badge??`P${pi+1}`}</span>}
-        <div style={{display:"flex",gap:5,flex:1,flexWrap:"wrap",alignItems:"baseline"}}>
-          {members.filter(m=>!shadowHONames.has(m)).map((m,mi)=>(
-            <span key={m} style={{display:"inline-flex",alignItems:"baseline"}}>
-              {mi>0&&<span style={{margin:"0 3px",color:C.textMuted,opacity:0.5}}>×</span>}
-              <NameWithGroup name={m} color={C.text} fontSize="0.82rem" fontWeight={500}/>
-            </span>
-          ))}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"baseline"}}>
+            {members.filter(m=>!shadowHONames.has(m)).map((m,mi)=>(
+              <span key={m} style={{display:"inline-flex",alignItems:"baseline"}}>
+                {mi>0&&<span style={{margin:"0 3px",color:C.textMuted,opacity:0.5}}>×</span>}
+                <NameWithGroup name={m} color={C.text} fontSize="0.82rem" fontWeight={500}/>
+              </span>
+            ))}
+          </div>
+          {/* Medicine: patients per section, e.g. A 2 · C 3 · F 1 */}
+          {sectionCounts&&sectionCounts.length>0&&(
+            <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:2,fontVariantNumeric:"tabular-nums"}}>
+              {sectionCounts.map((x,i)=><span key={x.sec} title={`${x.n} ${x.sec}`}>{i>0&&<span style={{opacity:0.5}}> · </span>}<span style={{fontWeight:700,color:C.textSub}}>{x.ab}</span> {x.n}</span>)}
+            </div>
+          )}
         </div>
         <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0}}>{pPts.length} pt</span>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
@@ -5061,14 +5069,21 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {isMed
               ? (activeStudents.length===0
                   ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students configured.</p>
-                  : activeStudents.map(st=>(
-                      <PairingStudentsCard key={st.name} pi={0} badge={null} members={[st.name]}
+                  : <>
+                    {patients.length>0&&(
+                      <div style={{fontSize:"0.68rem",color:C.textMuted,margin:"0 2px 10px",lineHeight:1.5}}>
+                        {sectionAbbrevs.order.filter(sec=>patients.some(p=>ptSection(p)===sec)).map((sec,i)=><span key={sec}>{i>0&&" · "}<strong style={{fontWeight:600,color:C.textSub}}>{sectionAbbrevs.ab[sec]}</strong> {sec}</span>)}
+                      </div>
+                    )}
+                    {activeStudents.map(st=>(
+                      <PairingStudentsCard key={st.name} pi={0} badge={null} members={[st.name]} sectionCounts={sectionCountsFor(st.name)}
                         pPts={patients.filter(p=>(p.assigned||[]).includes(st.name))} sectionOrder={sectionNames}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
                         onSelectPt={handleTileTap}
                       />
-                    )))
+                    ))}
+                  </>)
               : pairings.length===0&&activeStudents.length===0
               ? <p style={{color:C.textMuted,fontSize:"0.85rem"}}>No students or pairings configured.</p>
               : <>
