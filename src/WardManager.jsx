@@ -4058,7 +4058,7 @@ function MiniSectionFilter({ pts, sectionOrder=[], value, onChange, theme, rgb }
   );
 }
 
-function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge, sectionCounts }) {
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge, sectionCounts, newToday=0 }) {
   const [open, setOpen] = useState(false);
   const [secFilter, setSecFilter] = useState("all");
   const shownPts = sortPtsBySection(pPts, sectionOrder).filter(p=>secFilter==="all"||ptSectionKey(p)===secFilter);
@@ -4076,6 +4076,8 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
             ))}
           </div>
         </div>
+        {/* Patients added today (Medicine) */}
+        {newToday>0&&<span title={`${newToday} added today`} aria-label={`${newToday} added today`} style={{fontSize:"0.68rem",fontWeight:700,color:"#fff",background:C.red,borderRadius:999,padding:"2px 7px",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>+{newToday}</span>}
         <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
           {/* Medicine: patients per section (e.g. A2 · C1) beside the total */}
           {sectionCounts&&sectionCounts.length>0&&<>
@@ -4307,6 +4309,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     });
     return { order:names, ab:out };
   })();
+  // Patients assigned to a student that were added today (local midnight onwards).
+  const addedTodayFor = (name) => { const t0 = new Date(); t0.setHours(0,0,0,0); return patients.filter(p=>(p.assigned||[]).includes(name)&&(ptAddedAt(p)||0)>=t0.getTime()).length; };
   const sectionCountsFor = (name, excludeId) => sectionAbbrevs.order
     .map(sec=>({ sec, ab:sectionAbbrevs.ab[sec], n:patients.filter(p=>p.id!==excludeId&&ptSection(p)===sec&&(p.assigned||[]).includes(name)).length }))
     .filter(x=>x.n>0);
@@ -5079,7 +5083,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       </div>
                     )}
                     {activeStudents.map(st=>(
-                      <PairingStudentsCard key={st.name} pi={0} badge={null} members={[st.name]} sectionCounts={sectionCountsFor(st.name)}
+                      <PairingStudentsCard key={st.name} pi={0} badge={null} members={[st.name]} sectionCounts={sectionCountsFor(st.name)} newToday={addedTodayFor(st.name)}
                         pPts={patients.filter(p=>(p.assigned||[]).includes(st.name))} sectionOrder={sectionNames}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
