@@ -4224,7 +4224,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const [unassignedOpen,    setUnassignedOpen]    = useState(true); // Medicine: "no students yet" banner
   const [pairingEdit,       setPairingEdit]       = useState(false);
   const [pairingForm,       setPairingForm]       = useState([]);
-  const [shadowAutoAlloc,   setShadowAutoAlloc]   = useState(true); // auto shadow allocation on by default
+  const [shadowAutoAlloc,   setShadowAutoAlloc]   = useState(!isMed); // Surgery: auto by default; Medicine: manual
   const [switchConfirm,     setSwitchConfirm]     = useState(null); // {studentName, fromPairingIdx, toPairingIdx, setter}
   const [shadowEditing,     setShadowEditing]     = useState(false);
   const [shadowForm,        setShadowForm]        = useState(null);
@@ -4264,6 +4264,8 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const students    = setup.students    || [];
   const pairings    = setup.pairings    || [];
   const shadowHONames = new Set(shadowHOs.map(h=>h.name).filter(Boolean));
+  // Medicine wards can switch Shadow HO assignments off (owners only).
+  const shadowsOn = !isMed || setup.shadowAssign!==false;
   const activeStudents = students.filter(s=>s.name&&!shadowHONames.has(s.name));
 
   // Lookup group number for a student name
@@ -4519,7 +4521,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
       bedNo = `F${floorCount+1}`;
       section = "Floor";
     }
-    const shadowHO = shadowAutoAlloc ? (getSuggestedShadow()?.name||"") : (newPt.shadowHO||"");
+    const shadowHO = !shadowsOn ? "" : shadowAutoAlloc ? (getSuggestedShadow()?.name||"") : (newPt.shadowHO||"");
     const pt = { id:Date.now().toString(), bht:newPt.bht.trim(), patientName:newPt.patientName.trim(), age:ageStr, bedNo, section, side:newPt.side||"single", isFloor, pairingIdx, members, shadowHO, consultant:"", diagnosis:"", notes:"", historyTaken:false, isNew:true, addedAt:Date.now(), ...(isMed?{assigned:newPt.assigned||[], slot:""}:{}) };
     await save({...ward, patients:[...patients.map(p=>newPt._conflictId&&p.id===newPt._conflictId?{...p,side:newPt._conflictSide}:p),pt]});
     setNewPt({bht:"",patientName:"",ageYears:"",ageMonths:"",bedNo:"",section:sections[0]?.name||"",side:"single",pairingIdx:null});
@@ -4550,7 +4552,9 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
     const oldNames = shadowHOs.map(h=>h.name).filter(Boolean);
     const incoming = newNames.filter(n=>!oldNames.includes(n));
     const outgoing = oldNames.filter(n=>!newNames.includes(n));
-    if (incoming.length===0 && !outgoing.some(o=>patients.some(p=>p.shadowHO===o))) { applyShadowUpdate(newForm,{}); return; }
+    const ownsPatients = n => patients.some(p=>(p.assigned||[]).includes(n));
+    if (shadowsOn ? (incoming.length===0 && !outgoing.some(o=>patients.some(p=>p.shadowHO===o)))
+                  : !incoming.some(ownsPatients)) { applyShadowUpdate(newForm,{}); return; }
     const replace = {};
     incoming.forEach(y=>{ const x = shadowHOs[newForm.findIndex(h=>h.name===y)]?.name; if (x&&outgoing.includes(x)&&!Object.values(replace).includes(x)) replace[y]=x; });
     incoming.forEach(y=>{ if (!replace[y]) { const x = outgoing.find(o=>!Object.values(replace).includes(o)); replace[y] = x||""; } });
@@ -4561,6 +4565,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   };
   // The shadow each patient would end up with under the current handover choices.
   const handoverShadow = (h, p) => {
+    if (!shadowsOn) return p.shadowHO||"";
     if (h.manual[p.id]!==undefined) return h.manual[p.id];
     const newNames = h.form.map(x=>x.name).filter(Boolean);
     const by = Object.entries(h.replace).find(([,x])=>x&&x===p.shadowHO);
@@ -4743,7 +4748,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               :<GlassIconButton icon="login" label="Leader login" color={C.text} onClick={()=>setShowPin(true)}/>
             )}
             {seniorMode&&<ReadOnlyBadge/>}
-            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} title="Edit ward" aria-label="Edit ward" className="lg-hit" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,borderRadius:"50%",width:40,height:40,padding:0,cursor:"pointer",flexShrink:0}}><Icon name="gear" size={17} color={C.textSub}/></button>}
+            {isLeader&&!seniorMode&&<button onClick={()=>{setSetupForm({wardName:setup.wardName||"",appointmentType:setup.appointmentType||"",themeColor:setup.themeColor||"#007aff",students:(setup.students||[]).map(s=>({...s})),consultants:(setup.consultants||[]).map(c=>({...c})),wardSections:(setup.wardSections||[]).map(s=>({...s})),shadowHOs:(setup.shadowHOs||[]).map(h=>({...h})),specialBeds:(setup.specialBeds||[]).map(b=>({...b})),customTags:(setup.customTags||[]).map(t=>({...t})),shadowAssign:setup.shadowAssign!==false,pairings:(setup.pairings||[]).map(p=>({members:[...(p.members||[])]}))});setEditMode(true);ensureGroupsRepoLoaded();}} title="Edit ward" aria-label="Edit ward" className="lg-hit" style={{...LG.glass,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,borderRadius:"50%",width:40,height:40,padding:0,cursor:"pointer",flexShrink:0}}><Icon name="gear" size={17} color={C.textSub}/></button>}
           </div>
         </div>
       </div>
@@ -4781,7 +4786,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   </span>
                   <span style={{flex:1,minWidth:0}}>
                     <span style={{display:"block",fontSize:"0.86rem",fontWeight:600,color:C.text}}>{noStudents.length} {noStudents.length===1?"patient has":"patients have"} no owner</span>
-                    <span style={{display:"block",fontSize:"0.7rem",color:amber,marginTop:1}}>Shadows don't count · tap to assign an owner</span>
+                    <span style={{display:"block",fontSize:"0.7rem",color:amber,marginTop:1}}>{shadowsOn?"Shadows don't count · tap to assign an owner":"Tap a patient to assign an owner"}</span>
                   </span>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{transition:"transform 0.2s",transform:unassignedOpen?"rotate(180deg)":"none",flexShrink:0}}><path d="M3 5l4 4 4-4" stroke={amber} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
@@ -5037,7 +5042,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                                   {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                                 </div>
                               )}
-                              {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                              {shadowsOn&&pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
                               {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0,whiteSpace:"nowrap"}}>{addedLabel(pt)}</span>}
                             </div>
@@ -5109,7 +5114,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                                   {(pt.members||[]).map(m=>{const g=getGroup(m);return<span key={m} style={{fontSize:"0.52rem",background:LG.page,border:"none",borderRadius:999,padding:"1px 6px",color:C.textSub,display:"inline-flex",alignItems:"baseline",gap:"1px"}}>{m.split(" ")[0]}{g&&<sup style={{fontSize:"0.45em",fontWeight:700,opacity:0.7}}>{g}</sup>}</span>;})}
                                 </div>
                               )}
-                              {pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
+                              {shadowsOn&&pt.shadowHO&&<div style={{marginTop:3}}><span style={{fontSize:"0.52rem",background:"rgba(0,0,0,0.03)",border:"1px dashed rgba(0,0,0,0.2)",borderRadius:999,padding:"1px 7px",color:C.textMuted,fontStyle:"italic"}}>{pt.shadowHO}</span></div>}
                               </div>
                               {addedLabel(pt)&&<span title={`Added ${new Date(ptAddedAt(pt)).toLocaleString()}`} style={{fontSize:"0.5rem",color:C.textMuted,opacity:0.8,fontVariantNumeric:"tabular-nums",letterSpacing:"0.02em",lineHeight:1,paddingTop:4,flexShrink:0,whiteSpace:"nowrap"}}>{addedLabel(pt)}</span>}
                             </div>
@@ -5137,7 +5142,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         {activeTab==="students"&&!seniorMode&&(
           <div>
             {/* Shadow HO section — expandable */}
-            {shadowHOs.filter(h=>h.name).length>0&&(
+            {shadowsOn&&shadowHOs.filter(h=>h.name).length>0&&(
               <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} sectionOrder={sectionNames} onSelectPt={handleTileTap}/>
             )}
             {isMed
@@ -5397,7 +5402,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {isMed&&addPtNameFields}
 
             {/* Shadow HO Allocator */}
-            {shadowHOs.filter(h=>h.name).length>0&&(
+            {shadowsOn&&shadowHOs.filter(h=>h.name).length>0&&(
               <div style={{marginBottom:16}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <label style={labelStyle}>Shadow HO</label>
@@ -5656,7 +5661,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 </Row>
               )}
 
-              {viewPt.shadowHO&&(
+              {shadowsOn&&viewPt.shadowHO&&(
                 <Row label="Shadow HO">
                   <span style={{fontSize:"0.85rem",color:C.textSub,fontStyle:"italic"}}>{viewPt.shadowHO}</span>
                 </Row>
@@ -5871,7 +5876,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
               </div>
             )}
             {/* Shadow HO Allocator — edit patient */}
-            {shadowHOs.filter(h=>h.name).length>0&&!seniorMode&&(
+            {shadowsOn&&shadowHOs.filter(h=>h.name).length>0&&!seniorMode&&(
               <div style={{marginBottom:14}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <label style={labelStyle}>Shadow HO</label>
@@ -6000,7 +6005,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     const sideLabel = (pt.side&&pt.side!=="single") ? (" "+pt.side) : "";
                     const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                     const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
-                    const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||pt.shadowHO||""):(ptEdit.shadowHO||"");
+                    const shadowHO=!shadowsOn?(pt.shadowHO||""):shadowAutoAlloc?(getSuggestedShadow()?.name||pt.shadowHO||""):(ptEdit.shadowHO||"");
                     const floorPt = { ...pt, bedNo:floorBedNo, section:"Floor", side:"single", isFloor:true,
                       movedFromBed:(pt.section+" "+pt.bedNo+sideLabel),
                       bht:ptEdit.bht, patientName:ptEdit.patientName, age:ageStr,
@@ -6013,7 +6018,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   }
                   const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
                   const members=ptEdit.pairingIdx!=null&&pairings[ptEdit.pairingIdx]?(pairings[ptEdit.pairingIdx].members||[]).filter(m=>m&&!shadowHONames.has(m)):[];
-                  const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
+                  const shadowHO=!shadowsOn?(selPt.shadowHO||""):shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
                   let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,pairingIdx:ptEdit.pairingIdx,members,shadowHO,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,tags:ptEdit.tags||[],...(isMed?{assigned:ptEdit.assigned||[],...medBedFields(p,ptEdit)}:{})}:p);
                   if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
                   await save({...ward,patients:newPatients});
@@ -6032,7 +6037,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             {!isLeader&&!seniorMode&&(
               <button onClick={async()=>{
                 const ageStr=[ptEdit.ageYears&&`${ptEdit.ageYears}y`,ptEdit.ageMonths&&`${ptEdit.ageMonths}m`].filter(Boolean).join(" ");
-                const shadowHO=shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
+                const shadowHO=!shadowsOn?(selPt.shadowHO||""):shadowAutoAlloc?(getSuggestedShadow()?.name||selPt.shadowHO||""):(ptEdit.shadowHO||"");
                 let newPatients = patients.map(p=>p.id===selectedPt?{...p,bht:ptEdit.bht,patientName:ptEdit.patientName,age:ageStr,bedNo:ptEdit.bedNo,section:ptEdit.section,side:ptEdit.side,shadowHO,consultant:ptEdit.consultant,diagnosis:ptEdit.diagnosis,notes:ptEdit.notes,historyTaken:ptEdit.historyTaken,tags:ptEdit.tags||[],...(isMed?medBedFields(p,ptEdit):{})}:p);
                 if(sideConflict) newPatients=newPatients.map(p=>p.id===sideConflict.existingPtId?{...p,side:sideConflict.otherSide}:p);
                 await save({...ward,patients:newPatients});
@@ -6097,7 +6102,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
         const sup = n => { const g=getGroup(n); return g?<sup style={{fontSize:"0.6em",fontWeight:700,marginLeft:1}}>{g}</sup>:null; };
         const orphans = patients.filter(p=>h.outgoing.includes(p.shadowHO)&&!Object.values(h.replace).includes(p.shadowHO));
         const extras = h.incoming.filter(y=>!h.replace[y]);
-        const showList = orphans.length>0||extras.length>0;
+        const showList = shadowsOn&&(orphans.length>0||extras.length>0);
         const listPts = (extras.length>0 ? patients : orphans).slice().sort((a,b)=>{
           const need = p => handoverShadow(h,p)==="" ? 0 : 1;
           return need(a)-need(b) || (a.section||"").localeCompare(b.section||"") || (parseFloat(a.bedNo)||0)-(parseFloat(b.bedNo)||0);
@@ -6112,21 +6117,23 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
             <div style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 20px 44px",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -4px 40px rgba(0,0,0,0.15)"}}>
               <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"10px auto 18px"}}/>
               <h3 style={{margin:"0 0 6px",color:C.text,fontWeight:600}}>Shadow Handover</h3>
-              <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted,lineHeight:1.5}}>Each new shadow takes over the patients of the shadow they replace. The patients they owned as a student go to whoever you choose, normally the shadow returning to the roster.</p>
+              <p style={{margin:"0 0 16px",fontSize:"0.75rem",color:C.textMuted,lineHeight:1.5}}>{shadowsOn?"Each new shadow takes over the patients of the shadow they replace. The patients they owned as a student go to whoever you choose, normally the shadow returning to the roster.":"Shadow assignments are off for this ward, so only owners change: the patients each new shadow owned go to whoever you choose, normally the shadow returning to the roster."}</p>
 
-              {h.incoming.map(y=>{
+              {h.incoming.filter(y=>shadowsOn||patients.some(p=>(p.assigned||[]).includes(y))).map(y=>{
                 const x = h.replace[y];
                 const nShadow = x ? patients.filter(p=>p.shadowHO===x).length : 0;
                 const nOwned = patients.filter(p=>(p.assigned||[]).includes(y)).length;
                 return (
                   <div key={y} style={{background:LG.page,borderRadius:16,padding:"12px 14px",marginBottom:10}}>
                     <div style={{fontSize:"0.92rem",fontWeight:600,color:C.text,marginBottom:10}}>{first(y)}{sup(y)} <span style={{fontWeight:400,color:C.textMuted,fontSize:"0.78rem"}}>is the new shadow</span></div>
+                    {shadowsOn&&<>
                     <div style={rowLbl}>Replaces</div>
                     <select value={x} onChange={e=>{const val=e.target.value;setH(cur=>{const replace={...cur.replace};Object.keys(replace).forEach(k=>{if(k!==y&&replace[k]===val&&val)replace[k]="";});replace[y]=val;const ownerTo={...cur.ownerTo,[y]:val&&students.some(st=>st.name===val)?val:cur.ownerTo[y]};return {replace,ownerTo,manual:{}};});}} style={{...iS,width:"100%",padding:"9px 12px",marginBottom:6}}>
                       <option value="">Nobody (new post)</option>
                       {h.outgoing.map(o=><option key={o} value={o}>{o}</option>)}
                     </select>
                     <div style={{fontSize:"0.72rem",color:x?theme:C.textMuted,marginBottom:nOwned>0?12:0}}>{x?`Takes over ${first(x)}'s ${nShadow} shadow patient${nShadow===1?"":"s"}`:"Assign their patients in the list below"}</div>
+                    </>}
                     {nOwned>0&&<>
                       <div style={rowLbl}>{nOwned===1?"Their 1 owned patient goes to":`Their ${nOwned} owned patients go to`}</div>
                       <select value={h.ownerTo[y]||""} onChange={e=>{const val=e.target.value;setH(cur=>({ownerTo:{...cur.ownerTo,[y]:val}}));}} style={{...iS,width:"100%",padding:"9px 12px"}}>
@@ -6349,6 +6356,21 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   </div>
               }
             </div>
+            {isMed&&(()=>{
+              const on = setupForm.shadowAssign!==false;
+              return (
+                <div style={{marginBottom:22,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow,display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{flex:1}}>
+                    <label style={labelStyle}>Shadow HO Assignments</label>
+                    <p style={{fontSize:"0.72rem",color:C.textMuted,margin:"4px 0 0",lineHeight:1.45}}>{on?"Patients get an owner and a Shadow HO.":"Off: patients only get owners. Shadow HO posts still take students off the roster."}</p>
+                  </div>
+                  <button type="button" role="switch" aria-checked={on} aria-label="Shadow HO assignments" onClick={()=>setSetupForm(f=>({...f,shadowAssign:!on}))}
+                    style={{width:51,height:31,borderRadius:16,border:"none",padding:0,cursor:"pointer",background:on?C.green:"rgba(120,120,128,0.32)",position:"relative",flexShrink:0,transition:"background 0.2s"}}>
+                    <span style={{position:"absolute",top:2,left:on?22:2,width:27,height:27,borderRadius:"50%",background:"#fff",boxShadow:"0 2px 6px rgba(0,0,0,0.2)",transition:"left 0.2s"}}/>
+                  </button>
+                </div>
+              );
+            })()}
             {isMed&&(
               <div style={{marginBottom:22,background:C.surface,border:LG_EDGE,borderRadius:20,padding:"14px 16px",boxShadow:C.shadow}}>
                 <label style={labelStyle}>Student Assignments</label>
@@ -6374,7 +6396,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 const members=(newPairings[pt.pairingIdx].members||[]).filter(m=>m&&!newShadowHONames.has(m));
                 return {...pt,members};
               });
-              await save({...ward,patients:newPatients,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students:studs,consultants:cons,wardSections:secs,shadowHOs:newShadowHOs,customTags:tags,specialBeds,pairings:newPairings}});
+              await save({...ward,patients:newPatients,setup:{...setup,wardName:setupForm.wardName,appointmentType:setupForm.appointmentType,themeColor:setupForm.themeColor,students:studs,consultants:cons,wardSections:secs,shadowHOs:newShadowHOs,customTags:tags,specialBeds,pairings:newPairings,...(isMed?{shadowAssign:setupForm.shadowAssign!==false}:{})}});
               setEditMode(false);showToast("Settings saved!");
             }} style={{background:theme,border:"none",color:"#fff",borderRadius:12,cursor:"pointer",fontWeight:600,fontFamily:SF,fontSize:"0.95rem",width:"100%",padding:"14px",marginBottom:12}}>Save Changes</button>
             <button onClick={()=>{setEditMode(false);setShowReset(true);}} style={{width:"100%",background:"none",border:`1px solid rgba(${hexToRgb(C.red)},0.3)`,color:C.red,borderRadius:12,padding:"12px",cursor:"pointer",fontSize:"0.85rem",fontFamily:SF,marginBottom:8}}>Reset Ward (New Rotation)</button>
