@@ -4075,14 +4075,17 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
               </span>
             ))}
           </div>
-          {/* Medicine: patients per section, e.g. A 2 · C 3 · F 1 */}
-          {sectionCounts&&sectionCounts.length>0&&(
-            <div style={{fontSize:"0.7rem",color:C.textMuted,marginTop:2,fontVariantNumeric:"tabular-nums"}}>
-              {sectionCounts.map((x,i)=><span key={x.sec} title={`${x.n} ${x.sec}`}>{i>0&&<span style={{opacity:0.5}}> · </span>}<span style={{fontWeight:700,color:C.textSub}}>{x.ab}</span> {x.n}</span>)}
-            </div>
-          )}
         </div>
-        <span style={{fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0}}>{pPts.length} pt</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:"0.68rem",fontWeight:600,color:theme,background:`rgba(${rgb},0.08)`,border:`1px solid rgba(${rgb},0.18)`,borderRadius:6,padding:"2px 8px",flexShrink:0,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
+          {/* Medicine: patients per section (e.g. A2 · C1) beside the total */}
+          {sectionCounts&&sectionCounts.length>0&&<>
+            <span title={sectionCounts.map(x=>`${x.n} ${x.sec}`).join(", ")} style={{color:C.textSub,fontWeight:600}}>
+              {sectionCounts.map((x,i)=><span key={x.sec}>{i>0&&<span style={{opacity:0.45}}> · </span>}<span style={{fontWeight:700}}>{x.ab}</span>{x.n}</span>)}
+            </span>
+            <span aria-hidden="true" style={{width:1,alignSelf:"stretch",background:`rgba(${rgb},0.25)`}}/>
+          </>}
+          {pPts.length} pt
+        </span>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{transition:"transform 0.2s",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>
           <path d="M3 5l4 4 4-4" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
