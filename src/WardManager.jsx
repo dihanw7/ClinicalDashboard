@@ -576,7 +576,7 @@ function WardCard({ ward, onOpen }) {
     : bedKeys.filter(k=>{ const b=beds[k]; return b&&(b.diagnosis||b.consultant||b.notes||b.assigned?.length>0||b.shadows?.length>0||b.isNew||b.historyTaken||b.opStatus); }).length;
 
   // Paed/Surgery/Psych stats
-  const ptNew  = patients.filter(p=>p.isNew).length;
+  const ptNew  = patients.filter(p=>isMedicine?isAddedToday(p):p.isNew).length;
   const ptHist = patients.filter(p=>p.historyTaken).length;
   const paedNew  = ptNew;
   const paedHist = ptHist;
@@ -4022,6 +4022,9 @@ const ptAddedAt = pt => {
 };
 const ADDED_MONTHS = ["Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"];
 // e.g. "Sept 09 · 2:05 PM" (12-hour, device's local time)
+// Medicine's "New" marker is automatic: on for patients added today (local
+// midnight onwards), off from 12 AM the next day. No manual toggle.
+const isAddedToday = pt => { const t = ptAddedAt(pt); if (t==null) return false; const d0 = new Date(); d0.setHours(0,0,0,0); return t >= d0.getTime(); };
 const addedLabel = pt => {
   const t = ptAddedAt(pt); if (t==null) return "";
   const d = new Date(t), p2 = n => String(n).padStart(2,"0");
@@ -4266,6 +4269,16 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   const shadowHONames = new Set(shadowHOs.map(h=>h.name).filter(Boolean));
   // Medicine wards can switch Shadow HO assignments off (owners only).
   const shadowsOn = !isMed || setup.shadowAssign!==false;
+  // "New" marker: Medicine = added today (automatic); Surgery = the manual flag.
+  const showNew = (p) => isMed ? isAddedToday(p) : !!p.isNew;
+  // Medicine: re-render just after midnight so yesterday's "New" markers clear.
+  const [, setDayTick] = useState(0);
+  useEffect(()=>{
+    if (!isMed) return;
+    const next = new Date(); next.setHours(24,0,5,0);
+    const t = setTimeout(()=>setDayTick(x=>x+1), next.getTime()-Date.now());
+    return ()=>clearTimeout(t);
+  });
   const activeStudents = students.filter(s=>s.name&&!shadowHONames.has(s.name));
 
   // Lookup group number for a student name
@@ -4728,7 +4741,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
   );
 
   const selPt = selectedPt ? patients.find(p=>p.id===selectedPt) : null;
-  const stats = { total:patients.length, histTaken:patients.filter(p=>p.historyTaken).length, isNew:patients.filter(p=>p.isNew).length };
+  const stats = { total:patients.length, histTaken:patients.filter(p=>p.historyTaken).length, isNew:patients.filter(showNew).length };
 
   return (
     <div style={{minHeight:"100vh",background:LG.page,fontFamily:SF,position:"relative",isolation:"isolate"}}>
@@ -5012,10 +5025,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
-                              {(pt.historyTaken||pt.isNew)&&(
+                              {(pt.historyTaken||showNew(pt))&&(
                                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                                   {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
-                                  {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                                  {showNew(pt)&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
                                 </div>
                               )}
                               {(pt.tags||[]).length>0&&(
@@ -5080,10 +5093,10 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                             onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=LG.tileShadowHover;}}
                             onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=LG.tileShadow;}}>
                             <div style={{position:"absolute",top:9,right:9,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",maxWidth:"58%"}}>
-                              {(pt.historyTaken||pt.isNew)&&(
+                              {(pt.historyTaken||showNew(pt))&&(
                                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                                   {pt.historyTaken&&<Icon name="history" size={11} color={C.green}/>}
-                                  {pt.isNew&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
+                                  {showNew(pt)&&<span style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}
                                 </div>
                               )}
                               {(pt.tags||[]).length>0&&(
@@ -5617,7 +5630,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                   </span>
                   {viewPt.bedNo&&<span style={{fontSize:"0.95rem",fontWeight:700,color:theme}}>{String(viewPt.bedNo).padStart(2,"0")}</span>}
                   {viewPt.historyTaken&&<span style={{display:"flex",alignItems:"center",gap:3,fontSize:"0.68rem",color:C.green,fontWeight:600}}><Icon name="history" size={11} color={C.green}/> Hx taken</span>}
-                  {viewPt.isNew&&<span style={{fontSize:"0.68rem",color:C.red,fontWeight:600}}>● New</span>}
+                  {showNew(viewPt)&&<span style={{fontSize:"0.68rem",color:C.red,fontWeight:600}}>● New</span>}
                 </div>
                 <div style={{fontSize:"1.3rem",fontWeight:700,color:C.text,marginBottom:2,wordBreak:"break-word"}}>{viewPt.patientName||"—"}</div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:"0.8rem",color:C.textSub}}>
@@ -5935,7 +5948,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                 )}
               </div>
             )}
-            {isLeader&&!seniorMode&&(
+            {isLeader&&!seniorMode&&!isMed&&(
               <div style={{marginBottom:14}}>
                 <button onClick={()=>updatePatient(selectedPt,{isNew:!selPt.isNew})}
                   style={{width:"100%",padding:"9px",borderRadius:10,fontSize:"0.78rem",fontWeight:500,fontFamily:SF,cursor:"pointer",background:selPt.isNew?`rgba(${hexToRgb(C.red)},0.1)`:C.surface,border:`1px solid ${selPt.isNew?C.red:C.border}`,color:selPt.isNew?C.red:C.textMuted}}>
