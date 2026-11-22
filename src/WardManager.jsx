@@ -4061,7 +4061,7 @@ function MiniSectionFilter({ pts, sectionOrder=[], value, onChange, theme, rgb }
   );
 }
 
-function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge, sectionCounts, newToday=0 }) {
+function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, NameWithGroup, onSelectPt, customTags=[], sectionOrder=[], badge, sectionCounts, newToday=0, isNewPt=(p=>!!p.isNew) }) {
   const [open, setOpen] = useState(false);
   const [secFilter, setSecFilter] = useState("all");
   const shownPts = sortPtsBySection(pPts, sectionOrder).filter(p=>secFilter==="all"||ptSectionKey(p)===secFilter);
@@ -4113,7 +4113,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
                     {pt.age&&<div style={{fontSize:"0.6rem",color:C.textSub,marginBottom:1}}>{pt.age}</div>}
                     {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                     <div style={{position:"absolute",top:8,right:8,display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end",maxWidth:"55%"}}>
-                      {pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      {(pt.historyTaken||isNewPt(pt))&&<div style={{display:"flex",gap:4,alignItems:"center"}}>{pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}{isNewPt(pt)&&<span title="New today" style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}</div>}
                       {(pt.tags||[]).length>0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
                           {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
@@ -4132,7 +4132,7 @@ function PairingStudentsCard({ pi, members, pPts, theme, rgb, shadowHONames, Nam
   );
 }
 
-function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, customTags=[], sectionOrder=[] }) {
+function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, customTags=[], sectionOrder=[], isNewPt=(p=>!!p.isNew) }) {
   const [expandedHO, setExpandedHO] = useState(null);
   const [hoSecFilter, setHoSecFilter] = useState({}); // per-HO section filter
   const activeHOs = shadowHOs.filter(h=>h.name);
@@ -4176,7 +4176,7 @@ function ShadowHOStudentsSection({ shadowHOs, patients, theme, rgb, onSelectPt, 
                           {pt.age&&<div style={{fontSize:"0.6rem",color:C2.textSub,marginBottom:1}}>{pt.age}</div>}
                           {pt.diagnosis&&<div style={{fontSize:"0.6rem",color:C2.text,fontStyle:"italic",fontWeight:500,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",lineHeight:1.35,marginBottom:2}}>{pt.diagnosis}</div>}
                           <div style={{position:"absolute",top:8,right:8,display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end",maxWidth:"55%"}}>
-                            {pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            {(pt.historyTaken||isNewPt(pt))&&<div style={{display:"flex",gap:4,alignItems:"center"}}>{pt.historyTaken&&<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#34c759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}{isNewPt(pt)&&<span title="New today" style={{display:"inline-flex",animation:"blink 1.2s ease-in-out infinite"}}><Icon name="newdot" size={10} color={C.red}/></span>}</div>}
                             {(pt.tags||[]).length>0&&(
                               <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}>
                                 {(pt.tags||[]).map(t=>{const tag=customTags.find(ct=>ct.label===t);return tag?<span key={t} style={{fontSize:"0.48rem",fontWeight:700,padding:"1px 5px",borderRadius:4,background:`rgba(${hexToRgb(tag.color)},0.12)`,color:tag.color,border:`1px solid rgba(${hexToRgb(tag.color)},0.25)`,whiteSpace:"nowrap"}}>{t}</span>:null;})}
@@ -5161,7 +5161,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
           <div>
             {/* Shadow HO section — expandable */}
             {shadowsOn&&shadowHOs.filter(h=>h.name).length>0&&(
-              <ShadowHOStudentsSection shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} sectionOrder={sectionNames} onSelectPt={handleTileTap}/>
+              <ShadowHOStudentsSection isNewPt={showNew} shadowHOs={shadowHOs} patients={patients} theme={theme} rgb={rgb} customTags={setup.customTags||[]} sectionOrder={sectionNames} onSelectPt={handleTileTap}/>
             )}
             {isMed
               ? (activeStudents.length===0
@@ -5173,7 +5173,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                       </div>
                     )}
                     {activeStudents.map(st=>(
-                      <PairingStudentsCard key={st.name} pi={0} badge={null} members={[st.name]} sectionCounts={sectionCountsFor(st.name)} newToday={addedTodayFor(st.name)}
+                      <PairingStudentsCard isNewPt={showNew} key={st.name} pi={0} badge={null} members={[st.name]} sectionCounts={sectionCountsFor(st.name)} newToday={addedTodayFor(st.name)}
                         pPts={patients.filter(p=>(p.assigned||[]).includes(st.name))} sectionOrder={sectionNames}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
@@ -5188,7 +5188,7 @@ function SurgeryWardView({ wardId, ward, onBack, saveWard, onDelete, showToast, 
                     const members=(pair.members||[]).filter(Boolean);
                     const pPts=patients.filter(p=>p.pairingIdx===pi);
                     return (
-                      <PairingStudentsCard key={pi} pi={pi} members={members} pPts={pPts} sectionOrder={sectionNames}
+                      <PairingStudentsCard isNewPt={showNew} key={pi} pi={pi} members={members} pPts={pPts} sectionOrder={sectionNames}
                         theme={theme} rgb={rgb} shadowHONames={shadowHONames}
                         NameWithGroup={NameWithGroup} customTags={setup.customTags||[]}
                         onSelectPt={handleTileTap}
